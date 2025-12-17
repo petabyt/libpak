@@ -3,3 +3,4 @@ build/
 *.o
 *.out
 .cache
+android_test

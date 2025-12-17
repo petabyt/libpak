@@ -1,16 +1,19 @@
 plugins {
-    alias(libs.plugins.android.library)
+    alias(libs.plugins.android.application)
 }
 
 android {
-    namespace = "dev.danielc.libgadgetpair"
+    namespace = "dev.danielc.libpak"
     compileSdk = 36
 
     defaultConfig {
+        applicationId = "dev.danielc.libpak"
         minSdk = 24
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
     }
 
     buildTypes {
@@ -29,8 +32,5 @@ android {
 }
 
 dependencies {
-    implementation(libs.androidx.appcompat)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
+
 }

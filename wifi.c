@@ -1,25 +1,30 @@
+// dbus NetworkManager impl
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/rfcomm.h>
 #include <dbus/dbus.h>
+#include <string.h>
 #include "dbus.h"
 #include "wifi.h"
 
-struct WiFiContext {
+struct PakWiFi {
 	DBusConnection *conn;
 };
 
-int get_networkmanager_basic_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, void *val) {
+struct PakWiFi *pak_wifi_get_context(void) {
+	struct PakWiFi *ctx = malloc(sizeof(struct PakWiFi));
+	ctx->conn = get_dbus_system();
+	return ctx;
+}
+
+static int get_networkmanager_basic_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, void *val) {
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", path, "org.freedesktop.DBus.Properties", "Get");
     dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
-	DBusMessage *resp = dbus_connection_send_with_reply_and_block(conn, call, DBUS_TIMEOUT_USE_DEFAULT, &error);
-	dbus_message_unref(call);
+
+	DBusMessage *resp = send_reply_and_block(conn, call);
 	if (resp == NULL) return -1;
-	if (dbus_error_is_set(&error)) return -1;
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
@@ -27,18 +32,19 @@ int get_networkmanager_basic_property(DBusConnection *conn, const char *path, co
     dbus_message_iter_recurse(&args, &subargs);
     dbus_message_iter_get_basic(&subargs, val);
 
+    dbus_message_unref(resp);
+
     return 0;
 }
 
-int get_networkmanager_u8array_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, void *val) {
+static int get_networkmanager_u8array_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, void *val) {
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", path, "org.freedesktop.DBus.Properties", "Get");
     dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
-	DBusMessage *resp = dbus_connection_send_with_reply_and_block(conn, call, DBUS_TIMEOUT_USE_DEFAULT, &error);
-	dbus_message_unref(call);
+
+	DBusMessage *resp = send_reply_and_block(conn, call);
 	if (resp == NULL) return -1;
-	if (dbus_error_is_set(&error)) return -1;
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
@@ -65,6 +71,8 @@ int get_networkmanager_u8array_property(DBusConnection *conn, const char *path, 
 
 	((char **)val)[0] = s;
 
+	dbus_message_unref(resp);
+
     return 0;
 }
 
@@ -81,10 +89,9 @@ int get_networkmanager_active_connections(DBusConnection *conn) {
 	const char *iface = "org.freedesktop.NetworkManager";
 	const char *prop = "ActiveConnections";
     dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
-	DBusMessage *resp = dbus_connection_send_with_reply_and_block(conn, call, DBUS_TIMEOUT_USE_DEFAULT, &error);
-	dbus_message_unref(call);
+
+	DBusMessage *resp = send_reply_and_block(conn, call);
 	if (resp == NULL) return -1;
-	if (dbus_error_is_set(&error)) return -1;
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
@@ -103,9 +110,11 @@ int get_networkmanager_active_connections(DBusConnection *conn) {
 					printf("active connection: %s\n", path);
 				}
 			}
-			dbus_message_iter_next (&dict);
+			dbus_message_iter_next(&dict);
 		}
 	}
+
+	dbus_message_unref(resp);
 
     return 0;
 }
@@ -118,13 +127,9 @@ int get_networkmanager_connection_path(DBusConnection *conn, const char *path) {
 	const char *iface = "org.freedesktop.NetworkManager.Connection.Active";
 	const char *prop = "Connection";
     dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
-	DBusMessage *resp = dbus_connection_send_with_reply_and_block(conn, call, DBUS_TIMEOUT_USE_DEFAULT, &error);
-	dbus_message_unref(call);
-	if (resp == NULL) {
-		printf("call fail\n");
-		return -1;
-	}
-	if (dbus_error_is_set(&error)) return -1;
+
+	DBusMessage *resp = send_reply_and_block(conn, call);
+	if (resp == NULL) return -1;
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
@@ -139,6 +144,8 @@ int get_networkmanager_connection_path(DBusConnection *conn, const char *path) {
 		}
 	}
 
+	dbus_message_unref(resp);
+
     return 0;
 }
 
@@ -152,10 +159,8 @@ int get_networkmanager_devices(DBusConnection *conn) {
     dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_INVALID);
     dbus_message_append_args(call, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
 
-	DBusMessage *resp = dbus_connection_send_with_reply_and_block(conn, call, DBUS_TIMEOUT_USE_DEFAULT, &error);
-	dbus_message_unref(call);
+	DBusMessage *resp = send_reply_and_block(conn, call);
 	if (resp == NULL) return -1;
-	if (dbus_error_is_set(&error)) return -1;
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
@@ -180,14 +185,14 @@ int get_networkmanager_devices(DBusConnection *conn) {
 					printf("interf: %lu\n", dev_type);
 				}
 			}
-			dbus_message_iter_next (&dict);
+			dbus_message_iter_next(&dict);
 		}
 	}
 
     return 0;
 }
 
-int wifi_get_ap_list(struct WiFiContext *ctx, struct WiFiApList **ap_list) {
+int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list) {
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Devices/4", "org.freedesktop.DBus.Properties", "Get");
@@ -196,7 +201,7 @@ int wifi_get_ap_list(struct WiFiContext *ctx, struct WiFiApList **ap_list) {
 	const char *prop = "AccessPoints";
     dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
 
-	DBusMessage *resp = send_message(ctx->conn, call);
+	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
 	if (resp == NULL) return -1;
 
 	DBusMessageIter args;
@@ -207,7 +212,7 @@ int wifi_get_ap_list(struct WiFiContext *ctx, struct WiFiApList **ap_list) {
 	if (dbus_message_iter_get_arg_type(&subargs) != DBUS_TYPE_ARRAY) return -1;
 
 	int len = dbus_message_iter_get_element_count(&subargs);
-	struct WiFiApList *list = malloc(sizeof(struct WiFiApList) + (sizeof(struct WiFiAp) * len));
+	struct PakWiFiApList *list = malloc(sizeof(struct PakWiFiApList) + (sizeof(struct PakWiFiAp) * len));
 	list->length = len;
 
 	DBusMessageIter dict;
@@ -232,26 +237,9 @@ int wifi_get_ap_list(struct WiFiContext *ctx, struct WiFiApList **ap_list) {
     return 0;
 }
 
-int wifi_is_enabled(void) {
+int pak_wifi_is_enabled(struct PakWiFi *ctx) {
 	DBusConnection *conn = get_dbus_system();
 	dbus_bool_t v;
 	get_networkmanager_service_basic_property(conn, "WirelessEnabled", &v);
 	return v;
-}
-
-int test_wifi(void) {
-
-	struct WiFiContext ctx = {
-		.conn = get_dbus_system(),
-	};
-
-	struct WiFiApList *aps;
-
-	if (wifi_get_ap_list(&ctx, &aps)) return -1;
-
-	for (int i = 0; i < aps->length; i++) {
-		printf("'%s'\n", aps->list[i].ssid);
-	}
-
-	return 0;
 }

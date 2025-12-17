@@ -1,6 +1,6 @@
 # libpak
 
-WIP bluetooth and WiFi library
+WIP cross-platform bluetooth and WiFi library
 
 - [ ] Linux WiFi support (NetworkManager)
 - [ ] Linux bluetooth support (bluez)

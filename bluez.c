@@ -38,7 +38,8 @@ static int get_bluez_string_property(DBusConnection *conn, const char *path, con
 	return 0;
 }
 
-static int is_hc_powered(DBusConnection *conn, const char *path) {
+int pak_is_bluetooth_enabled(struct PakBt *ctx) {
+	DBusConnection *conn = get_dbus_system();
 	dbus_bool_t v;
 	get_bluez_bool_property(conn, "/org/bluez/hci0", "org.bluez.Adapter1", "Powered", &v);
 	return v;
@@ -125,6 +126,79 @@ int pak_bt_get_adapters(struct PakBt *ctx, struct PakBtAdapterList **list_arg) {
 		if (!find_dict(&dict, "org.bluez.Adapter1", &adapter_dict)) {
 			//list->list[list->length].priv = path; // todo: strdup?
 			fill_adapter_from_dict(&adapter_dict, &list->list[list->length]);
+			list->length++;
+		}
+
+		dbus_message_iter_next(&iter_arr);
+	}
+
+	dbus_message_unref(resp);
+
+	(*list_arg) = list;
+	return 0;
+}
+
+static int fill_adv_from_dict(struct DBusMessageIter *dict_iter, struct PakBtAdvertisement *adv) {
+	int len = dbus_message_iter_get_element_count(dict_iter);
+	DBusMessageIter arr_iter;
+	dbus_message_iter_recurse(dict_iter, &arr_iter);
+	for (int i = 0; i < len; i++) {
+		struct DBusMessageIter dict;
+		dbus_message_iter_recurse(&arr_iter, &dict);
+		const char *name = NULL;
+		dbus_message_iter_get_basic(&dict, &name);
+		if (name == NULL) abort();
+		dbus_message_iter_next(&dict);
+		struct DBusMessageIter dict_variant;
+		dbus_message_iter_recurse(&dict, &dict_variant);
+
+		if (!strcmp(name, "Connected")) {
+			dbus_bool_t v;
+			dbus_message_iter_get_basic(&dict_variant, &v);
+		} else if (!strcmp(name, "Name")) {
+			const char *v;
+			dbus_message_iter_get_basic(&dict_variant, &v);
+			strlcpy(adv->name, v, sizeof(adv->name));
+		} else if (!strcmp(name, "Address")) {
+			const char *v;
+			dbus_message_iter_get_basic(&dict_variant, &v);
+			strlcpy(adv->mac_address, v, sizeof(adv->mac_address));
+		}
+
+		dbus_message_iter_next(&arr_iter);
+	}
+	return -1;
+}
+
+int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtAdvertisementList **list_arg) {
+	DBusConnection *conn = get_dbus_system();
+
+	DBusMessage *resp = send_message_noargs(conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+	if (resp == NULL) return -1;
+
+	DBusMessageIter iter;
+	dbus_message_iter_init(resp, &iter);
+
+	int len = dbus_message_iter_get_element_count(&iter);
+	struct PakBtAdvertisementList *list = malloc(sizeof(struct PakBtAdvertisementList) + (sizeof(struct PakBtAdvertisement) * len));
+	list->length = 0;
+
+	DBusMessageIter iter_arr;
+	dbus_message_iter_recurse(&iter, &iter_arr);
+
+	for (int i = 0; i < len; i++) {
+		DBusMessageIter dict;
+		dbus_message_iter_recurse(&iter_arr, &dict);
+
+		const char *path = NULL;
+		dbus_message_iter_get_basic(&dict, &path);
+		if (path == NULL) abort();
+
+		dbus_message_iter_next(&dict);
+		DBusMessageIter adapter_dict;
+		if (!find_dict(&dict, "org.bluez.Device1", &adapter_dict)) {
+			//list->list[list->length].priv = path; // todo: strdup?
+			fill_adv_from_dict(&adapter_dict, &list->list[list->length]);
 			list->length++;
 		}
 

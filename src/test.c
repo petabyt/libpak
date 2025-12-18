@@ -1,7 +1,6 @@
 #include <stdio.h>
 //#include <stdlib.h>
 #include <unistd.h>
-#include "dbus.h"
 #include "wifi.h"
 #include "bluetooth.h"
 
@@ -21,10 +20,6 @@ int test_wifi(void) {
 }
 
 int main(void) {
-	if (!pak_is_bluetooth_enabled(NULL)) {
-		printf("NOTE: Bluetooth is not enabled\n");
-	}
-
 	struct PakBtAdapterList *adapters;
 	pak_bt_get_adapters(NULL, &adapters);
 
@@ -39,6 +34,11 @@ int main(void) {
 	for (int i = 0; i < advs->length; i++) {
 		printf("Advertisement: '%s'\n", advs->list[i].name);
 		printf("mac address: '%s'\n", advs->list[i].mac_address);
+	}
+
+	if (!pak_is_bluetooth_enabled(NULL)) {
+		printf("Bluetooth is not enabled\n");
+		return 0;
 	}
 
 	struct PakBtConnection *conn;

@@ -1,3 +1,6 @@
-all:
-	gcc test.c wifi.c bluez.c `pkg-config --cflags --libs dbus-1` `pkg-config --cflags bluez` -o a.out
-	./a.out
+test: build
+	cmake --build build
+	build/test
+
+build:
+	cmake -G Ninja -B build -DPAK_INCLUDE_TEST=ON

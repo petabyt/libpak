@@ -5,8 +5,17 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/rfcomm.h>
 #include <dbus/dbus.h>
+#include <errno.h>
 #include "dbus.h"
 #include "bluetooth.h"
+
+struct PakBt {
+	int foo;
+};
+
+struct PakBtConnection {
+	int fd;
+};
 
 static int get_bluez_bool_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, dbus_bool_t *v) {
 	DBusMessage *resp;
@@ -211,18 +220,44 @@ int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, s
 	return 0;
 }
 
-int test_bluetooth(void) {
-	DBusConnection *conn = get_dbus_system();
+int str2ba(const char *str, bdaddr_t *ba) {
+	uint8_t b[6];
+	const char *ptr = str;
+	int i;
+	for (i = 0; i < 6; i++) {
+		b[i] = (uint8_t) strtol(ptr, NULL, 16);
+		if (i != 5 && !(ptr = strchr(ptr, ':')))
+			ptr = ":00:00:00:00:00";
+		ptr++;
+	}
 
-//	const char *v = NULL;
-//	get_bluez_string_property(conn, "/org/bluez/hci0", "org.bluez.Adapter1", "Address", &v);
-//	printf("%s\n", v);
+	for (i = 0; i < 6; i++)
+		ba->b[i] = b[5 - i];
 
-	//printf("Is hc powered: %d\n", is_hc_powered(conn, "/org/bluez/hci0"));
+	return 0;
+}
 
-//	list_bluez();
-//	int fd = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-//	if (fd < 0) return -1;
-//	close(fd);
+// https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1
+
+int pak_btc_connect_to_service_channel(struct PakBt *ctx, struct PakBtAdvertisement *adv, struct PakBtConnection **conn) {
+	(*conn) = malloc(sizeof(struct PakBtConnection));
+
+	int fd = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+	if (fd < 0) return -1;
+
+	uint32_t linkmode = RFCOMM_LM_AUTH | RFCOMM_LM_ENCRYPT;
+	setsockopt(fd, SOL_RFCOMM, RFCOMM_LM, &linkmode, 4);
+
+	struct sockaddr_rc addr = {0};
+	addr.rc_family = AF_BLUETOOTH;
+	addr.rc_channel = 1;
+	str2ba("74:74:46:B5:CA:8C", &addr.rc_bdaddr);
+
+	if (connect(fd, (const struct sockaddr *)&addr, sizeof(addr))) {
+		fprintf(stderr, "connect: %d\n", errno);
+		close(fd);
+		return -1;
+	}
+
 	return 0;
 }

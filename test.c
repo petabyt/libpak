@@ -22,7 +22,7 @@ int test_wifi(void) {
 
 int main(void) {
 	if (!pak_is_bluetooth_enabled(NULL)) {
-		printf("NOTE: Bluetooth is not enabled");
+		printf("NOTE: Bluetooth is not enabled\n");
 	}
 
 	struct PakBtAdapterList *adapters;
@@ -40,6 +40,9 @@ int main(void) {
 		printf("Advertisement: '%s'\n", advs->list[i].name);
 		printf("mac address: '%s'\n", advs->list[i].mac_address);
 	}
+
+	struct PakBtConnection *conn;
+	pak_btc_connect_to_service_channel(NULL, NULL, &conn);
 
 	return 0;
 }

@@ -223,9 +223,10 @@ int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list) {
 		if (dbus_message_iter_get_arg_type(&dict) != DBUS_TYPE_OBJECT_PATH) return -1;
 		const char *path = NULL;
 		dbus_message_iter_get_basic(&dict, &path);
-		const char *s = NULL;
+		char *s = NULL;
 		get_networkmanager_u8array_property(ctx->conn, path, "org.freedesktop.NetworkManager.AccessPoint", "Ssid", &s);
 		strlcpy(list->list[i].ssid, s, sizeof(list->list[i].ssid));
+		free(s);
 
 		dbus_message_iter_next(&dict);
 	}

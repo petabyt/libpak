@@ -47,7 +47,7 @@ static int get_bluez_string_property(DBusConnection *conn, const char *path, con
 	return 0;
 }
 
-int pak_is_bluetooth_enabled(struct PakBt *ctx) {
+int pak_bt_is_enabled(struct PakBt *ctx) {
 	DBusConnection *conn = get_dbus_system();
 	dbus_bool_t v;
 	get_bluez_bool_property(conn, "/org/bluez/hci0", "org.bluez.Adapter1", "Powered", &v);
@@ -220,26 +220,9 @@ int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, s
 	return 0;
 }
 
-int str2ba(const char *str, bdaddr_t *ba) {
-	uint8_t b[6];
-	const char *ptr = str;
-	int i;
-	for (i = 0; i < 6; i++) {
-		b[i] = (uint8_t) strtol(ptr, NULL, 16);
-		if (i != 5 && !(ptr = strchr(ptr, ':')))
-			ptr = ":00:00:00:00:00";
-		ptr++;
-	}
-
-	for (i = 0; i < 6; i++)
-		ba->b[i] = b[5 - i];
-
-	return 0;
-}
-
 // https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1
 
-int pak_btc_connect_to_service_channel(struct PakBt *ctx, struct PakBtAdvertisement *adv, struct PakBtConnection **conn) {
+int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtAdvertisement *adv, struct PakBtSocket **conn) {
 	(*conn) = malloc(sizeof(struct PakBtConnection));
 
 	int fd = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
@@ -260,4 +243,12 @@ int pak_btc_connect_to_service_channel(struct PakBt *ctx, struct PakBtAdvertisem
 	}
 
 	return 0;
+}
+
+int pak_bt_write(struct PakBtSocket *conn, const void *data, unsigned int length) {
+	
+}
+
+int pak_bt_read(struct PakBtSocket *conn, void *data, unsigned int length) {
+	
 }

@@ -36,13 +36,13 @@ int main(void) {
 		printf("mac address: '%s'\n", advs->list[i].mac_address);
 	}
 
-	if (!pak_is_bluetooth_enabled(NULL)) {
+	if (!pak_bt_is_enabled(NULL)) {
 		printf("Bluetooth is not enabled\n");
 		return 0;
 	}
 
-	struct PakBtConnection *conn;
-	pak_btc_connect_to_service_channel(NULL, NULL, &conn);
+	//struct PakBtConnection *conn;
+	//pak_btc_connect_to_service_channel(NULL, NULL, &conn);
 
 	return 0;
 }

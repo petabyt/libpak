@@ -4,24 +4,27 @@
 
 /// Bluetooth context
 struct PakBt;
-/// Bluetooth rfcomm socket
-struct PakBtSocket;
 
-struct PakBt *pak_bt_get_context(void);
-void pak_bt_unref_context(struct PakBt *ctx);
+/// Checks if system-wide bluetooth is enabled
+int pak_bt_is_enabled(struct PakBt *ctx);
 
 enum PakBtFeature {
 	PAK_SUPPORT_LE_ADVERTISING = 1,
 	PAK_SUPPORT_LE_AUDIO,
 };
+int pak_bt_is_supported(enum PakBtFeature feat);
+
+struct PakBt *pak_bt_get_context(void);
+void pak_bt_unref_context(struct PakBt *ctx);
 
 enum PakBtEvent {
 	PAK_EVENT_FOO = 1,
 };
 
-int pak_bt_is_enabled(struct PakBt *ctx);
-
-int pak_bt_is_supported(enum PakBtFeature feat);
+enum PakBtSocketOption {
+	PAK_RFCOMM_SECURE = 1 << 0,
+	PAK_RFCOMM_INSECURE = 1 << 1,
+};
 
 struct PakBtAdapter {
 	char address[64];
@@ -49,6 +52,10 @@ struct PakBtDeviceList {
 	struct PakBtDevice list[];
 };
 
+/// Bluetooth RFCOMM socket
+struct PakBtSocket;
+
+/// Setup RFCOMM connection to a UUID via SDP lookup
 int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, uint8_t uuid[16], struct PakBtSocket **conn);
 
 struct PakBtAdvertisement {

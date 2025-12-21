@@ -1,5 +1,5 @@
 plugins {
-    alias(libs.plugins.android.application)
+    id("com.android.library")
 }
 
 android {
@@ -7,13 +7,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.danielc.libpak"
         minSdk = 24
-        targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -25,6 +19,11 @@ android {
             )
         }
     }
+    externalNativeBuild {
+        cmake {
+            path = file("../CMakeLists.txt")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -32,5 +31,6 @@ android {
 }
 
 dependencies {
-
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.ext.junit)
 }

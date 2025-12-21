@@ -1,11 +1,12 @@
-// Android WiFi helper and utility library
-// Copyright Daniel Cook - Apache License
+// Android WiFi interface
 package dev.danielc.libpak;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.LinkProperties;
 import android.net.Network;
@@ -49,6 +50,26 @@ public class WiFi {
     public Runnable onWiFiSelectAvailable = null;
     public Runnable onWiFiSelectCancel = null;
     public boolean blockEvents = false;
+
+    public static class NativeNetworkCallback extends ConnectivityManager.NetworkCallback {
+        byte[] struct;
+        @Override
+        public void onAvailable(Network network) {
+
+        }
+        @Override
+        public void onLost(Network network) {
+
+        }
+        @Override
+        public void onUnavailable() {
+
+        }
+        @Override
+        public void onCapabilitiesChanged(Network network, NetworkCapabilities networkCapabilities) {
+
+        }
+    }
 
     void run(Runnable r) {
         if (blockEvents) return;
@@ -233,6 +254,16 @@ public class WiFi {
 
         Log.d(TAG, "WiFi network not available");
         return NOT_AVAILABLE;
+    }
+
+    @SuppressLint("MissingPermission")
+    public static void scan(Context ctx) {
+        WifiManager wm = (WifiManager)ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            wm.getScanResults();
+        } else {
+            
+        }
     }
 
     public static void openHotSpotSettings(Context ctx) {

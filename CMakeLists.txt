@@ -8,7 +8,7 @@ option(PAK_INCLUDE_BT "Bluetooth APIs" ON)
 
 if(ANDROID)
 	add_library(pak SHARED
-		src/android.c
+		src/android_bluetooth.c
 	)
 elseif(LINUX)
 	find_package(PkgConfig REQUIRED)
@@ -16,7 +16,7 @@ elseif(LINUX)
 	pkg_check_modules(BLUETOOTH IMPORTED_TARGET GLOBAL bluez)
 	add_library(pak STATIC 
 		src/bluez.c
-		src/wifi.c
+		src/nm_wifi.c
 	)
 	target_link_libraries(pak PRIVATE PkgConfig::DBUS PkgConfig::BLUETOOTH)
 endif()

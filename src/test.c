@@ -1,25 +1,10 @@
 #include <stdio.h>
-//#include <stdlib.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include "wifi.h"
 #include "bluetooth.h"
 
-int test_bluetooth(void);
-
-int test_wifi(void) {
-	struct PakWiFi *ctx = pak_wifi_get_context();
-
-	struct PakWiFiApList *aps = NULL;
-	if (pak_wifi_get_ap_list(ctx, &aps)) return -1;
-
-	for (int i = 0; i < aps->length; i++) {
-		printf("'%s'\n", aps->list[i].ssid);
-	}
-
-	return 0;
-}
-
-int main(void) {
+int test_bluetooth(void) {
 	struct PakBtAdapterList *adapters;
 	pak_bt_get_adapters(NULL, &adapters);
 
@@ -44,5 +29,36 @@ int main(void) {
 	//struct PakBtConnection *conn;
 	//pak_btc_connect_to_service_channel(NULL, NULL, &conn);
 
+	return 0;
+}
+
+int test_wifi(void) {
+	struct PakWiFi *ctx = pak_wifi_get_context();
+
+	struct PakWiFiApList *aps = NULL;
+	if (pak_wifi_get_ap_list(ctx, &aps)) return -1;
+
+	for (int i = 0; i < aps->length; i++) {
+		printf("'%s'\n", aps->list[i].ssid);
+	}
+
+	free(aps);
+
+	struct PakWiFiAdapterList *alist;
+	if (pak_wifi_get_adapter_list(ctx, &alist)) return -1;
+	printf("%s\n", alist->list[0].name);
+
+	pak_wifi_free_adapter_list(ctx, alist);
+
+	struct PakWiFiAp ap;
+
+	pak_wifi_get_connected_ap(ctx, &ap);
+	printf("ssid: '%s'\n", ap.ssid);
+
+	return 0;
+}
+
+int main(void) {
+	return test_wifi();
 	return 0;
 }

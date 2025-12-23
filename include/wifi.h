@@ -23,23 +23,29 @@ void pak_wifi_unref_context(struct PakWiFi *ctx);
 
 int pak_wifi_is_enabled(struct PakWiFi *ctx);
 
-struct PakWiFiDevice {
+struct PakWiFiAdapter {
 	char name[32];
 	int is_active;
-	void *priv;
+	uint64_t priv;
 };
 
-struct PakWiFiDeviceList {
+struct PakWiFiAdapterList {
 	int length;
-	struct PakWiFiDevice list[];
+	struct PakWiFiAdapter list[];
 };
 
-int pak_wifi_get_device_list(struct PakWiFi *ctx, struct PakWiFiDeviceList **ap_list);
+//int pak_wifi_get_n_adapters(struct PakWiFi *ctx);
+//int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int index);
+//int pak_wifi_unref_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter);
+
+int pak_wifi_get_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList **ap_list);
+int pak_wifi_free_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter_arg);
+int pak_wifi_free_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList *list_arg);
 
 struct PakWiFiAp {
 	char ssid[33];
 	char bssid[6];
-	void *priv;
+	uint64_t priv;
 };
 
 struct PakWiFiApList {
@@ -48,6 +54,8 @@ struct PakWiFiApList {
 };
 
 int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list);
+
+int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAp *ap);
 
 struct PakWiFiApFilter {
 	int has_ssid;

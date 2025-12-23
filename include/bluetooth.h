@@ -40,6 +40,7 @@ struct PakBtAdapterList {
 
 /// @brief Get a list of bluetooth adapters that can be used
 int pak_bt_get_adapters(struct PakBt *ctx, struct PakBtAdapterList **list_arg);
+int pak_bt_free_adapter_list(struct PakBt *ctx, struct PakBtAdapterList *list_arg);
 
 struct PakBtDevice {
 	char name[64];

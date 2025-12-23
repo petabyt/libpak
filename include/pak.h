@@ -6,8 +6,6 @@
 //void pak_set_error_printer(struct PakWiFi *ctx, void (*printf)(void *arg, const char *fmt, ...), void *arg);
 //static void pak_error(struct Pak)
 
-
-
 enum PakErrorCode {
 	PAK_PERMISSION_DENIED = -1,
 	PAK_UNSUPPORTED = -2,

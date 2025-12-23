@@ -35,6 +35,15 @@ int test_bluetooth(void) {
 int test_wifi(void) {
 	struct PakWiFi *ctx = pak_wifi_get_context();
 
+	int len = pak_wifi_get_n_adapters(ctx);
+	if (len < 0) return -1;
+	struct PakWiFiAdapter adapter;
+	for (int i = 0; i < len; i++) {
+		if (pak_wifi_get_adapter(ctx, &adapter, i)) return -1;
+		printf("adapter: %s\n", adapter.name);
+		pak_wifi_unref_adapter(ctx, &adapter);
+	}
+
 	struct PakWiFiApList *aps = NULL;
 	if (pak_wifi_get_ap_list(ctx, &aps)) return -1;
 
@@ -43,12 +52,6 @@ int test_wifi(void) {
 	}
 
 	free(aps);
-
-	struct PakWiFiAdapterList *alist;
-	if (pak_wifi_get_adapter_list(ctx, &alist)) return -1;
-	printf("%s\n", alist->list[0].name);
-
-	pak_wifi_free_adapter_list(ctx, alist);
 
 	struct PakWiFiAp ap;
 

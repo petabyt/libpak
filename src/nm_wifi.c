@@ -9,6 +9,7 @@
 
 struct PakWiFi {
 	DBusConnection *conn;
+	DBusMessage *adapter_list;
 };
 
 static void *get_priv(uint64_t x) {
@@ -18,6 +19,7 @@ static void *get_priv(uint64_t x) {
 struct PakWiFi *pak_wifi_get_context(void) {
 	struct PakWiFi *ctx = malloc(sizeof(struct PakWiFi));
 	ctx->conn = get_dbus_system();
+	ctx->adapter_list = NULL;
 	return ctx;
 }
 
@@ -25,7 +27,7 @@ static int get_networkmanager_basic_property(DBusConnection *conn, const char *p
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", path, "org.freedesktop.DBus.Properties", "Get");
-    dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
+	dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
 
 	DBusMessage *resp = send_reply_and_block(conn, call);
 	if (resp == NULL) return -1;
@@ -33,19 +35,19 @@ static int get_networkmanager_basic_property(DBusConnection *conn, const char *p
 	DBusMessageIter args;
 	DBusMessageIter subargs;
 	if (!dbus_message_iter_init(resp, &args)) return -1;
-    dbus_message_iter_recurse(&args, &subargs);
-    dbus_message_iter_get_basic(&subargs, val);
+	dbus_message_iter_recurse(&args, &subargs);
+	dbus_message_iter_get_basic(&subargs, val);
 
-    dbus_message_unref(resp);
+	dbus_message_unref(resp);
 
-    return 0;
+	return 0;
 }
 
 static int get_networkmanager_u8array_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, void *val) {
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", path, "org.freedesktop.DBus.Properties", "Get");
-    dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
+	dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
 
 	DBusMessage *resp = send_reply_and_block(conn, call);
 	if (resp == NULL) return -1;
@@ -53,7 +55,7 @@ static int get_networkmanager_u8array_property(DBusConnection *conn, const char 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
 	if (!dbus_message_iter_init(resp, &args)) return -1;
-    dbus_message_iter_recurse(&args, &subargs);
+	dbus_message_iter_recurse(&args, &subargs);
 
 	int len = dbus_message_iter_get_element_count(&subargs);
 	char *s = malloc(len + 1);
@@ -77,80 +79,99 @@ static int get_networkmanager_u8array_property(DBusConnection *conn, const char 
 
 	dbus_message_unref(resp);
 
-    return 0;
+	return 0;
 }
 
 static int get_networkmanager_service_basic_property(DBusConnection *conn, const char *prop, void *val) {
 	get_networkmanager_basic_property(conn, "/org/freedesktop/NetworkManager", "org.freedesktop.NetworkManager", prop, val);
-    return 0;
+	return 0;
 }
 
-int pak_wifi_get_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList **list_arg) {
+static int is_usable_adapter(DBusConnection *conn, const char *path) {
+	uint64_t dev_type = 0;
+	get_networkmanager_basic_property(conn, path, "org.freedesktop.NetworkManager.Device", "DeviceType", &dev_type);
+
+	// Network cards can be detached from NetworkManager like so:
+	// nmcli dev set <dev> managed no
+	dbus_bool_t is_managed = 0;
+	get_networkmanager_basic_property(conn, path, "org.freedesktop.NetworkManager.Device", "Managed", &is_managed);
+
+	return (dev_type == 2 && is_managed); // 2 = NM_DEVICE_TYPE_WIFI
+}
+
+int pak_wifi_get_n_adapters(struct PakWiFi *ctx) {
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager", "org.freedesktop.DBus.Properties", "Get");
 
 	const char *iface = "org.freedesktop.NetworkManager";
 	const char *prop = "Devices";
-    dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_INVALID);
-    dbus_message_append_args(call, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
+	dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_INVALID);
+	dbus_message_append_args(call, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
 
 	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
 	if (resp == NULL) return -1;
 
+	if (ctx->adapter_list != NULL) dbus_message_unref(ctx->adapter_list);
+	ctx->adapter_list = resp;
+
 	DBusMessageIter args;
 	DBusMessageIter subargs;
 	if (!dbus_message_iter_init(resp, &args)) return -1;
-    dbus_message_iter_recurse(&args, &subargs);
+	dbus_message_iter_recurse(&args, &subargs);
+	if (dbus_message_iter_get_arg_type(&subargs) != DBUS_TYPE_ARRAY) return -1;
+	DBusMessageIter dict;
+	dbus_message_iter_recurse(&subargs, &dict);
+	int count = 0;
+	while (dbus_message_iter_get_arg_type(&dict) != DBUS_TYPE_INVALID) {
+		const char *path = NULL;
+		dbus_message_iter_get_basic(&dict, &path);
+		if (path == NULL) abort();
+		if (is_usable_adapter(ctx->conn, path)) count++;
+		dbus_message_iter_next(&dict);
+	}
+	return count;
+}
+
+int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int index) {
+	if (ctx->adapter_list == NULL) {
+		if (pak_wifi_get_n_adapters(ctx) < 0) return -1;
+	}
+
+	DBusMessageIter args;
+	DBusMessageIter subargs;
+	if (!dbus_message_iter_init(ctx->adapter_list, &args)) return -1;
+	dbus_message_iter_recurse(&args, &subargs);
 
 	if (dbus_message_iter_get_arg_type(&subargs) != DBUS_TYPE_ARRAY) return -1;
-
-	int len = dbus_message_iter_get_element_count(&subargs);
-	struct PakWiFiAdapterList *list = malloc(sizeof(struct PakWiFiAdapterList) + (sizeof(struct PakWiFiAdapter) * len));
-	list->length = 0;
 
 	DBusMessageIter dict;
 	dbus_message_iter_recurse(&subargs, &dict);
 	int current_type;
+	int count = 0;
 	while ((current_type = dbus_message_iter_get_arg_type(&dict)) != DBUS_TYPE_INVALID) {
 		const char *path = NULL;
 		dbus_message_iter_get_basic(&dict, &path);
 		if (path == NULL) abort();
-
-		uint64_t dev_type = 0;
-		get_networkmanager_basic_property(ctx->conn, path, "org.freedesktop.NetworkManager.Device", "DeviceType", &dev_type);
-
-		// Network cards can be detached from NetworkManager like so:
-		// nmcli dev set <dev> managed no
-		dbus_bool_t is_managed = 0;
-		get_networkmanager_basic_property(ctx->conn, path, "org.freedesktop.NetworkManager.Device", "Managed", &is_managed);
-
-		if (dev_type == 2 && is_managed) { // NM_DEVICE_TYPE_WIFI
-			list->list[list->length].priv = (uint64_t)(uintptr_t)strdup(path);
-			const char *dev_iface = NULL;
-			get_networkmanager_basic_property(ctx->conn, path, "org.freedesktop.NetworkManager.Device", "Interface", &dev_iface);
-			strlcpy(list->list[list->length].name, dev_iface, sizeof(list->list[list->length].name));
-
-			list->length++;
+		if (is_usable_adapter(ctx->conn, path)) {
+			if (index == count) {
+				adapter->priv = (uint64_t)(uintptr_t)strdup(path);
+				const char *dev_iface = NULL;
+				get_networkmanager_basic_property(ctx->conn, path, "org.freedesktop.NetworkManager.Device", "Interface", &dev_iface);
+				strlcpy(adapter->name, dev_iface, sizeof(adapter->name));
+				return 0;
+			} else {
+				count++;
+			}
 		}
 		dbus_message_iter_next(&dict);
 	}
 
-	(*list_arg) = list;
-
-	dbus_message_unref(resp);
-
-    return 0;
+	return -1;
 }
-int pak_wifi_free_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter_arg) {
+
+int pak_wifi_unref_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter_arg) {
 	free(get_priv(adapter_arg->priv));
-	return 0;
-}
-int pak_wifi_free_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList *list_arg) {
-	for (int i = 0; i < list_arg->length; i++) {
-		pak_wifi_free_adapter(ctx, &list_arg->list[i]);
-	}
-	free(list_arg);
 	return 0;
 }
 
@@ -169,7 +190,7 @@ int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list) {
 
 	const char *iface = "org.freedesktop.NetworkManager.Device.Wireless";
 	const char *prop = "AccessPoints";
-    dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
+	dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
 
 	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
 	if (resp == NULL) return -1;
@@ -177,7 +198,7 @@ int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list) {
 	DBusMessageIter args;
 	DBusMessageIter subargs;
 	if (!dbus_message_iter_init(resp, &args)) return -1;
-    dbus_message_iter_recurse(&args, &subargs);
+	dbus_message_iter_recurse(&args, &subargs);
 
 	if (dbus_message_iter_get_arg_type(&subargs) != DBUS_TYPE_ARRAY) return -1;
 
@@ -203,7 +224,7 @@ int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list) {
 
 	(*ap_list) = list;
 
-    return 0;
+	return 0;
 }
 
 int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAp *ap) {
@@ -213,7 +234,7 @@ int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAp *ap) {
 
 	const char *iface = "org.freedesktop.NetworkManager.Device.Wireless";
 	const char *prop = "ActiveAccessPoint";
-    dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
+	dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
 
 	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
 	if (resp == NULL) return -1;
@@ -221,7 +242,7 @@ int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAp *ap) {
 	DBusMessageIter args;
 	DBusMessageIter subargs;
 	if (!dbus_message_iter_init(resp, &args)) return -1;
-    dbus_message_iter_recurse(&args, &subargs);
+	dbus_message_iter_recurse(&args, &subargs);
 	const char *path = NULL;
 	dbus_message_iter_get_basic(&subargs, &path);
 

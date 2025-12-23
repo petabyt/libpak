@@ -34,11 +34,12 @@ struct PakWiFiAdapterList {
 	struct PakWiFiAdapter list[];
 };
 
-//int pak_wifi_get_n_adapters(struct PakWiFi *ctx);
-//int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int index);
-//int pak_wifi_unref_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter);
+int pak_wifi_get_n_adapters(struct PakWiFi *ctx);
+int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int index);
+int pak_wifi_unref_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter);
 
 int pak_wifi_get_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList **ap_list);
+int pak_wifi_get_default_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *ap);
 int pak_wifi_free_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter_arg);
 int pak_wifi_free_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList *list_arg);
 

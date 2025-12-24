@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include "pak.h"
 
+//typedef char _pad[(sizeof(uintptr_t) - sizeof(uint32_t)) ? 4 : 0];
+
 struct PakWiFi;
 struct PakNetworkHandle;
 
@@ -26,7 +28,7 @@ int pak_wifi_is_enabled(struct PakWiFi *ctx);
 struct PakWiFiAdapter {
 	char name[32];
 	int is_active;
-	uint64_t priv;
+	struct PakWiFiAdapterPriv *priv;
 };
 
 struct PakWiFiAdapterList {
@@ -40,12 +42,12 @@ int pak_wifi_unref_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter);
 
 int pak_wifi_get_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList **ap_list);
 int pak_wifi_get_default_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *ap);
-int pak_wifi_free_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter_arg);
 int pak_wifi_free_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList *list_arg);
 
 struct PakWiFiAp {
 	char ssid[33];
 	char bssid[6];
+	enum PakWiFiBand band;
 	uint64_t priv;
 };
 
@@ -56,7 +58,7 @@ struct PakWiFiApList {
 
 int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list);
 
-int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAp *ap);
+int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap);
 
 struct PakWiFiApFilter {
 	int has_ssid;

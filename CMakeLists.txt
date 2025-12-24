@@ -27,11 +27,19 @@ target_include_directories(pak
 )
 
 if(PAK_INCLUDE_TEST)
+	find_library(QUICKJS_LIB
+	    NAMES quickjs
+	    PATH_SUFFIXES quickjs
+	    REQUIRED
+	)
 	add_executable(test
 		src/test.c
+		src/quickjs_wifi.c
 	)
 	target_link_libraries(test
 		PRIVATE
+		${QUICKJS_LIB}
 		pak
+		m
 	)
 endif()

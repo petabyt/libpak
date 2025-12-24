@@ -3,6 +3,9 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <dbus/dbus.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
 #include <string.h>
 #include "dbus.h"
 #include "wifi.h"
@@ -10,6 +13,10 @@
 struct PakWiFi {
 	DBusConnection *conn;
 	DBusMessage *adapter_list;
+};
+
+struct PakWiFiAdapterPriv {
+	char path[1024];
 };
 
 static void *get_priv(uint64_t x) {
@@ -154,11 +161,17 @@ int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, in
 		dbus_message_iter_get_basic(&dict, &path);
 		if (path == NULL) abort();
 		if (is_usable_adapter(ctx->conn, path)) {
-			if (index == count) {
-				adapter->priv = (uint64_t)(uintptr_t)strdup(path);
+			// Return first available as default for now
+			if (index == count || index == -1) {
+				adapter->priv = (struct PakWiFiAdapterPriv *)strdup(path);
 				const char *dev_iface = NULL;
 				get_networkmanager_basic_property(ctx->conn, path, "org.freedesktop.NetworkManager.Device", "Interface", &dev_iface);
 				strlcpy(adapter->name, dev_iface, sizeof(adapter->name));
+				// TODO: Get ip address
+				// https://people.freedesktop.org/~lkundrak/nm-docs/gdbus-org.freedesktop.NetworkManager.IP4Config.html
+//				const char *ip4config = NULL;
+//				get_networkmanager_basic_property(ctx->conn, path, "org.freedesktop.NetworkManager.Device", "Ip4Config", &ip4config);
+//				printf("%s\n", ip4config);
 				return 0;
 			} else {
 				count++;
@@ -170,8 +183,15 @@ int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, in
 	return -1;
 }
 
+int pak_wifi_bind_socket_to_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int fd) {
+	struct ifreq ifr;
+	memset(&ifr, 0, sizeof(ifr));
+	strlcpy(ifr.ifr_name, adapter->name, sizeof(ifr.ifr_name));
+	return setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, (void *)&ifr, sizeof(ifr));
+}
+
 int pak_wifi_unref_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter_arg) {
-	free(get_priv(adapter_arg->priv));
+	free(adapter_arg->priv->path);
 	return 0;
 }
 
@@ -180,6 +200,12 @@ static int fill_ap(DBusConnection *conn, const char *path, struct PakWiFiAp *ap)
 	get_networkmanager_u8array_property(conn, path, "org.freedesktop.NetworkManager.AccessPoint", "Ssid", &s);
 	strlcpy(ap->ssid, s, sizeof(ap->ssid));
 	free(s);
+	get_networkmanager_basic_property(conn, path, "org.freedesktop.NetworkManager.AccessPoint", "HwAddress", &s);
+	strlcpy(ap->bssid, s, sizeof(ap->bssid));
+	uint64_t freq = 0;
+	get_networkmanager_basic_property(conn, path, "org.freedesktop.NetworkManager.AccessPoint", "Frequency", &freq);
+	if (freq & 0x5000) ap->band = PAK_WIFI_5GHZ;
+	if (freq & 0x2000) ap->band = PAK_WIFI_2GHZ;
 	return 0;
 }
 
@@ -227,10 +253,10 @@ int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list) {
 	return 0;
 }
 
-int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAp *ap) {
+int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
 	DBusError error;
 	dbus_error_init(&error);
-	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Devices/4", "org.freedesktop.DBus.Properties", "Get");
+	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", adapter->priv->path, "org.freedesktop.DBus.Properties", "Get");
 
 	const char *iface = "org.freedesktop.NetworkManager.Device.Wireless";
 	const char *prop = "ActiveAccessPoint";
@@ -243,10 +269,10 @@ int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAp *ap) {
 	DBusMessageIter subargs;
 	if (!dbus_message_iter_init(resp, &args)) return -1;
 	dbus_message_iter_recurse(&args, &subargs);
-	const char *path = NULL;
-	dbus_message_iter_get_basic(&subargs, &path);
+	const char *ap_path = NULL;
+	dbus_message_iter_get_basic(&subargs, &ap_path);
 
-	fill_ap(ctx->conn, path, ap);
+	fill_ap(ctx->conn, ap_path, ap);
 
 	dbus_message_unref(resp);
 
@@ -258,4 +284,10 @@ int pak_wifi_is_enabled(struct PakWiFi *ctx) {
 	dbus_bool_t v;
 	get_networkmanager_service_basic_property(conn, "WirelessEnabled", &v);
 	return v;
+}
+
+int pak_wifi_connect_to_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFi *ap) {
+	// TODO: AddAndActivateConnection
+
+	return 0;
 }

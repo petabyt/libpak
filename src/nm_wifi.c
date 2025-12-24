@@ -19,9 +19,9 @@ struct PakWiFiAdapterPriv {
 	char path[1024];
 };
 
-static void *get_priv(uint64_t x) {
-	return (void *)(uintptr_t)x;
-}
+struct PakWiFiApPriv {
+	char path[1024];
+};
 
 struct PakWiFi *pak_wifi_get_context(void) {
 	struct PakWiFi *ctx = malloc(sizeof(struct PakWiFi));
@@ -206,6 +206,9 @@ static int fill_ap(DBusConnection *conn, const char *path, struct PakWiFiAp *ap)
 	get_networkmanager_basic_property(conn, path, "org.freedesktop.NetworkManager.AccessPoint", "Frequency", &freq);
 	if (freq & 0x5000) ap->band = PAK_WIFI_5GHZ;
 	if (freq & 0x2000) ap->band = PAK_WIFI_2GHZ;
+
+	ap->priv = (struct PakWiFiApPriv *)strdup(path);
+
 	return 0;
 }
 
@@ -286,8 +289,20 @@ int pak_wifi_is_enabled(struct PakWiFi *ctx) {
 	return v;
 }
 
-int pak_wifi_connect_to_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFi *ap) {
-	// TODO: AddAndActivateConnection
+int pak_wifi_connect_to_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
+	const char *existing_conn = "/";
+	const char *device = adapter->priv->path;
+	const char *ap_path = ap->priv->path;
+
+	DBusError error;
+	dbus_error_init(&error);
+	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager", "org.freedesktop.NetworkManager", "ActivateConnection");
+	dbus_message_append_args(call, DBUS_TYPE_OBJECT_PATH, &existing_conn, DBUS_TYPE_OBJECT_PATH, &device, DBUS_TYPE_OBJECT_PATH, &ap_path, DBUS_TYPE_INVALID);
+
+	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
+	if (resp == NULL) return -1;
+
+	dbus_message_unref(resp);
 
 	return 0;
 }

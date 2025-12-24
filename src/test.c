@@ -105,13 +105,15 @@ int test_wifi(void) {
 	pak_wifi_get_connected_ap(ctx, &adapter, &ap);
 	printf("Connected to '%s'\n", ap.ssid);
 
+	pak_wifi_connect_to_ap(ctx, &adapter, &ap);
+
 	pak_wifi_unref_adapter(ctx, &adapter);
 
 	return 0;
 }
 
 int main(void) {
-	//return test_wifi();
-	return run_quickjs("x.js");
+	return test_wifi();
+	//return run_quickjs("x.js");
 	return 0;
 }

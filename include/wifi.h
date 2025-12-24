@@ -48,7 +48,7 @@ struct PakWiFiAp {
 	char ssid[33];
 	char bssid[6];
 	enum PakWiFiBand band;
-	uint64_t priv;
+	struct PakWiFiApPriv *priv;
 };
 
 struct PakWiFiApList {
@@ -59,6 +59,8 @@ struct PakWiFiApList {
 int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list);
 
 int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap);
+
+int pak_wifi_connect_to_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap);
 
 struct PakWiFiApFilter {
 	int has_ssid;

@@ -28,7 +28,7 @@ static DBusMessage *send_reply_and_block(DBusConnection *conn, DBusMessage *call
 	DBusMessage *resp = dbus_connection_send_with_reply_and_block(conn, call, DBUS_TIMEOUT_USE_DEFAULT, &error);
 	dbus_message_unref(call);
 	if (resp == NULL) {
-		fprintf(stderr, "dbus_connection_send_with_reply_and_block\n");
+		fprintf(stderr, "dbus_connection_send_with_reply_and_block: %s\n", error.message);
 		return NULL;
 	}
 	if (dbus_error_is_set(&error)) {

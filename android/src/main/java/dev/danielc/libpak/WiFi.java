@@ -257,12 +257,12 @@ public class WiFi {
     }
 
     @SuppressLint("MissingPermission")
-    public static void scan(Context ctx) {
+    public static void scan(Context ctx) throws Exception {
         WifiManager wm = (WifiManager)ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         if (ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             wm.getScanResults();
         } else {
-            
+            throw new Exception("bad permission");
         }
     }
 

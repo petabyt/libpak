@@ -19,6 +19,14 @@ struct PakBtSocket {
 	int fd;
 };
 
+struct PakBtDevicePriv {
+	
+};
+
+struct PakBtAdapterPriv {
+	
+};
+
 static int get_bluez_bool_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, dbus_bool_t *v) {
 	DBusMessage *resp;
 	int rc = get_dbus_property(conn, "org.bluez", path, iface, prop, &resp);
@@ -286,9 +294,15 @@ int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev
 }
 
 int pak_bt_write(struct PakBtSocket *conn, const void *data, unsigned int length) {
-	return -1;
+	return write(conn->fd, data, length);
 }
 
 int pak_bt_read(struct PakBtSocket *conn, void *data, unsigned int length) {
-	return -1;
+	return read(conn->fd, data, length);
+}
+
+int pak_bt_close_socket(struct PakBtSocket *conn) {
+	close(conn->fd);
+	free(conn);
+	return 0;
 }

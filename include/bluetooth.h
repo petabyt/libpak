@@ -31,7 +31,8 @@ struct PakBtAdapter {
 	char name[64];
 	int powered;
 	int class_;
-	void *priv;
+	struct PakBtAdapterPriv *priv;
+	_pad_pointer pad_priv;
 };
 struct PakBtAdapterList {
 	int length;
@@ -46,7 +47,8 @@ struct PakBtDevice {
 	char name[64];
 	char mac_address[64];
 	int is_connected;
-	void *priv;
+	struct PakBtDevicePriv *priv;
+	_pad_pointer pad_priv;
 };
 struct PakBtDeviceList {
 	int length;

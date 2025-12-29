@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 project(pak)
 
+set(CMAKE_C_FLAGS_DEBUG -g)
+set(CMAKE_CXX_FLAGS_DEBUG -g)
+set(CMAKE_C_FLAGS_RELWITHDEBINFO -g)
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO -g)
+
 option(PAK_INCLUDE_TEST "cli program" OFF)
 option(PAK_INCLUDE_WIFI "WiFi APIs" ON)
 option(PAK_INCLUDE_BT "Bluetooth APIs" ON)
@@ -42,4 +47,6 @@ if(PAK_INCLUDE_TEST)
 		pak
 		m
 	)
+	add_executable(veecar examples/veecar.c)
+	target_link_libraries(veecar PRIVATE pak)
 endif()

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <quickjs/quickjs.h>
 #include <quickjs/quickjs-libc.h>
 #include "wifi.h"
@@ -91,29 +92,23 @@ int test_wifi(void) {
 	if (pak_wifi_get_adapter(ctx, &adapter, 0)) return -1;
 	printf("adapter: %s\n", adapter.name);
 
-	struct PakWiFiApList *aps = NULL;
-	if (pak_wifi_get_ap_list(ctx, &aps)) return -1;
-
-	for (int i = 0; i < aps->length; i++) {
-		printf("'%s'\n", aps->list[i].ssid);
+	int n_aps = pak_wifi_get_n_aps(ctx, &adapter);
+	struct PakWiFiAp ap;
+	for (int i = 0; i < n_aps; i++) {
+		if (pak_wifi_get_ap(ctx, &adapter, &ap, i)) return -1;
+		if (!strncmp(ap.ssid, "V300", 4)) {
+			
+		}
+		pak_wifi_unref_ap(ctx, &adapter, &ap);
 	}
 
-	free(aps);
-
-	struct PakWiFiAp ap;
-
-	pak_wifi_get_connected_ap(ctx, &adapter, &ap);
-	printf("Connected to '%s'\n", ap.ssid);
-
-	pak_wifi_connect_to_ap(ctx, &adapter, &ap);
+	//pak_wifi_connect_to_ap(ctx, &adapter, &ap);
 
 	pak_wifi_unref_adapter(ctx, &adapter);
 
 	return 0;
 }
 
-int main(void) {
-	return test_wifi();
-	//return run_quickjs("x.js");
+int main(int argc, char **argv) {
 	return 0;
 }

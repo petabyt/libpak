@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include "pak.h"
 
-//typedef char _pad[(sizeof(uintptr_t) - sizeof(uint32_t)) ? 4 : 0];
+// TODO: Rename to Network instead of WiFi (to support binding to ethernet/cellular adapter)
 
 struct PakWiFi;
 struct PakNetworkHandle;
@@ -29,34 +29,24 @@ struct PakWiFiAdapter {
 	char name[32];
 	int is_active;
 	struct PakWiFiAdapterPriv *priv;
-};
-
-struct PakWiFiAdapterList {
-	int length;
-	struct PakWiFiAdapter list[];
+	_pad_pointer pad_priv;
 };
 
 int pak_wifi_get_n_adapters(struct PakWiFi *ctx);
 int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int index);
 int pak_wifi_unref_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter);
 
-int pak_wifi_get_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList **ap_list);
-int pak_wifi_get_default_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *ap);
-int pak_wifi_free_adapter_list(struct PakWiFi *ctx, struct PakWiFiAdapterList *list_arg);
-
 struct PakWiFiAp {
 	char ssid[33];
 	char bssid[6];
 	enum PakWiFiBand band;
 	struct PakWiFiApPriv *priv;
+	_pad_pointer pad_priv;
 };
 
-struct PakWiFiApList {
-	int length;
-	struct PakWiFiAp list[];
-};
-
-int pak_wifi_get_ap_list(struct PakWiFi *ctx, struct PakWiFiApList **ap_list);
+int pak_wifi_get_n_aps(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter);
+int pak_wifi_get_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, int index);
+int pak_wifi_unref_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap);
 
 int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap);
 
@@ -75,3 +65,5 @@ struct PakWiFiApFilter {
 };
 
 int pak_wifi_android_network_request_dialog(struct PakWiFi *ctx, struct PakWiFiApFilter *spec, int (*cb)(struct PakWiFi *ctx, struct PakNetworkHandle *), void *arg);
+
+// TODO: Companion APIs

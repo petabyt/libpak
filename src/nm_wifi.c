@@ -59,6 +59,26 @@ static int get_networkmanager_basic_property(DBusConnection *conn, const char *p
 	return 0;
 }
 
+static int get_u8array(DBusMessageIter *iter, char *val, unsigned int max) {
+	if (dbus_message_iter_get_arg_type(iter) == DBUS_TYPE_ARRAY) {
+		DBusMessageIter dict;
+		dbus_message_iter_recurse(iter, &dict);
+		int current_type;
+		int i = 0;
+		while ((current_type = dbus_message_iter_get_arg_type(&dict)) != DBUS_TYPE_INVALID) {
+			uint8_t c;
+			dbus_message_iter_get_basic(&dict, &c);
+			val[i] = (char)c;
+			dbus_message_iter_next(&dict);
+			i++;
+			if (i >= max) return -1;
+		}
+		val[i] = '\0';
+		return 0;
+	}
+	return -1;
+}
+
 static int get_networkmanager_u8array_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, char *val, unsigned int max) {
 	DBusError error;
 	dbus_error_init(&error);
@@ -360,7 +380,7 @@ static void map_begin_setting(DBusMessageIter *map, DBusMessageIter *entry, DBus
 }
 
 // https://people.freedesktop.org/~lkundrak/nm-dbus-api/nm-settings.html
-static int append_pack_connection_info(DBusConnection *conn, DBusMessageIter *iter, struct PakWiFiAp *ap) {
+static int append_pack_connection_info(DBusConnection *conn, DBusMessageIter *iter, struct PakWiFiAp *ap, const char *password) {
 	DBusMessageIter dict;
 	dbus_message_iter_open_container(iter, DBUS_TYPE_ARRAY, "{sa{sv}}", &dict);
 
@@ -368,8 +388,10 @@ static int append_pack_connection_info(DBusConnection *conn, DBusMessageIter *it
 	DBusMessageIter con_val;
 
 	map_begin_setting(&dict, &con_entry, &con_val, "connection");
-	add_string_key(&con_val, "id", "pak connection");
+	add_string_key(&con_val, "id", "IoT WiFi Device Connection");
 	add_string_key(&con_val, "type", "802-11-wireless");
+	add_string_key(&con_val, "zone", "PakDevice");
+	//add_string_key(&con_val, "interface-name", "wlp19s0");
 	add_bool_key(&con_val, "autoconnect", FALSE);
 	dbus_message_iter_close_container(&con_entry, &con_val);
 	dbus_message_iter_close_container(&dict, &con_entry);
@@ -380,8 +402,8 @@ static int append_pack_connection_info(DBusConnection *conn, DBusMessageIter *it
 	dbus_message_iter_close_container(&dict, &con_entry);
 
 	map_begin_setting(&dict, &con_entry, &con_val, "802-11-wireless-security");
-	add_string_key(&con_val, "key-mgnt", "wpa-psk");
-	add_string_key(&con_val, "psk", "12345678");
+	add_string_key(&con_val, "key-mgmt", "wpa-psk");
+	if (password != NULL) add_string_key(&con_val, "psk", password);
 	dbus_message_iter_close_container(&con_entry, &con_val);
 	dbus_message_iter_close_container(&dict, &con_entry);
 
@@ -389,26 +411,136 @@ static int append_pack_connection_info(DBusConnection *conn, DBusMessageIter *it
 	return 0;
 }
 
-int pak_wifi_connect_to_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
-	const char *device = adapter->priv->path;
-	const char *ap_path = ap->priv->path;
+static int is_connection_matching(DBusConnection *conn, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *path) {
+	DBusError error;
+	dbus_error_init(&error);
+	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", path, "org.freedesktop.NetworkManager.Settings.Connection", "GetSettings");
+
+	DBusMessage *resp = send_reply_and_block(conn, call);
+	if (resp == NULL) return -1;
+
+	DBusMessageIter args;
+	if (!dbus_message_iter_init(resp, &args)) return -1;
+
+	int matched_ssid = 0;
+
+	DBusMessageIter dict;
+	dbus_message_iter_recurse(&args, &dict);
+	while (dbus_message_iter_get_arg_type(&dict) != DBUS_TYPE_INVALID) {
+		DBusMessageIter subargs;
+		dbus_message_iter_recurse(&dict, &subargs);
+		const char *s = NULL;
+		dbus_message_iter_get_basic(&subargs, &s);
+		dbus_message_iter_next(&subargs);
+		if (!strcmp(s, "802-11-wireless")) {
+			DBusMessageIter subsubargs;
+			dbus_message_iter_recurse(&subargs, &subsubargs);
+			while (dbus_message_iter_get_arg_type(&subsubargs) != DBUS_TYPE_INVALID) {
+				DBusMessageIter subsubsubargs;
+				dbus_message_iter_recurse(&subsubargs, &subsubsubargs);
+				dbus_message_iter_get_basic(&subsubsubargs, &s);
+				dbus_message_iter_next(&subsubsubargs);
+				if (!strcmp(s, "ssid")) {
+					DBusMessageIter subsubsubsubargs;
+					dbus_message_iter_recurse(&subsubsubargs, &subsubsubsubargs);
+					char ssid[64];
+					get_u8array(&subsubsubsubargs, ssid, sizeof(ssid));
+					matched_ssid = !strcmp(ssid, ap->ssid);
+				}
+				dbus_message_iter_next(&subsubargs);
+			}
+		}
+		dbus_message_iter_next(&dict);
+	}
+
+	dbus_message_unref(resp);
+
+	if (matched_ssid) {
+		return 1;
+	}
+
+	//printf("%c\n", dbus_message_iter_get_arg_type(&subsubsubsubargs));
+
+	return 0;
+}
+
+static int get_existing_connection(DBusConnection *conn, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char **path_arg) {
+
+	const char *iface = "org.freedesktop.NetworkManager.Device";
+	const char *prop = "AvailableConnections";
 
 	DBusError error;
 	dbus_error_init(&error);
-	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager", "org.freedesktop.NetworkManager", "AddAndActivateConnection");
-	DBusMessageIter iter;
-	dbus_message_iter_init_append(call, &iter);
-	append_pack_connection_info(ctx->conn, &iter, ap); // arg0: connection
-	dbus_message_iter_append_basic(&iter, DBUS_TYPE_OBJECT_PATH, &device); // arg1: device
-	dbus_message_iter_append_basic(&iter, DBUS_TYPE_OBJECT_PATH, &ap_path); // arg2: ap path
+	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", adapter->priv->path, "org.freedesktop.DBus.Properties", "Get");
+	dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
 
-	const char *sig = dbus_message_get_signature(call);
-	fprintf(stderr, "sig = %s\n", sig);
-
-	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
+	DBusMessage *resp = send_reply_and_block(conn, call);
 	if (resp == NULL) return -1;
 
+	DBusMessageIter args;
+	DBusMessageIter subargs;
+	if (!dbus_message_iter_init(resp, &args)) return -1;
+	dbus_message_iter_recurse(&args, &subargs);
+
+	if (dbus_message_iter_get_arg_type(&subargs) != DBUS_TYPE_ARRAY) return -1;
+
+	DBusMessageIter dict;
+	dbus_message_iter_recurse(&subargs, &dict);
+	int current_type;
+	int i = 0;
+	while ((current_type = dbus_message_iter_get_arg_type(&dict)) != DBUS_TYPE_INVALID) {
+		const char *path = NULL;
+		dbus_message_iter_get_basic(&dict, &path);
+		if (is_connection_matching(conn, adapter, ap, path)) {
+			printf("Found existing connection path: %s\n", path);
+			(*path_arg) = path;
+			dbus_message_unref(resp);
+			return 1;
+		}
+		dbus_message_iter_next(&dict);
+	}
+
 	dbus_message_unref(resp);
+
+	return 0;
+}
+
+int pak_wifi_connect_to_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *password) {
+	DBusError error;
+	dbus_error_init(&error);
+
+	const char *device = adapter->priv->path;
+	const char *ap_path = ap->priv->path;
+
+	const char *conn_path = NULL;
+	if (get_existing_connection(ctx->conn, adapter, ap, &conn_path)) {
+
+		// TODO: Update connection setting with new password (if changed)
+
+		DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager", "org.freedesktop.NetworkManager", "ActivateConnection");
+		DBusMessageIter iter;
+		dbus_message_iter_init_append(call, &iter);
+		dbus_message_iter_append_basic(&iter, DBUS_TYPE_OBJECT_PATH, &conn_path); // arg0: existing connection path
+		dbus_message_iter_append_basic(&iter, DBUS_TYPE_OBJECT_PATH, &device); // arg1: device
+		dbus_message_iter_append_basic(&iter, DBUS_TYPE_OBJECT_PATH, &ap_path); // arg2: ap path
+
+		DBusMessage *resp = send_reply_and_block(ctx->conn, call);
+		if (resp == NULL) return -1;
+
+		dbus_message_unref(resp);
+	} else {
+		DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager", "org.freedesktop.NetworkManager", "AddAndActivateConnection");
+		DBusMessageIter iter;
+		dbus_message_iter_init_append(call, &iter);
+		append_pack_connection_info(ctx->conn, &iter, ap, password); // arg0: connection settings
+		dbus_message_iter_append_basic(&iter, DBUS_TYPE_OBJECT_PATH, &device); // arg1: device
+		dbus_message_iter_append_basic(&iter, DBUS_TYPE_OBJECT_PATH, &ap_path); // arg2: ap path
+
+		DBusMessage *resp = send_reply_and_block(ctx->conn, call);
+		if (resp == NULL) return -1;
+
+		dbus_message_unref(resp);
+	}
 
 	return 0;
 }

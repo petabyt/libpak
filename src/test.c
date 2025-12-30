@@ -56,26 +56,22 @@ int run_quickjs(const char *filename) {
 
 
 int test_bluetooth(void) {
-	struct PakBtAdapterList *adapters;
-	pak_bt_get_adapters(NULL, &adapters);
-
-	for (int i = 0; i < adapters->length; i++) {
-		printf("Bluetooth adapter: '%s'\n", adapters->list[i].name);
-		//printf("'%s'\n", adapters->list[i].address);
+	struct PakBtAdapter adapter;
+	struct PakBt *ctx = pak_bt_get_context();
+	int n = pak_bt_get_n_adapters(ctx);
+	if (n < 0) return -1;
+	for (int i = 0; i < n; i++) {
+		if (pak_bt_get_adapter(ctx, &adapter, i)) return -1;
+		printf("Bluetooth adapter: '%s'\n", adapter.name);
+		break;
 	}
 
-	struct PakBtAdvertisementList *advs;
-	pak_bt_get_advertisements(NULL, NULL, &advs);
-
-	for (int i = 0; i < advs->length; i++) {
-		printf("Advertisement: '%s'\n", advs->list[i].name);
-		printf("mac address: '%s'\n", advs->list[i].mac_address);
-	}
-
-	if (!pak_bt_is_enabled(NULL)) {
+	if (!pak_bt_is_enabled(ctx)) {
 		printf("Bluetooth is not enabled\n");
 		return 0;
 	}
+
+	pak_bt_unref_adapter(ctx, &adapter);
 
 	//struct PakBtConnection *conn;
 	//pak_btc_connect_to_service_channel(NULL, NULL, &conn);
@@ -110,5 +106,6 @@ int test_wifi(void) {
 }
 
 int main(int argc, char **argv) {
+	return test_bluetooth();
 	return 0;
 }

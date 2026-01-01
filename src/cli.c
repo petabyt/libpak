@@ -7,6 +7,7 @@
 #include "wifi.h"
 #include "bluetooth.h"
 
+JSModuleDef *js_init_module_socket(JSContext *ctx, const char *module_name);
 JSModuleDef *js_init_module_wifi(JSContext *ctx, const char *module_name);
 
 int run_quickjs(const char *filename) {
@@ -16,6 +17,7 @@ int run_quickjs(const char *filename) {
 	js_std_add_helpers(ctx, 0, NULL);
 
 	JS_AddModuleExport(ctx, js_init_module_wifi(ctx, "pak:wifi"), "WiFi");
+	js_init_module_socket(ctx, "c:socket");
 	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
 	js_std_init_handlers(rt);
 
@@ -39,12 +41,13 @@ int run_quickjs(const char *filename) {
 
 	JSValue val = JS_Eval(ctx, buffer, file_size, filename, JS_EVAL_TYPE_MODULE);
 	if (JS_IsException(val)) {
-		js_std_dump_error(ctx);
 		const char *str = JS_ToCString(ctx, val);
 		printf("JS error: %s\n", str);
 		JS_FreeCString(ctx, str);
 		return -1;
 	}
+
+	printf("Return value: %d\n", JS_VALUE_GET_TAG(val));
 
 	JS_FreeValue(ctx, val);
 
@@ -73,9 +76,6 @@ int test_bluetooth(void) {
 
 	pak_bt_unref_adapter(ctx, &adapter);
 
-	//struct PakBtConnection *conn;
-	//pak_btc_connect_to_service_channel(NULL, NULL, &conn);
-
 	return 0;
 }
 
@@ -86,19 +86,15 @@ int test_wifi(void) {
 	if (len <= 0) return -1;
 	struct PakWiFiAdapter adapter;
 	if (pak_wifi_get_adapter(ctx, &adapter, 0)) return -1;
-	printf("adapter: %s\n", adapter.name);
+	printf("WiFi adapter: %s\n", adapter.name);
 
 	int n_aps = pak_wifi_get_n_aps(ctx, &adapter);
 	struct PakWiFiAp ap;
 	for (int i = 0; i < n_aps; i++) {
 		if (pak_wifi_get_ap(ctx, &adapter, &ap, i)) return -1;
-		if (!strncmp(ap.ssid, "V300", 4)) {
-			
-		}
+		printf("ssid: %s\n", ap.ssid);
 		pak_wifi_unref_ap(ctx, &adapter, &ap);
 	}
-
-	//pak_wifi_connect_to_ap(ctx, &adapter, &ap);
 
 	pak_wifi_unref_adapter(ctx, &adapter);
 
@@ -106,6 +102,15 @@ int test_wifi(void) {
 }
 
 int main(int argc, char **argv) {
-	return test_bluetooth();
-	return 0;
+	for (int i = 0; i < argc; i++) {
+		if (!strcmp(argv[i], "--js")) {
+			return run_quickjs(argv[i + 1]);
+		} else if (!strcmp(argv[i], "--test")) {
+			int rc = test_wifi();
+			rc |= test_bluetooth();
+			return rc;
+		}
+	}
+	printf("Invalid argument\n");
+	return -1;
 }

@@ -68,8 +68,9 @@ static JSValue get_default_adapter(JSContext *ctx, JSValueConst this_val, int ar
 	return adapter;
 }
 
-static const JSCFunctionListEntry ptp_methods[] = {
+static const JSCFunctionListEntry wifi_methods[] = {
 	JS_CFUNC_DEF("getDefaultAdapter", 0, get_default_adapter),
+	//JS_CFUNC_DEF("bindSocketToAdapter", 0, get_default_adapter),
 
 	JS_PROP_INT32_DEF("WIFI_2GHZ",		   1, JS_PROP_ENUMERABLE),
 	JS_PROP_INT32_DEF("WIFI_5GHZ",		   2, JS_PROP_ENUMERABLE),
@@ -102,7 +103,7 @@ static int module_wifi(JSContext* ctx, JSModuleDef *m) {
 	JS_NewClass(JS_GetRuntime(ctx), wifi_class_id, &js_class);
 
 	JSValue proto = JS_NewObject(ctx);
-	JS_SetPropertyFunctionList(ctx, proto, ptp_methods, sizeof(ptp_methods) / sizeof(ptp_methods[0]));
+	JS_SetPropertyFunctionList(ctx, proto, wifi_methods, sizeof(wifi_methods) / sizeof(wifi_methods[0]));
 	JS_SetClassProto(ctx, wifi_class_id, proto);
 
 	JSValue class = JS_NewCFunction2(ctx, js_directory_constructor, class_name, 5, JS_CFUNC_constructor, 0);

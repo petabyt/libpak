@@ -25,17 +25,28 @@ struct PakWiFiApPriv {
 	char path[];
 };
 
-static inline void *alloc_priv(unsigned int sizeofstruct, const char *path) {
-	unsigned int path_len = strlen(path);
-	char *buf = calloc(1, sizeofstruct + path_len + 1);
-	memcpy(buf + sizeofstruct, path, path_len + 1);
-	return buf;
+static DBusHandlerResult handle_messages(DBusConnection *connection, DBusMessage *message, void *user_data) {
+	printf("Handle message\n");
+	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 struct PakWiFi *pak_wifi_get_context(void) {
 	struct PakWiFi *ctx = malloc(sizeof(struct PakWiFi));
 	ctx->conn = get_dbus_system();
 	ctx->adapter_list = NULL;
+
+	DBusConnection *conn = get_dbus_system();
+
+	dbus_connection_add_filter(conn, handle_messages, ctx, NULL);
+
+	dbus_bus_add_match(conn,
+		"type='signal',"
+		"sender='org.freedesktop.NetworkManager',"
+		"interface='org.freedesktop.DBus.Properties',"
+		"member='PropertiesChanged'"
+		, NULL);
+	dbus_connection_flush(conn);
+
 	return ctx;
 }
 
@@ -59,24 +70,9 @@ static int get_networkmanager_basic_property(DBusConnection *conn, const char *p
 	return 0;
 }
 
-static int get_u8array(DBusMessageIter *iter, char *val, unsigned int max) {
-	if (dbus_message_iter_get_arg_type(iter) == DBUS_TYPE_ARRAY) {
-		DBusMessageIter dict;
-		dbus_message_iter_recurse(iter, &dict);
-		int current_type;
-		int i = 0;
-		while ((current_type = dbus_message_iter_get_arg_type(&dict)) != DBUS_TYPE_INVALID) {
-			uint8_t c;
-			dbus_message_iter_get_basic(&dict, &c);
-			val[i] = (char)c;
-			dbus_message_iter_next(&dict);
-			i++;
-			if (i >= max) return -1;
-		}
-		val[i] = '\0';
-		return 0;
-	}
-	return -1;
+static int sleep_for_event(DBusConnection *conn) {
+	while (dbus_connection_read_write_dispatch(conn, 1000) == FALSE);
+	return 0;
 }
 
 static int get_networkmanager_u8array_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, char *val, unsigned int max) {
@@ -93,21 +89,7 @@ static int get_networkmanager_u8array_property(DBusConnection *conn, const char 
 	if (!dbus_message_iter_init(resp, &args)) return -1;
 	dbus_message_iter_recurse(&args, &subargs);
 
-	if (dbus_message_iter_get_arg_type(&subargs) == DBUS_TYPE_ARRAY) {
-		DBusMessageIter dict;
-		dbus_message_iter_recurse(&subargs, &dict);
-		int current_type;
-		int i = 0;
-		while ((current_type = dbus_message_iter_get_arg_type(&dict)) != DBUS_TYPE_INVALID) {
-			uint8_t c;
-			dbus_message_iter_get_basic(&dict, &c);
-			val[i] = (char)c;
-			dbus_message_iter_next(&dict);
-			i++;
-			if (i >= max) return -1;
-		}
-		val[i] = '\0';
-	}
+	if (get_u8array(&subargs, val, max)) return -1;
 
 	dbus_message_unref(resp);
 

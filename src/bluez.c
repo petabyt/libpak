@@ -27,16 +27,32 @@ struct PakBtAdapterPriv {
 	char path[1024];
 };
 
-struct PakBt *pak_bt_get_context(void) {
-	struct PakBt *ctx = malloc(sizeof(struct PakBt));
-	return ctx;
+static DBusHandlerResult handle_messages(DBusConnection *connection, DBusMessage *message, void *user_data) {
+	printf("Handle message\n");
+	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-static inline void *alloc_priv(unsigned int sizeofstruct, const char *path) {
-	unsigned int path_len = strlen(path);
-	char *buf = calloc(1, sizeofstruct + path_len + 1);
-	memcpy(buf + sizeofstruct, path, path_len + 1);
-	return buf;
+struct PakBt *pak_bt_get_context(void) {
+	struct PakBt *ctx = malloc(sizeof(struct PakBt));
+
+	DBusConnection *conn = get_dbus_system();
+
+	dbus_connection_add_filter(conn, handle_messages, NULL, NULL);
+
+	dbus_bus_add_match(conn,
+		"type='signal',"
+		"sender='org.bluez',"
+		"interface='org.freedesktop.DBus.Properties',"
+		"member='PropertiesChanged'"
+		, NULL);
+	dbus_connection_flush(conn);
+
+    while (1)
+    {
+        dbus_connection_read_write_dispatch(conn, 1000);
+    }
+
+	return ctx;
 }
 
 static int get_bluez_bool_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, dbus_bool_t *v) {

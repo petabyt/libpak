@@ -36,6 +36,9 @@ int pak_wifi_get_n_adapters(struct PakWiFi *ctx);
 int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int index);
 int pak_wifi_unref_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter);
 
+/// Bind a socket to a network adapter
+int pak_wifi_bind_socket_to_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int fd);
+
 struct PakWiFiAp {
 	char ssid[33];
 	char bssid[6];

@@ -37,11 +37,12 @@ if(PAK_INCLUDE_TEST)
 	    PATH_SUFFIXES quickjs
 	    REQUIRED
 	)
-	add_executable(test
-		src/test.c
-		src/quickjs_wifi.c
+	add_executable(pakcli
+		src/cli.c
+		bindings/quickjs_wifi.c
+		bindings/quickjs_socket.c
 	)
-	target_link_libraries(test
+	target_link_libraries(pakcli
 		PRIVATE
 		${QUICKJS_LIB}
 		pak

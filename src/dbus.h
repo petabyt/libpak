@@ -1,6 +1,14 @@
 // dbus helpers
 #include <stdlib.h>
+#include <stdint.h>
 #include <dbus/dbus.h>
+
+static inline void *alloc_priv(unsigned int sizeofstruct, const char *path) {
+	unsigned int path_len = strlen(path);
+	char *buf = calloc(1, sizeofstruct + path_len + 1);
+	memcpy(buf + sizeofstruct, path, path_len + 1);
+	return buf;
+}
 
 static DBusConnection *get_dbus_system(void) {
 	DBusError error;
@@ -47,4 +55,24 @@ static int get_dbus_property(DBusConnection *conn, const char *dest, const char 
 	if (resp == NULL) return -1;
 	if (dbus_error_is_set(&error)) return -1;
 	return 0;
+}
+
+static int get_u8array(DBusMessageIter *iter, char *val, unsigned int max) {
+	if (dbus_message_iter_get_arg_type(iter) == DBUS_TYPE_ARRAY) {
+		DBusMessageIter dict;
+		dbus_message_iter_recurse(iter, &dict);
+		int current_type;
+		int i = 0;
+		while ((current_type = dbus_message_iter_get_arg_type(&dict)) != DBUS_TYPE_INVALID) {
+			uint8_t c;
+			dbus_message_iter_get_basic(&dict, &c);
+			val[i] = (char)c;
+			dbus_message_iter_next(&dict);
+			i++;
+			if (i >= max) return -1;
+		}
+		val[i] = '\0';
+		return 0;
+	}
+	return -1;
 }

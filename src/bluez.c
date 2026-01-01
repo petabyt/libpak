@@ -70,17 +70,14 @@ static int get_bluez_bool_property(DBusConnection *conn, const char *path, const
 	return 0;
 }
 
-static int get_bluez_string_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, const char **v) {
-	DBusMessage *resp;
-	int rc = get_dbus_property(conn, "org.bluez", path, iface, prop, &resp);
+static int get_bluez_string_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, const char **v, DBusMessage **resp) {
+	int rc = get_dbus_property(conn, "org.bluez", path, iface, prop, resp);
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
-	if (!dbus_message_iter_init(resp, &args)) return -1;
+	if (!dbus_message_iter_init(*resp, &args)) return -1;
     dbus_message_iter_recurse(&args, &subargs);
     dbus_message_iter_get_basic(&subargs, v);
-
-    dbus_message_unref(resp);
 
 	return 0;
 }

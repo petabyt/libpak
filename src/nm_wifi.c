@@ -325,8 +325,26 @@ int pak_wifi_is_enabled(struct PakWiFi *ctx) {
 	return v;
 }
 
-int pak_wifi_request_scan(struct PakWiFi *ctx) {
+int pak_wifi_request_scan(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter) {
 	DBusConnection *conn = get_dbus_system();
+
+	DBusError error;
+	dbus_error_init(&error);
+	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", adapter->priv->path, "org.freedesktop.NetworkManager.Device.Wireless", "RequestScan");
+
+	DBusMessageIter iter;
+	dbus_message_iter_init_append(call, &iter);
+
+	DBusMessageIter dict;
+	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "{sv}", &dict);
+	// Empty
+	dbus_message_iter_close_container(&iter, &dict);
+
+	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
+	if (resp == NULL) return -1;
+
+	dbus_message_unref(resp);
+
 	return 0;
 }
 
@@ -462,8 +480,7 @@ static int is_connection_matching(DBusConnection *conn, struct PakWiFiAdapter *a
 	return 0;
 }
 
-static int get_existing_connection(DBusConnection *conn, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char **path_arg) {
-
+static int find_existing_connection(DBusConnection *conn, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char **path_arg) {
 	const char *iface = "org.freedesktop.NetworkManager.Device";
 	const char *prop = "AvailableConnections";
 
@@ -511,7 +528,7 @@ int pak_wifi_connect_to_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, 
 	const char *ap_path = ap->priv->path;
 
 	const char *conn_path = NULL;
-	if (get_existing_connection(ctx->conn, adapter, ap, &conn_path)) {
+	if (find_existing_connection(ctx->conn, adapter, ap, &conn_path)) {
 
 		// TODO: Update connection setting with new password (if changed)
 

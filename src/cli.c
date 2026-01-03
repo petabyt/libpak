@@ -59,20 +59,17 @@ int run_quickjs(const char *filename) {
 
 
 int test_bluetooth(void) {
-	struct PakBtAdapter adapter;
 	struct PakBt *ctx = pak_bt_get_context();
-	int n = pak_bt_get_n_adapters(ctx);
-	if (n < 0) return -1;
-	for (int i = 0; i < n; i++) {
-		if (pak_bt_get_adapter(ctx, &adapter, i)) return -1;
-		printf("Bluetooth adapter: '%s'\n", adapter.name);
-		break;
-	}
 
-	if (!pak_bt_is_enabled(ctx)) {
-		printf("Bluetooth is not enabled\n");
-		return 0;
-	}
+	int len = pak_bt_get_n_adapters(ctx);
+	if (len <= 0) return -1;
+	struct PakBtAdapter adapter;
+	if (pak_bt_get_adapter(ctx, &adapter, 0)) return -1;
+
+	struct PakBtDevice dev;
+	if (pak_bt_get_paired_device(ctx, &adapter, &dev, 0) == 0) {
+		printf("%s\n", dev.name);
+	} 
 
 	pak_bt_unref_adapter(ctx, &adapter);
 
@@ -109,6 +106,8 @@ int main(int argc, char **argv) {
 			int rc = test_wifi();
 			rc |= test_bluetooth();
 			return rc;
+		} else if (!strcmp(argv[i], "--dump-bt")) {
+			return test_bluetooth();
 		}
 	}
 	printf("Invalid argument\n");

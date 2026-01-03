@@ -37,20 +37,20 @@ struct PakBt *pak_bt_get_context(void) {
 
 	DBusConnection *conn = get_dbus_system();
 
-	dbus_connection_add_filter(conn, handle_messages, NULL, NULL);
-
-	dbus_bus_add_match(conn,
-		"type='signal',"
-		"sender='org.bluez',"
-		"interface='org.freedesktop.DBus.Properties',"
-		"member='PropertiesChanged'"
-		, NULL);
-	dbus_connection_flush(conn);
-
-    while (1)
-    {
-        dbus_connection_read_write_dispatch(conn, 1000);
-    }
+//	dbus_connection_add_filter(conn, handle_messages, NULL, NULL);
+//
+//	dbus_bus_add_match(conn,
+//		"type='signal',"
+//		"sender='org.bluez',"
+//		"interface='org.freedesktop.DBus.Properties',"
+//		"member='PropertiesChanged'"
+//		, NULL);
+//	dbus_connection_flush(conn);
+//
+//    while (1)
+//    {
+//        dbus_connection_read_write_dispatch(conn, 1000);
+//    }
 
 	return ctx;
 }
@@ -214,8 +214,8 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
 	return 0;
 }
 
-// https://github.com/bluez/bluez-sandbox/blob/209e2568c6970d174c45460d1e16c3e7e8571a5f/doc/device-api.txt
-static int fill_adv_from_dict(struct DBusMessageIter *dict_iter, struct PakBtAdvertisement *adv) {
+// https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc/org.bluez.Device.rst
+static int fill_adv_from_dict(struct DBusMessageIter *dict_iter, struct PakBtDevice *dev) {
 	int len = dbus_message_iter_get_element_count(dict_iter);
 	DBusMessageIter arr_iter;
 	dbus_message_iter_recurse(dict_iter, &arr_iter);
@@ -232,22 +232,33 @@ static int fill_adv_from_dict(struct DBusMessageIter *dict_iter, struct PakBtAdv
 		if (!strcmp(name, "Connected")) {
 			dbus_bool_t v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
+			dev->is_connected = (int)v;
 		} else if (!strcmp(name, "Name")) {
 			const char *v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			strlcpy(adv->name, v, sizeof(adv->name));
+			strlcpy(dev->name, v, sizeof(dev->name));
 		} else if (!strcmp(name, "Address")) {
 			const char *v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			strlcpy(adv->mac_address, v, sizeof(adv->mac_address));
+			strlcpy(dev->mac_address, v, sizeof(dev->mac_address));
+		} else if (!strcmp(name, "ManufacturerData")) {
+			struct DBusMessageIter dict2;
+			dbus_message_iter_recurse(&dict, &dict2);
+			printf("%c\n", dbus_message_iter_get_arg_type(&dict2));
+		} else if (!strcmp(name, "Class")) {
+			uint32_t v;
+			dbus_message_iter_get_basic(&dict_variant, &v);
+			dev->btclass = v;
 		}
 
 		dbus_message_iter_next(&arr_iter);
 	}
-	return -1;
+	return 0;
 }
 
-int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtAdvertisementList **list_arg) {
+#define FILTER_IS_CONNECTED 1
+
+static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *dev, int index, int filter) {
 	DBusConnection *conn = get_dbus_system();
 
 	DBusMessage *resp = send_message_noargs(conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
@@ -257,12 +268,11 @@ int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, s
 	dbus_message_iter_init(resp, &iter);
 
 	int len = dbus_message_iter_get_element_count(&iter);
-	struct PakBtAdvertisementList *list = malloc(sizeof(struct PakBtAdvertisementList) + (sizeof(struct PakBtAdvertisement) * len));
-	list->length = 0;
 
 	DBusMessageIter iter_arr;
 	dbus_message_iter_recurse(&iter, &iter_arr);
 
+	int found = 0;
 	for (int i = 0; i < len; i++) {
 		DBusMessageIter dict;
 		dbus_message_iter_recurse(&iter_arr, &dict);
@@ -274,9 +284,16 @@ int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, s
 		dbus_message_iter_next(&dict);
 		DBusMessageIter adapter_dict;
 		if (!find_dict(&dict, "org.bluez.Device1", &adapter_dict)) {
-			//list->list[list->length].priv = path; // todo: strdup?
-			fill_adv_from_dict(&adapter_dict, &list->list[list->length]);
-			list->length++;
+			if (found == index) {
+				fill_adv_from_dict(&adapter_dict, dev);
+				int check = (filter & FILTER_IS_CONNECTED) && dev->is_connected;
+				if (check) {
+					//dev->priv = strdup(path);
+					dbus_message_unref(resp);
+					return 0;
+				}
+			}
+			found++;
 		}
 
 		dbus_message_iter_next(&iter_arr);
@@ -284,8 +301,11 @@ int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, s
 
 	dbus_message_unref(resp);
 
-	(*list_arg) = list;
-	return 0;
+	return -1;
+}
+
+int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index) {
+	return pak_bt_get_object(ctx, adapter, device, index, FILTER_IS_CONNECTED);
 }
 
 // https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1

@@ -42,16 +42,17 @@ int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int inde
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter);
 
 struct PakBtDevice {
+	int is_classic;
+	int is_connected;
 	char name[64];
 	char mac_address[64];
-	int is_connected;
+	uint32_t btclass;
+	uint8_t mfg_data[64];
 	struct PakBtDevicePriv *priv;
 	_pad_pointer pad_priv;
 };
-struct PakBtDeviceList {
-	int length;
-	struct PakBtDevice list[];
-};
+
+int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index);
 
 /// Bluetooth RFCOMM socket
 struct PakBtSocket;
@@ -59,20 +60,9 @@ struct PakBtSocket;
 /// Setup RFCOMM connection to a UUID via SDP lookup
 int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, uint8_t uuid[16], struct PakBtSocket **conn);
 
-struct PakBtAdvertisement {
-	char name[64];
-	char mac_address[64];
-	uint8_t mfg_data[64];
-	int adv_interval;
-};
-struct PakBtAdvertisementList {
-	int length;
-	struct PakBtAdvertisement list[];
-};
-
 /// @brief Get a list of current cached advertisements on an adapter. Does not perform a scan.
-int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtAdvertisementList **list_arg);
+//int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtAdvertisementList **list_arg);
 
-typedef int pak_bt_listen(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtAdvertisement *adv);
+typedef int pak_bt_listen(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtDevice *adv);
 
 int pak_bt_listen_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, pak_bt_listen *cb, void *cb_arg);

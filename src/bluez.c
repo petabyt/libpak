@@ -245,6 +245,24 @@ static int fill_adv_from_dict(struct DBusMessageIter *dict_iter, struct PakBtDev
 			struct DBusMessageIter dict2;
 			dbus_message_iter_recurse(&dict, &dict2);
 			printf("%c\n", dbus_message_iter_get_arg_type(&dict2));
+		} else if (!strcmp(name, "UUIDs")) {
+			struct DBusMessageIter dict2;
+			dbus_message_iter_recurse(&dict, &dict2);
+
+			dev->uuids.length = (unsigned int)dbus_message_iter_get_element_count(&dict2);
+			dev->uuids.uuids = malloc(sizeof(struct PakUuidList) + 16 * dev->uuids.length);
+
+			struct DBusMessageIter dict3;
+			dbus_message_iter_recurse(&dict2, &dict3);
+
+			int i = 0;
+			while (dbus_message_iter_get_arg_type(&dict3) != DBUS_TYPE_INVALID) {
+				const char *uuid = NULL;
+				dbus_message_iter_get_basic(&dict3, &uuid);
+				pak_str_to_uuid128(uuid, dev->uuids.uuids[i]);
+				dbus_message_iter_next(&dict3);
+				i++;
+			}
 		} else if (!strcmp(name, "Class")) {
 			uint32_t v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
@@ -306,6 +324,12 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 
 int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index) {
 	return pak_bt_get_object(ctx, adapter, device, index, FILTER_IS_CONNECTED);
+}
+
+int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {
+	//free(device->priv);
+	free(device->uuids.uuids);
+	return 0;
 }
 
 // https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1

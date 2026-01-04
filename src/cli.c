@@ -67,9 +67,17 @@ int test_bluetooth(void) {
 	if (pak_bt_get_adapter(ctx, &adapter, 0)) return -1;
 
 	struct PakBtDevice dev;
-	if (pak_bt_get_paired_device(ctx, &adapter, &dev, 0) == 0) {
-		printf("%s\n", dev.name);
-	} 
+	int i = 0;
+	while (pak_bt_get_paired_device(ctx, &adapter, &dev, i) == 0) {
+		printf("Paired device: %s\n", dev.name);
+		for (int z = 0; z < dev.uuids.length; z++) {
+			char uuid[37];
+			pak_uuid128_to_str(dev.uuids.uuids[z], uuid);
+			printf("%s\n", uuid);
+		}
+		i++;
+		pak_bt_unref_device(ctx, &dev);
+	}
 
 	pak_bt_unref_adapter(ctx, &adapter);
 

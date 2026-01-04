@@ -214,8 +214,46 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
 	return 0;
 }
 
+static void parse_manufacturer_data(struct DBusMessageIter *dict, struct PakBtDevice *dev) {
+	// Example: "ManufacturerData" a{qv} 1 1520 ay 4 170 0 0 0
+	int of = 0;
+	struct DBusMessageIter dict2;
+	dbus_message_iter_recurse(dict, &dict2);
+
+	struct DBusMessageIter dict3;
+	dbus_message_iter_recurse(&dict2, &dict3);
+
+	while (dbus_message_iter_get_arg_type(&dict3) != DBUS_TYPE_INVALID) {
+		struct DBusMessageIter dict4;
+		dbus_message_iter_recurse(&dict3, &dict4);
+
+		uint16_t qword;
+		dbus_message_iter_get_basic(&dict4, &qword);
+
+		dev->mfg_data[of++] = qword & 0xff;
+		dev->mfg_data[of++] = (qword >> 8) & 0xff;
+
+		dbus_message_iter_next(&dict4);
+
+		struct DBusMessageIter dict5;
+		dbus_message_iter_recurse(&dict4, &dict5);
+
+		struct DBusMessageIter dict6;
+		dbus_message_iter_recurse(&dict5, &dict6);
+
+		while (dbus_message_iter_get_arg_type(&dict6) != DBUS_TYPE_INVALID) {
+			uint8_t byte;
+			dbus_message_iter_get_basic(&dict6, &byte);
+			dev->mfg_data[of++] = byte;
+			dbus_message_iter_next(&dict6);
+		}
+
+		dbus_message_iter_next(&dict3);
+	}
+}
+
 // https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc/org.bluez.Device.rst
-static int fill_adv_from_dict(struct DBusMessageIter *dict_iter, struct PakBtDevice *dev) {
+static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevice *dev) {
 	int len = dbus_message_iter_get_element_count(dict_iter);
 	DBusMessageIter arr_iter;
 	dbus_message_iter_recurse(dict_iter, &arr_iter);
@@ -242,9 +280,7 @@ static int fill_adv_from_dict(struct DBusMessageIter *dict_iter, struct PakBtDev
 			dbus_message_iter_get_basic(&dict_variant, &v);
 			strlcpy(dev->mac_address, v, sizeof(dev->mac_address));
 		} else if (!strcmp(name, "ManufacturerData")) {
-			struct DBusMessageIter dict2;
-			dbus_message_iter_recurse(&dict, &dict2);
-			printf("%c\n", dbus_message_iter_get_arg_type(&dict2));
+			parse_manufacturer_data(&dict, dev);
 		} else if (!strcmp(name, "UUIDs")) {
 			struct DBusMessageIter dict2;
 			dbus_message_iter_recurse(&dict, &dict2);
@@ -302,16 +338,26 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 		dbus_message_iter_next(&dict);
 		DBusMessageIter adapter_dict;
 		if (!find_dict(&dict, "org.bluez.Device1", &adapter_dict)) {
-			if (found == index) {
-				fill_adv_from_dict(&adapter_dict, dev);
-				int check = (filter & FILTER_IS_CONNECTED) && dev->is_connected;
-				if (check) {
-					//dev->priv = strdup(path);
-					dbus_message_unref(resp);
-					return 0;
+			dbus_bool_t is_connected = 0;
+			DBusMessageIter val_dict;
+			if (find_dict(&adapter_dict, "Connected", &val_dict)) return -1;
+			DBusMessageIter val_dict2;
+			dbus_message_iter_recurse(&val_dict, &val_dict2);
+			dbus_message_iter_get_basic(&val_dict2, &is_connected);
+
+			if (filter & FILTER_IS_CONNECTED) {
+				if (is_connected) {
+					if (found == index) {
+						fill_from_device1(&adapter_dict, dev);
+						//dev->priv = strdup(path);
+						dbus_message_unref(resp);
+						return 0;
+					}
+					found++;
 				}
+			} else {
+				found++;
 			}
-			found++;
 		}
 
 		dbus_message_iter_next(&iter_arr);

@@ -72,9 +72,14 @@ int test_bluetooth(void) {
 		printf("Paired device: %s\n", dev.name);
 		for (int z = 0; z < dev.uuids.length; z++) {
 			char uuid[37];
-			pak_uuid128_to_str(dev.uuids.uuids[z], uuid);
+			pak_uuid128_to_str(dev.uuids.uuids[0], uuid);
 			printf("%s\n", uuid);
 		}
+		printf("Mfgdata: {");
+		for (int z = 0; z < 0x10; z++) {
+			printf("%02x,", dev.mfg_data[z]);
+		}
+		printf("}\n");
 		i++;
 		pak_bt_unref_device(ctx, &dev);
 	}

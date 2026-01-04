@@ -52,7 +52,7 @@ struct PakBtDevice {
 	char name[64];
 	char mac_address[64];
 	uint32_t btclass;
-	uint8_t mfg_data[64];
+	uint8_t mfg_data[0xff];
 	struct PakUuidList uuids;
 	struct PakBtDevicePriv *priv;
 	_pad_pointer pad_priv;

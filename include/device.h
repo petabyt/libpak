@@ -13,11 +13,12 @@
 #define PAK_DEVICE_DOORBELL "doorbell"
 // Home class
 #define PAK_DEVICE_KITCHEN_APPLIANCE "kitchen-appliance"
+#define PAK_DEVICE_GENERIC_APPLIANCE "generic-appliance"
 #define PAK_DEVICE_GENERIC_HOME_DEVICE "generic-home-device"
 #define PAK_DEVICE_DESK "desk"
-#define PAK_DEVICE_3D_PRINTER "3d-printer"
-#define PAK_DEVICE_WIFI_ROUTER "wifi-router"
 #define PAK_DEVICE_GENERIC_FURNITURE "generic-furniture"
+#define PAK_DEVICE_WIFI_ROUTER "wifi-router"
+#define PAK_DEVICE_3D_PRINTER "3d-printer"
 // Accessory class
 #define PAK_DEVICE_HEADPHONES "headphones"
 #define PAK_DEVICE_EARBUDS "earbuds"
@@ -29,6 +30,7 @@
 #define PAK_DEVICE_GENERIC_MEDICAL_WEARABLE "generic-medical-wearable"
 #define PAK_DEVICE_GENERIC_EXERCISE_MACHINE "generic-exercise-machine"
 // Non-photo gadget class
+#define PAK_DEVICE_GAME_CONTROLLER "game-controller"
 #define PAK_DEVICE_DRONE "drone"
 #define PAK_DEVICE_GENERIC_REMOTE_CONTROL "generic-remote-control"
 #define PAK_DEVICE_SCOOTER "scooter"

@@ -1,4 +1,5 @@
 // Runtime
+#include <stdint.h>
 
 /// @addtogroup PakDevice
 /// @{
@@ -39,3 +40,44 @@
 #define PAK_DEVICE_AUTOMOTIVE_INFOTAINMENT "automotive-infotainment"
 #define PAK_DEVICE_AUTOMOTIVE_DIAGNOSTIC "automotive-diagnostic"
 /// @}
+
+struct Manifest {
+	const char *name;
+	const char *description;
+	const char *author;
+	const char *author_url;
+	int version;
+	int language;
+	const char *root_url;
+	const char *manifest_path;
+	const char *script_path;
+	const char *icon_path;
+
+	const char *script_signature;
+	const char *script_public_key;
+
+	int primary_discovery_type;
+
+	struct ManifestWiFiDiscovery {
+		const char *ssid_pattern;
+	}wifi_options;
+
+	struct ManifestBLEDiscovery {
+		uint8_t mfg_data_match[0xff];
+		uint8_t mfg_data_mask[0xff];
+		const char *service_uuid1;
+		const char *service_uuid2;
+	}ble_options;
+
+	struct ManifestUSBDiscovery {
+		int pid;
+		int vid;
+	}usb_options;
+
+	struct ManifestDatagramDiscovery {
+		const char *http_request;
+	}upnp_options;
+
+	const char **target_companies;
+	const char **target_products;
+};

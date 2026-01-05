@@ -62,14 +62,13 @@ int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device);
 
+int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int *percent);
+
 /// Bluetooth RFCOMM socket
 struct PakBtSocket;
 
 /// Setup RFCOMM connection to a UUID via SDP lookup
 int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, uint8_t uuid[16], struct PakBtSocket **conn);
-
-/// @brief Get a list of current cached advertisements on an adapter. Does not perform a scan.
-//int pak_bt_get_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtAdvertisementList **list_arg);
 
 typedef int pak_bt_listen(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtDevice *adv);
 

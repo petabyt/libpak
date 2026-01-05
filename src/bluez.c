@@ -12,7 +12,7 @@
 #include "bluetooth.h"
 
 struct PakBt {
-	int foo;
+	DBusConnection *conn;
 };
 
 struct PakBtSocket {
@@ -20,11 +20,13 @@ struct PakBtSocket {
 };
 
 struct PakBtDevicePriv {
-	int foo;
+	int x;
+	char path[];
 };
 
 struct PakBtAdapterPriv {
-	char path[1024];
+	int x;
+	char path[];
 };
 
 static DBusHandlerResult handle_messages(DBusConnection *connection, DBusMessage *message, void *user_data) {
@@ -35,7 +37,7 @@ static DBusHandlerResult handle_messages(DBusConnection *connection, DBusMessage
 struct PakBt *pak_bt_get_context(void) {
 	struct PakBt *ctx = malloc(sizeof(struct PakBt));
 
-	DBusConnection *conn = get_dbus_system();
+	ctx->conn = get_dbus_system();
 
 //	dbus_connection_add_filter(conn, handle_messages, NULL, NULL);
 //
@@ -47,10 +49,6 @@ struct PakBt *pak_bt_get_context(void) {
 //		, NULL);
 //	dbus_connection_flush(conn);
 //
-//    while (1)
-//    {
-//        dbus_connection_read_write_dispatch(conn, 1000);
-//    }
 
 	return ctx;
 }
@@ -211,6 +209,7 @@ int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int inde
 }
 
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
+	free(adapter->priv);
 	return 0;
 }
 
@@ -349,7 +348,7 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 				if (is_connected) {
 					if (found == index) {
 						fill_from_device1(&adapter_dict, dev);
-						//dev->priv = strdup(path);
+						dev->priv = (struct PakBtDevicePriv *)alloc_priv(sizeof(struct PakBtDevicePriv), path);
 						dbus_message_unref(resp);
 						return 0;
 					}
@@ -373,8 +372,28 @@ int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 }
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {
-	//free(device->priv);
+	free(device->priv);
 	free(device->uuids.uuids);
+	return 0;
+}
+
+int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int *percent) {
+	DBusMessage *resp;
+	int rc = get_dbus_property(ctx->conn, "org.bluez", device->priv->path, "org.bluez.Battery1", "Percentage", &resp);
+
+	DBusMessageIter args;
+	DBusMessageIter subargs;
+	if (!dbus_message_iter_init(resp, &args)) return -1;
+    dbus_message_iter_recurse(&args, &subargs);
+
+	uint8_t v;
+
+    dbus_message_iter_get_basic(&subargs, &v);
+
+	(*percent) = (int)v;
+
+    dbus_message_unref(resp);
+
 	return 0;
 }
 

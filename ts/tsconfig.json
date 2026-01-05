@@ -1,0 +1,31 @@
+{
+	"compilerOptions": {
+		"target": "ES5",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+
+		"strict": true,
+		"noImplicitAny": true,
+		"noImplicitThis": true,
+		"alwaysStrict": true,
+
+		"skipLibCheck": false,
+		"forceConsistentCasingInFileNames": true,
+
+		"esModuleInterop": false,
+		"allowSyntheticDefaultImports": false,
+
+		"declaration": false,
+		"sourceMap": true,
+
+		"verbatimModuleSyntax": true,
+		//"emitDeclarationOnly": true,
+		//"allowImportingTsExtensions": true,
+
+		"outDir": "dist"
+	},
+	"include": [
+		"src",
+		"types",
+	]
+}

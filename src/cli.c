@@ -89,6 +89,8 @@ int test_bluetooth(void) {
 		pak_bt_unref_device(ctx, &dev);
 	}
 
+	pak_main_loop();
+
 	pak_bt_unref_adapter(ctx, &adapter);
 
 	return 0;
@@ -110,6 +112,8 @@ int test_wifi(void) {
 		printf("ssid: %s\n", ap.ssid);
 		pak_wifi_unref_ap(ctx, &adapter, &ap);
 	}
+
+	pak_main_loop();
 
 	pak_wifi_unref_adapter(ctx, &adapter);
 

@@ -25,8 +25,44 @@ struct PakWiFiApPriv {
 	char path[];
 };
 
-static DBusHandlerResult handle_messages(DBusConnection *connection, DBusMessage *message, void *user_data) {
-	printf("Handle message: %s\n", dbus_message_get_member(message));
+static DBusHandlerResult handle_messages(DBusConnection *conn, DBusMessage *message, void *user_data) {
+	if (dbus_message_get_type(message) != DBUS_MESSAGE_TYPE_SIGNAL)
+		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+
+	if (dbus_message_is_signal(message, "org.freedesktop.DBus.Properties", "PropertiesChanged")) {
+		printf("Property changed\n");
+
+		DBusMessageIter iter, iter2, iter3;
+		dbus_message_iter_init(message, &iter);
+		const char *iface_name;
+		dbus_message_iter_get_basic(&iter, &iface_name);
+		printf("iface: %s\n", iface_name);
+		dbus_message_iter_next(&iter); // skip iface
+		dbus_message_iter_recurse(&iter, &iter2);
+
+		dbus_message_iter_recurse(&iter2, &iter3);
+
+		const char *signal_name;
+		dbus_message_iter_get_basic(&iter3, &signal_name);
+		printf("changed %s\n", signal_name);
+
+		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+	}
+
+	if (dbus_message_get_type(message) == DBUS_MESSAGE_TYPE_SIGNAL) {
+		const char *iface;
+		const char *member;
+		const char *path;
+		iface = dbus_message_get_interface(message);
+		member = dbus_message_get_member(message);
+		path = dbus_message_get_path(message);
+
+		printf("signal iface=%s member=%s path=%s\n",
+		       iface ? iface : "(null)",
+		       member ? member : "(null)",
+		       path ? path : "(null)");
+	}
+
 	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 

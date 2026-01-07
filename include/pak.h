@@ -12,3 +12,5 @@ enum PakErrorCode {
 	PAK_PERMISSION_DENIED = -1,
 	PAK_UNSUPPORTED = -2,
 };
+
+int pak_main_loop(void);

@@ -21,7 +21,7 @@ public class Companion {
             CompanionDeviceManager deviceManager = (CompanionDeviceManager)ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);
 
             WifiDeviceFilter.Builder builder = new WifiDeviceFilter.Builder();
-            builder.setNamePattern(Pattern.compile("V300."));
+            builder.setNamePattern(Pattern.compile("V300.+"));
             WifiDeviceFilter filter = builder.build();
 
             Executor executor = new Executor() {

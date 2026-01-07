@@ -39,8 +39,10 @@ int main(void) {
 	if (pak_wifi_get_adapter(ctx, &adapter, 0)) return -1;
 	printf("adapter: %s\n", adapter.name);
 
+	printf("requested scan: %d\n", pak_wifi_request_scan(ctx, &adapter));
+	return 0;
+
 	int found_ssid = 0;
-	
 	int n_aps = pak_wifi_get_n_aps(ctx, &adapter);
 	struct PakWiFiAp ap;
 	for (int i = 0; i < n_aps; i++) {

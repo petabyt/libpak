@@ -20,6 +20,7 @@ elseif(LINUX)
 	pkg_check_modules(DBUS IMPORTED_TARGET GLOBAL dbus-1)
 	pkg_check_modules(BLUETOOTH IMPORTED_TARGET GLOBAL bluez)
 	add_library(pak STATIC 
+		src/dbus.c
 		src/bluez.c
 		src/nm_wifi.c
 	)

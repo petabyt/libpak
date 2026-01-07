@@ -52,7 +52,7 @@ public class WiFi {
     public boolean blockEvents = false;
 
     public static class NativeNetworkCallback extends ConnectivityManager.NetworkCallback {
-        byte[] struct;
+        public byte[] struct;
         @Override
         public void onAvailable(Network network) {
 

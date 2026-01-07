@@ -28,6 +28,7 @@ enum Operations {
 	M_SELECT,
 	M_READ,
 	M_WRITE,
+	M_CREATESOCKADDRIN,
 };
 
 static fd_set *parse_fd_set(JSContext *ctx, fd_set *set, JSValue arr) {
@@ -129,12 +130,39 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 		struct timeval *tv = (void *)JS_GetArrayBuffer(ctx, &len, argv[4]);
 		return JS_NewInt32(ctx, select(nfds, r, w, e, tv));
 		}
+	case M_CREATESOCKADDRIN: {
+		uint32_t port = 0;
+		const char *addr = JS_ToCString(ctx, argv[0]);
+		JS_ToUint32(ctx, &port, argv[1]);
+		struct sockaddr_in sa;
+		memset(&sa, 0, sizeof(sa));
+		sa.sin_family = AF_INET;
+		sa.sin_port = htons(port);
+		if (inet_pton(AF_INET, addr, &(sa.sin_addr)) <= 0) {
+			return JS_ThrowInternalError(ctx, "inet_pton");
+		}
+		JSValue val = JS_NewArrayBufferCopy(ctx, (void *)&sa, sizeof(sa));
+		return val;
+		}
 	}
 	return JS_UNDEFINED;
 }
 
+static JSValue get_yes(JSContext *ctx, JSValueConst this_val) {
+	int yes = 1;
+	printf("Get yes\n");
+	return JS_NewArrayBufferCopy(ctx, (const unsigned char *)&yes, sizeof(yes));
+}
+
+static JSValue dummy_setter(JSContext *ctx, JSValueConst this_val, JSValueConst val) {
+	printf("set\n");
+	return JS_ThrowTypeError(ctx, "readonly");
+}
+
 #define JS_CONSTANT(x) JS_PROP_INT32_DEF(#x, x, JS_PROP_CONFIGURABLE)
 static const JSCFunctionListEntry socket_methods[] = {
+	//JS_CGETSET_DEF("yes", get_yes, dummy_setter),
+
 	JS_CFUNC_MAGIC_DEF("socket", 3, generic_operation, M_SOCKET),
 	JS_CFUNC_MAGIC_DEF("setsockopt", 4, generic_operation, M_SETSOCKOPT),
 	JS_CFUNC_MAGIC_DEF("getsockopt", 3, generic_operation, M_GETSOCKOPT),
@@ -144,6 +172,7 @@ static const JSCFunctionListEntry socket_methods[] = {
 	JS_CFUNC_MAGIC_DEF("select", 5, generic_operation, M_SELECT),
 	JS_CFUNC_MAGIC_DEF("read", 3, generic_operation, M_READ),
 	JS_CFUNC_MAGIC_DEF("write", 3, generic_operation, M_WRITE),
+	JS_CFUNC_MAGIC_DEF("createSockAddrIn", 2, generic_operation, M_CREATESOCKADDRIN),
 
 	JS_CONSTANT(SOL_SOCKET),
 

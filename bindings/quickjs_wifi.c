@@ -33,6 +33,8 @@ static JSValue create_adapter(JSContext *ctx, JSValue wifi, struct PakWiFi *wifi
 
 	JS_SetOpaque(adapter_obj, adapter_priv);
 
+	JS_SetPropertyStr(ctx, adapter_obj, "name", JS_NewString(ctx, adapter_priv->adapter.name));
+
 	JS_SetPropertyStr(ctx, adapter_obj, "parent", JS_DupValue(ctx, wifi));
 	return adapter_obj;
 }

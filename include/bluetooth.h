@@ -10,31 +10,30 @@ struct PakBt *pak_bt_get_context(void);
 /// Checks if system-wide bluetooth is enabled
 int pak_bt_is_enabled(struct PakBt *ctx);
 
-enum PakBtFeature {
-	PAK_SUPPORT_LE_ADVERTISING = 1,
-	PAK_SUPPORT_LE_AUDIO,
-};
-int pak_bt_is_supported(enum PakBtFeature feat);
-
 struct PakBt *pak_bt_get_context(void);
 void pak_bt_unref_context(struct PakBt *ctx);
 
 enum PakBtEvent {
-	PAK_EVENT_FOO = 1,
+	PAK_EVENT_LE_ADVERTISEMENT = 1,
+	PAK_EVENT_GATT_UUID_CHANGED,
 };
 
-enum PakBtSocketOption {
-	PAK_RFCOMM_SECURE = 1 << 0,
-	PAK_RFCOMM_INSECURE = 1 << 1,
+enum PakBtFeature {
+	PAK_SUPPORT_LE = 1,
+	PAK_SUPPORT_LE_ADVERTISING,
+	PAK_SUPPORT_LE_AUDIO,
+	PAK_SUPPORT_BTC,
+	PAK_SUPPORT_PERIPHERAL_MODE,
 };
+int pak_bt_is_supported(struct PakBt *ctx, enum PakBtFeature feat);
 
 struct PakBtAdapter {
+	struct PakBtAdapterPriv *priv;
+	_pad_pointer pad_priv;
 	char address[64];
 	char name[64];
 	int powered;
 	int class_;
-	struct PakBtAdapterPriv *priv;
-	_pad_pointer pad_priv;
 };
 
 int pak_bt_get_n_adapters(struct PakBt *ctx);
@@ -47,6 +46,8 @@ struct PakUuidList {
 };
 
 struct PakBtDevice {
+	struct PakBtDevicePriv *priv;
+	_pad_pointer pad_priv;
 	int is_classic;
 	int is_connected;
 	char name[64];
@@ -54,8 +55,6 @@ struct PakBtDevice {
 	uint32_t btclass;
 	uint8_t mfg_data[0xff];
 	struct PakUuidList uuids;
-	struct PakBtDevicePriv *priv;
-	_pad_pointer pad_priv;
 };
 
 int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index);
@@ -67,8 +66,17 @@ int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int
 /// Bluetooth RFCOMM socket
 struct PakBtSocket;
 
+enum PakBtSocketOption {
+	PAK_RFCOMM_SECURE = 1 << 0,
+	PAK_RFCOMM_INSECURE = 1 << 1,
+};
+
 /// Setup RFCOMM connection to a UUID via SDP lookup
 int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, uint8_t uuid[16], struct PakBtSocket **conn);
+
+int pak_bt_write(struct PakBtSocket *conn, const void *data, unsigned int length);
+int pak_bt_read(struct PakBtSocket *conn, void *data, unsigned int length);
+int pak_bt_close_socket(struct PakBtSocket *conn);
 
 typedef int pak_bt_listen(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtDevice *adv);
 

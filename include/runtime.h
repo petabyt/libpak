@@ -43,6 +43,11 @@
 #define PAK_DEVICE_AUTOMOTIVE_DIAGNOSTIC "automotive-diagnostic"
 /// @}
 
+struct FileMetadata {
+	const char *filename;
+	const char *mime_type;
+};
+
 struct Module {
 	enum Screen {
 		SCREEN_CONNECT_WIFI = 1,
@@ -58,34 +63,44 @@ struct Module {
 		SCREEN_GEOTAGGING,
 		SCREEN_LIVEVIEW,
 		SCREEN_LIVE_FEED,
-	};
+	}default_screen;
 
 	int version;
 	struct ModulePriv *priv;
-	enum Screen default_screen;
 	int (*get_manifest)(struct Module *);
 	int (*init)(struct Module *);
-	int (*on_try_connect_wifi)(struct Module *, struct PakNetworkHandle *handle, int job);
+	/// Try to initiate a connection over a network handle
+	int (*on_try_connect_wifi)(struct Module *, struct PakWiFiAdapter *handle, int job);
+	/// Runs immediately after successful connection. Runs at a constant interval, 1s by default.
 	int (*on_idle_tick)(struct Module *, unsigned int us_since_last_tick);
+	/// On user requested disconnect
+	int (*on_disconnect)(struct Module *);
+	/// Runs when a new screen is entered or returned to. This doesn't ask for any new data, it only notifies the module
+	/// to switch states for a different set of commands
 	int (*on_enter_screen)(struct Module *, int screen, int job);
+	/// When a screen is exited. When the previous screen is being entered back into, on_enter_screen will be called
+	/// TODO: switch to int (*on_switch_screen)(struct Module *, int old_screen, int new_screen, int job); 
 	int (*on_exit_screen)(struct Module *, int screen, int job);
-	int (*on_download_full_file)(struct Module *, int screen, int job, void *file_tag);
+	/// 
+	int (*on_request_file_contents)(struct Module *, int screen, int job, void *file_tag);
+	/// Process an arbritrary command (from a console)
 	int (*on_custom_command)(struct Module *, const char *request);
-
-	int (*add_thumbnail)(struct Module *, void *file_tag, void *image_data, unsigned int length);
-	int (*add_file_metadata)(struct Module *, void *file_tag, struct FileMetadata *metadata);
-	int (*add_file)(struct Module *, void *file_tag, void *image_data, unsigned int length);
-
-	int (*enter_screen)(struct Module *, int screen);
-	int (*enter_custom_screen)(struct Module *, int tag);
-	int (*set_progress_bar)(struct Module *, int job, int percent);
-	int (*set_download_speed)(struct Module *, long time, unsigned int n_bytes);
-	int (*set_device_name)(struct Module *, const char *name);
-	int (*set_unique_id)(struct Module *, const char *string);
-	int (*flip_kill_switch)(struct Module *, const char *reason);
-	int (*set_tick_interval)(struct Module *, unsigned int us);
-	const char *(*get_path)(struct Module *, const char *filename);
 };
+
+int pak_mod_add_file_thumbnail(struct Module *mod, void *file_tag, void *image_data, unsigned int length);
+int pak_mod_add_file_metadata(struct Module *mod, void *file_tag, struct FileMetadata *metadata);
+int pak_mod_add_file_contents(struct Module *mod, void *file_tag, void *image_data, unsigned int length);
+
+int pak_mod_enter_screen(struct Module *mod, int screen);
+int pak_mod_enter_custom_screen(struct Module *mod);
+int pak_mod_set_progress_bar(struct Module *mod, int job, int percent);
+int pak_mod_set_current_download_speed(struct Module *mod, long time, unsigned int n_bytes);
+int pak_mod_set_device_name(struct Module *mod, const char *name);
+int pak_mod_set_device_unique_id(struct Module *mod, const char *string);
+int pak_mod_load_device_unique_id(struct Module *mod, const char *string);
+int pak_mod_flip_kill_switch(struct Module *mod, const char *reason);
+int pak_mod_set_tick_interval(struct Module *mod, unsigned int us);
+const char *get_path(struct Module *mod, const char *filename);
 
 struct Manifest {
 	const char *name;

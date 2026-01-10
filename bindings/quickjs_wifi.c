@@ -20,11 +20,11 @@ static JSClassID wifi_class_id = 0;
 static JSClassID wifi_adapter_class_id = 0;
 
 struct Adapter {
-	struct PakWiFi *ctx;
+	struct PakNet *ctx;
 	struct PakWiFiAdapter adapter;
 };
 
-static JSValue create_adapter(JSContext *ctx, JSValue wifi, struct PakWiFi *wifi_ctx, int index) {
+static JSValue create_adapter(JSContext *ctx, JSValue wifi, struct PakNet *wifi_ctx, int index) {
 	JSValue adapter_obj = JS_NewObjectClass(ctx, wifi_adapter_class_id);
 
 	struct Adapter *adapter_priv = js_malloc_rt(JS_GetRuntime(ctx), sizeof(struct Adapter));
@@ -65,32 +65,43 @@ static int module_wifi_adapter(JSContext* ctx, JSModuleDef *m) {
 }
 
 static JSValue get_default_adapter(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
-	struct PakWiFi *wifi_ctx = JS_GetOpaque(this_val, wifi_class_id);
+	struct PakNet *wifi_ctx = JS_GetOpaque(this_val, wifi_class_id);
 	JSValue adapter = create_adapter(ctx, this_val, wifi_ctx, -1);
 	return adapter;
 }
 
+static JSValue wifi_bind_to_adapter(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
+	struct PakNet *wifi_ctx = JS_GetOpaque(this_val, wifi_class_id);
+	struct PakWiFiAdapter *adapter_ctx = JS_GetOpaque(argv[0], wifi_adapter_class_id);
+	int32_t fd;
+	JS_ToInt32(ctx, &fd, argv[1]);
+	if (pak_wifi_bind_socket_to_adapter(wifi_ctx, adapter_ctx, fd)) {
+		return JS_ThrowInternalError(ctx, "pak_wifi_bind_socket_to_adapter");
+	}
+	return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry wifi_methods[] = {
 	JS_CFUNC_DEF("getDefaultAdapter", 0, get_default_adapter),
-	//JS_CFUNC_DEF("bindSocketToAdapter", 0, get_default_adapter),
+	JS_CFUNC_DEF("bindSocketToAdapter", 0, wifi_bind_to_adapter),
 
 	JS_PROP_INT32_DEF("WIFI_2GHZ",		   1, JS_PROP_ENUMERABLE),
 	JS_PROP_INT32_DEF("WIFI_5GHZ",		   2, JS_PROP_ENUMERABLE),
 };
 
-static JSValue js_directory_constructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst argv[]) {
+static JSValue js_wifi_constructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst argv[]) {
 	JSValue proto = JS_GetPropertyStr(ctx, new_target, "prototype");
 	JSValue obj = JS_NewObjectProtoClass(ctx, proto, wifi_class_id);
 	JS_FreeValue(ctx, proto);
 
-	struct PakWiFi *wifictx = pak_wifi_get_context();
+	struct PakNet *wifictx = pak_net_get_context();
 
 	JS_SetOpaque(obj, wifictx);
 	
 	return obj;
 }
 
-static void js_directory_finalizer(JSRuntime *rt, JSValue val) {
+static void js_wifi_finalizer(JSRuntime *rt, JSValue val) {
 }
 
 static int module_wifi(JSContext* ctx, JSModuleDef *m) {
@@ -98,7 +109,7 @@ static int module_wifi(JSContext* ctx, JSModuleDef *m) {
 
 	const JSClassDef js_class = {
 		.class_name = class_name,
-		.finalizer = js_directory_finalizer,
+		.finalizer = js_wifi_finalizer,
 	};
 
 	JS_NewClassID(&wifi_class_id);
@@ -108,7 +119,7 @@ static int module_wifi(JSContext* ctx, JSModuleDef *m) {
 	JS_SetPropertyFunctionList(ctx, proto, wifi_methods, sizeof(wifi_methods) / sizeof(wifi_methods[0]));
 	JS_SetClassProto(ctx, wifi_class_id, proto);
 
-	JSValue class = JS_NewCFunction2(ctx, js_directory_constructor, class_name, 5, JS_CFUNC_constructor, 0);
+	JSValue class = JS_NewCFunction2(ctx, js_wifi_constructor, class_name, 5, JS_CFUNC_constructor, 0);
 	JS_SetConstructor(ctx, class, proto);
 
 	JS_SetModuleExport(ctx, m, class_name, class);

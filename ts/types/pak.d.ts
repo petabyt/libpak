@@ -5,21 +5,29 @@ declare module "pak:wifi" {
 		getAdapters(): WiFiAdapter[];
 		bindSocketToAdapter(fd: number, adapter: WiFiAdapter): void;
 
-		getAps(adapter: WiFiAdapter): WiFiAp[];
-		getConnectedAp(adapter: WiFiAdapter): WiFiAp;
-		connectToAp(adapter: WiFiAdapter, ap: WiFiAp): void;
-
-		requestScan(adapter: WiFiAdapter): void;
-
-		androidNetworkRequestDialog(adapter: WiFiAdapter, callback: Function): void;
+		requestConnection(spec: WiFiApFilter, callback: (adapter: WiFiAdapter) => void);
 
 		static WIFI_2GHZ: number;
 		static WIFI_5GHZ: number;
 	}
 
+	interface WiFiApFilter {
+		ssidPattern?: string;
+		bssid?: string;
+		bssid_mask?: string;
+		password?: string;
+		band?: number;
+		hidden?: boolean;
+	}
+
 	export class WiFiAdapter {
 		name: string;
 		private constructor();
+
+		getAps(): WiFiAp[];
+		getConnectedAp(): WiFiAp;
+		connectToAp(ap: WiFiAp): void;
+		requestScan(): void;
 	}
 	export class WiFiAp {
 		private constructor();
@@ -39,6 +47,6 @@ declare module "pak:bt" {
 }
 
 declare module "c:socket" {
-	function socket(domain: number, type_: number, protocol: number);
-	function setsockopt(fd: number, level: number, optname: number, value: ArrayBuffer);
+	function socket(domain: number, type_: number, protocol: number): void;
+	function setsockopt(fd: number, level: number, optname: number, value: ArrayBuffer): void;
 }

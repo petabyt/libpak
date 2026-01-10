@@ -7,7 +7,7 @@ set(CMAKE_CXX_FLAGS_DEBUG -g)
 set(CMAKE_C_FLAGS_RELWITHDEBINFO -g)
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO -g)
 
-option(PAK_INCLUDE_TEST "cli program" OFF)
+option(PAK_INCLUDE_TEST "cli program" ON)
 option(PAK_INCLUDE_WIFI "WiFi APIs" ON)
 option(PAK_INCLUDE_BT "Bluetooth APIs" ON)
 
@@ -23,6 +23,7 @@ elseif(LINUX)
 		src/dbus.c
 		src/bluez.c
 		src/nm_wifi.c
+		src/common.c
 	)
 	target_link_libraries(pak PRIVATE PkgConfig::DBUS PkgConfig::BLUETOOTH)
 endif()

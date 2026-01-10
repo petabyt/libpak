@@ -6,6 +6,7 @@
 #include <quickjs/quickjs-libc.h>
 #include "wifi.h"
 #include "bluetooth.h"
+#include "runtime.h"
 
 JSModuleDef *js_init_module_socket(JSContext *ctx, const char *module_name);
 JSModuleDef *js_init_module_wifi(JSContext *ctx, const char *module_name);
@@ -18,6 +19,7 @@ int run_quickjs(const char *filename) {
 
 	JS_AddModuleExport(ctx, js_init_module_wifi(ctx, "pak:wifi"), "WiFi");
 	js_init_module_socket(ctx, "c:socket");
+	js_init_module_std(ctx, "qjs:std");
 	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
 	js_std_init_handlers(rt);
 
@@ -51,6 +53,7 @@ int run_quickjs(const char *filename) {
 
 	JS_FreeValue(ctx, val);
 
+	js_std_free_handlers(rt);
 	JS_FreeContext(ctx);
 	JS_FreeRuntime(rt);
 
@@ -97,7 +100,7 @@ int test_bluetooth(void) {
 }
 
 int test_wifi(void) {
-	struct PakWiFi *ctx = pak_wifi_get_context();
+	struct PakNet *ctx = pak_net_get_context();
 
 	int len = pak_wifi_get_n_adapters(ctx);
 	if (len <= 0) return -1;

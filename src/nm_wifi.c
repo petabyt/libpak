@@ -10,7 +10,7 @@
 #include "dbus.h"
 #include "wifi.h"
 
-struct PakWiFi {
+struct PakNet {
 	DBusConnection *conn;
 	DBusMessage *adapter_list;
 };
@@ -66,8 +66,8 @@ static DBusHandlerResult handle_messages(DBusConnection *conn, DBusMessage *mess
 	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-struct PakWiFi *pak_wifi_get_context(void) {
-	struct PakWiFi *ctx = malloc(sizeof(struct PakWiFi));
+struct PakNet *pak_net_get_context(void) {
+	struct PakNet *ctx = malloc(sizeof(struct PakNet));
 	ctx->conn = get_dbus_system();
 	ctx->adapter_list = NULL;
 
@@ -151,7 +151,7 @@ static int is_usable_adapter(DBusConnection *conn, const char *path) {
 	return (dev_type == 2 && is_managed); // 2 = NM_DEVICE_TYPE_WIFI
 }
 
-int pak_wifi_get_n_adapters(struct PakWiFi *ctx) {
+int pak_wifi_get_n_adapters(struct PakNet *ctx) {
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager", "org.freedesktop.DBus.Properties", "Get");
@@ -186,7 +186,7 @@ int pak_wifi_get_n_adapters(struct PakWiFi *ctx) {
 	return count;
 }
 
-int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int index) {
+int pak_wifi_get_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int index) {
 	if (ctx->adapter_list == NULL) {
 		if (pak_wifi_get_n_adapters(ctx) < 0) return -1;
 	}
@@ -232,14 +232,14 @@ int pak_wifi_get_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, in
 	return -1;
 }
 
-int pak_wifi_bind_socket_to_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, int fd) {
+int pak_wifi_bind_socket_to_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int fd) {
 	struct ifreq ifr;
 	memset(&ifr, 0, sizeof(ifr));
 	strlcpy(ifr.ifr_name, adapter->name, sizeof(ifr.ifr_name));
 	return setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, (void *)&ifr, sizeof(ifr));
 }
 
-int pak_wifi_unref_adapter(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter_arg) {
+int pak_wifi_unref_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter_arg) {
 	free(adapter_arg->priv);
 	return 0;
 }
@@ -264,7 +264,7 @@ static int fill_ap(DBusConnection *conn, const char *path, struct PakWiFiAp *ap)
 	return 0;
 }
 
-int pak_wifi_get_n_aps(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter) {
+int pak_wifi_get_n_aps(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", adapter->priv->path, "org.freedesktop.DBus.Properties", "Get");
@@ -288,7 +288,7 @@ int pak_wifi_get_n_aps(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter) {
 	return len;
 }
 
-int pak_wifi_get_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, int index) {
+int pak_wifi_get_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, int index) {
 	if (adapter->priv->current_ap_list == NULL) {
 		if (pak_wifi_get_n_aps(ctx, adapter) < 0) return -1;
 	}
@@ -321,12 +321,12 @@ int pak_wifi_get_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct 
 	return -1;
 }
 
-int pak_wifi_unref_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
+int pak_wifi_unref_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
 	free(ap->priv);
 	return 0;
 }
 
-int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
+int pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", adapter->priv->path, "org.freedesktop.DBus.Properties", "Get");
@@ -345,6 +345,8 @@ int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapte
 	const char *ap_path = NULL;
 	dbus_message_iter_get_basic(&subargs, &ap_path);
 
+	if (!strcmp(ap_path, "/")) return -1; // not connected
+
 	fill_ap(ctx->conn, ap_path, ap);
 
 	dbus_message_unref(resp);
@@ -352,7 +354,7 @@ int pak_wifi_get_connected_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapte
 	return 0;
 }
 
-int pak_wifi_is_enabled(struct PakWiFi *ctx) {
+int pak_wifi_is_enabled(struct PakNet *ctx) {
 	DBusMessage *resp;
 	DBusConnection *conn = get_dbus_system();
 	dbus_bool_t v;
@@ -361,7 +363,7 @@ int pak_wifi_is_enabled(struct PakWiFi *ctx) {
 	return v;
 }
 
-int pak_wifi_request_scan(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter) {
+int pak_wifi_request_scan(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {
 	DBusConnection *conn = get_dbus_system();
 
 	DBusError error;
@@ -556,7 +558,7 @@ static int find_existing_connection(DBusConnection *conn, struct PakWiFiAdapter 
 	return 0;
 }
 
-int pak_wifi_connect_to_ap(struct PakWiFi *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *password) {
+int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *password) {
 	DBusError error;
 	dbus_error_init(&error);
 

@@ -4,9 +4,9 @@
 #include <sys/ioctl.h>
 #include <linux/usbdevice_fs.h>
 #include <string.h>
-#include <libpict.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <jni.h>
 
 struct PakUsbPriv {
 	jobject obj;
@@ -15,19 +15,6 @@ struct PakUsbPriv {
 	int endpoint_in;
 	int endpoint_out;
 };
-
-// TODO: Rename to ptp_comm_init
-static struct PtpCommPriv *init_comm(struct PtpRuntime *r) {
-	if (r->comm_priv == NULL) {
-		r->comm_priv = calloc(1, sizeof(struct PtpCommPriv));
-	}
-
-	return r->comm_priv;
-}
-
-void ptp_comm_deinit(struct PtpRuntime *r) {
-	// TODO:
-}
 
 static jobject get_usb_man(JNIEnv *env, jobject ctx) {
 	jclass ClassContext = (*env)->FindClass(env, "android/content/Context");
@@ -55,6 +42,7 @@ static jobject get_ptp_interface(JNIEnv *env, jobject dev) {
 	return NULL;
 }
 
+#if 0
 struct PtpDeviceEntry *ptpusb_device_list(struct PtpRuntime *r) {
 	struct PtpDeviceEntry *curr_ent = malloc(sizeof(struct PtpDeviceEntry));
 	memset(curr_ent, 0, sizeof(struct PtpDeviceEntry));
@@ -141,6 +129,7 @@ struct PtpDeviceEntry *ptpusb_device_list(struct PtpRuntime *r) {
 	(*env)->PopLocalFrame(env, NULL);
 	return orig_ent;
 }
+#endif
 
 static int get_usb_permission(JNIEnv *env, jobject ctx, jobject man, jobject device) {
 	(*env)->PushLocalFrame(env, 20);

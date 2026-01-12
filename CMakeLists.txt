@@ -7,13 +7,19 @@ set(CMAKE_CXX_FLAGS_DEBUG -g)
 set(CMAKE_C_FLAGS_RELWITHDEBINFO -g)
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO -g)
 
-option(PAK_INCLUDE_TEST "cli program" ON)
+option(PAK_INCLUDE_CLI "cli program" ON)
 option(PAK_INCLUDE_WIFI "WiFi APIs" ON)
 option(PAK_INCLUDE_BT "Bluetooth APIs" ON)
 
 if(ANDROID)
 	add_library(pak SHARED
-		src/android_bluetooth.c
+		ndk/bluetooth.c
+	)
+	find_library(log-lib log)
+	find_library(android-lib android)
+	target_link_libraries(pak PRIVATE
+			${log-lib}
+			${android-lib}
 	)
 elseif(LINUX)
 	find_package(PkgConfig REQUIRED)
@@ -33,7 +39,7 @@ target_include_directories(pak
 	${PROJECT_SOURCE_DIR}/include
 )
 
-if(PAK_INCLUDE_TEST)
+if(PAK_INCLUDE_CLI AND NOT ANDROID)
 	find_library(QUICKJS_LIB
 	    NAMES quickjs
 	    PATH_SUFFIXES quickjs

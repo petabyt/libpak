@@ -1,6 +1,6 @@
 veecar:
 	cmake --build build
-	build/veecar
+	build/pakcli --js examples/veecar.js
 
 test: build
 	cmake --build build

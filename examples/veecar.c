@@ -43,8 +43,8 @@ static int connected(struct PakNet *ctx, struct PakWiFiAdapter *adapter, void *a
 	usleep(1000);
 
 	char buffer[1000];
-	printf("%u\n", read(fd, buffer, sizeof(buffer)));
-	printf("%u\n", read(fd, buffer, sizeof(buffer)));
+	read(fd, buffer, sizeof(buffer));
+	read(fd, buffer, sizeof(buffer));
 	printf("%s\n", buffer);
 
 	close(fd);
@@ -62,7 +62,5 @@ int main(void) {
 		.password = "12345678",
 	};
 
-	pak_wifi_request_connection(ctx, &spec, connected, NULL);
-
-	return 0;
+	return pak_wifi_request_connection(ctx, &spec, connected, NULL);
 }

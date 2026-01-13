@@ -3,6 +3,54 @@
 #include <wifi.h>
 #include <bluetooth.h>
 
+struct Manifest {
+	const char *name;
+	const char *description;
+	const char *author;
+	const char *author_url;
+	const char *language_code;
+	int version;
+	const char *root_url;
+	const char *manifest_path;
+	const char *script_path;
+	const char *icon_path;
+
+	const char *script_signature;
+	const char *script_public_key;
+
+	struct TargetInfo {
+		const char *device_type;
+		const char **companies;
+		const char **products;
+	}target;
+
+	int primary_discovery_type;
+
+	struct ManifestWiFiDiscovery {
+		const char *ssid_pattern;
+	}wifi_options;
+
+	struct ManifestBLEDiscovery {
+		uint8_t mfg_data_match[0xff];
+		uint8_t mfg_data_mask[0xff];
+		const char *service_uuid1;
+		const char *service_uuid2;
+	}ble_options;
+
+	struct ManifestUSBDiscovery {
+		int pid_mask;
+		int pid;
+		int vid_mask;
+		int vid;
+		int class_mask;
+		int class_;
+	}usb_options;
+
+	struct ManifestDatagramDiscovery {
+		const char *http_request;
+	}upnp_options;
+};
+
 /// @addtogroup PakDevice
 /// @{
 // Photo class
@@ -88,8 +136,8 @@ enum Screen {
 
 struct Module {
 	int version;
+	struct RuntimePriv *rt;
 	struct ModulePriv *priv;
-	int (*get_manifest)(struct Module *);
 	int (*init)(struct Module *);
 	/// Try to initiate a connection over a network handle
 	int (*on_try_connect_wifi)(struct Module *, struct PakWiFiAdapter *handle, int job);
@@ -109,6 +157,8 @@ struct Module {
 	int (*on_custom_command)(struct Module *, const char *request);
 };
 
+int pak_update_manifest(struct Module *mod, const struct Manifest *m);
+
 int pak_mod_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
 int pak_mod_add_file_metadata(struct Module *mod, struct FileHandle *file, const struct FileMetadata *metadata);
 int pak_mod_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
@@ -127,51 +177,3 @@ int pak_mod_load_device_unique_id(struct Module *mod, const char *string);
 int pak_mod_flip_kill_switch(struct Module *mod, const char *reason);
 int pak_mod_set_tick_interval(struct Module *mod, unsigned int us);
 const char *get_path(struct Module *mod, const char *filename);
-
-struct Manifest {
-	const char *name;
-	const char *description;
-	const char *author;
-	const char *author_url;
-	int version;
-	int language;
-	const char *root_url;
-	const char *manifest_path;
-	const char *script_path;
-	const char *icon_path;
-
-	const char *script_signature;
-	const char *script_public_key;
-
-	struct TargetInfo {
-		const char *device_type;
-		const char **companies;
-		const char **products;
-	}target;
-
-	int primary_discovery_type;
-
-	struct ManifestWiFiDiscovery {
-		const char *ssid_pattern;
-	}wifi_options;
-
-	struct ManifestBLEDiscovery {
-		uint8_t mfg_data_match[0xff];
-		uint8_t mfg_data_mask[0xff];
-		const char *service_uuid1;
-		const char *service_uuid2;
-	}ble_options;
-
-	struct ManifestUSBDiscovery {
-		int pid_mask;
-		int pid;
-		int vid_mask;
-		int vid;
-		int class_mask;
-		int class_;
-	}usb_options;
-
-	struct ManifestDatagramDiscovery {
-		const char *http_request;
-	}upnp_options;
-};

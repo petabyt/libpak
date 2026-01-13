@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <runtime.h>
 #include <wifi.h>
 
@@ -24,6 +25,13 @@ static int manual_connect(struct Module *mod) {
 
 static int init(struct Module *mod) {
 	mod->priv = (struct ModulePriv *)malloc(sizeof(struct ModulePriv));
+
+	struct Manifest m = {
+		.name = "Dummy module",
+		.description = "A dummy module that doesn't do much",
+		.author = "Daniel Cook",
+	};
+	
 	return 0;
 }
 

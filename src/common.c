@@ -45,13 +45,9 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 			pak_wifi_unref_ap(ctx, &adapter, &ap);
 			continue;
 		}
-		pak_wifi_connect_to_ap(ctx, &adapter, &ap, spec->password);
-
-		struct PakNetworkHandle handle = {
-			.type = PAK_WIFI,
-			.adapter = &adapter,
-			.u.ap = ap,
-		};
+		if (pak_wifi_connect_to_ap(ctx, &adapter, &ap, spec->password)) {
+			return PAK_NOT_CONNECTED;
+		}
 
 		pak_wifi_unref_ap(ctx, &adapter, &ap);
 		cb(ctx, &adapter, arg);
@@ -59,5 +55,5 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 
 	pak_wifi_unref_adapter(ctx, &adapter);
 
-	return 0;
+	return PAK_NOT_CONNECTED;
 }

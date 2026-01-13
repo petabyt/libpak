@@ -12,6 +12,7 @@ int get_module_dummy(struct Module *mod);
 
 JSModuleDef *js_init_module_socket(JSContext *ctx, const char *module_name);
 JSModuleDef *js_init_module_wifi(JSContext *ctx, const char *module_name);
+JSModuleDef *js_init_module_pak_runtime(JSContext *ctx, const char *module_name);
 
 int run_quickjs(const char *filename) {
 	JSRuntime *rt = JS_NewRuntime();
@@ -20,6 +21,7 @@ int run_quickjs(const char *filename) {
 	js_std_add_helpers(ctx, 0, NULL);
 
 	JS_AddModuleExport(ctx, js_init_module_wifi(ctx, "pak:wifi"), "WiFi");
+	JS_AddModuleExport(ctx, js_init_module_pak_runtime(ctx, "pak:runtime"), "Module");
 	js_init_module_socket(ctx, "c:socket");
 	js_init_module_std(ctx, "qjs:std");
 	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
@@ -124,10 +126,7 @@ int test_wifi(void) {
 	return 0;
 }
 
-static int test_module(struct Module *mod) {
-	mod->init(mod);
-	return 0;
-}
+int test_module(struct Module *mod);
 
 int main(int argc, char **argv) {
 	for (int i = 0; i < argc; i++) {

@@ -13,6 +13,11 @@
 struct PakNet {
 	DBusConnection *conn;
 	DBusMessage *adapter_list;
+	enum LastEvent {
+		EV_NONE,
+		EV_CONNECTED_TO_AP,
+		EV_FAILED_TO_CONNECT,
+	}ev;
 };
 
 struct PakWiFiAdapterPriv {
@@ -21,15 +26,12 @@ struct PakWiFiAdapterPriv {
 };
 
 struct PakWiFiApPriv {
-	enum LastEvent {
-		EV_NONE,
-		EV_CONNECTED_TO_AP,
-		EV_FAILED_TO_CONNECT,
-	}ev;
+	int x;
 	char path[];
 };
 
 static DBusHandlerResult handle_messages(DBusConnection *conn, DBusMessage *message, void *user_data) {
+	struct PakNet *ctx = (struct PakNet *)user_data;
 	if (dbus_message_get_type(message) != DBUS_MESSAGE_TYPE_SIGNAL)
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
@@ -53,19 +55,42 @@ static DBusHandlerResult handle_messages(DBusConnection *conn, DBusMessage *mess
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 	}
 
-	if (dbus_message_get_type(message) == DBUS_MESSAGE_TYPE_SIGNAL) {
-		const char *iface;
-		const char *member;
-		const char *path;
-		iface = dbus_message_get_interface(message);
-		member = dbus_message_get_member(message);
-		path = dbus_message_get_path(message);
+	if (dbus_message_is_signal(message, "org.freedesktop.NetworkManager.Connection.Active", "StateChanged")) {
+		printf("State changed\n");
 
-		printf("signal iface=%s member=%s path=%s\n",
-		       iface ? iface : "(null)",
-		       member ? member : "(null)",
-		       path ? path : "(null)");
+		DBusMessageIter iter;
+		dbus_message_iter_init(message, &iter);
+		uint32_t state, reason;
+		dbus_message_iter_get_basic(&iter, &state);
+		dbus_message_iter_next(&iter);
+		dbus_message_iter_get_basic(&iter, &reason);
+
+		if (state == 2) { // NM_ACTIVE_CONNECTION_STATE_ACTIVATED
+			ctx->ev = EV_CONNECTED_TO_AP;
+			return DBUS_HANDLER_RESULT_HANDLED;
+		} else if (state == 4) { // NM_ACTIVE_CONNECTION_STATE_DEACTIVATED
+			// If password fails, reason will be 3 (NM_ACTIVE_CONNECTION_STATE_REASON_DEVICE_DISCONNECTED)
+			// This is not the right way to handle this
+			ctx->ev = EV_FAILED_TO_CONNECT;
+			return DBUS_HANDLER_RESULT_HANDLED;
+		} else {
+			printf("%u %u\n", state, reason);
+		}
+
+		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 	}
+
+	const char *iface;
+	const char *member;
+	const char *path;
+	iface = dbus_message_get_interface(message);
+	member = dbus_message_get_member(message);
+	path = dbus_message_get_path(message);
+
+	printf("signal iface=%s member=%s path=%s\n",
+	       iface ? iface : "(null)",
+	       member ? member : "(null)",
+	       path ? path : "(null)");
 
 	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
@@ -74,6 +99,7 @@ struct PakNet *pak_net_get_context(void) {
 	struct PakNet *ctx = malloc(sizeof(struct PakNet));
 	ctx->conn = get_dbus_system();
 	ctx->adapter_list = NULL;
+	ctx->ev = EV_NONE;
 
 	DBusConnection *conn = get_dbus_system();
 
@@ -82,8 +108,8 @@ struct PakNet *pak_net_get_context(void) {
 	dbus_bus_add_match(conn,
 		"type='signal',"
 		"sender='org.freedesktop.NetworkManager',"
-		"interface='org.freedesktop.NetworkManager.AccessPoint',"
-		"member='PropertiesChanged'"
+		"interface='org.freedesktop.NetworkManager.Connection.Active',"
+		"member='StateChanged'"
 		, NULL);
 	dbus_connection_flush(conn);
 
@@ -599,13 +625,14 @@ int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, s
 		dbus_message_unref(resp);
 	}
 
-	// TODO: Wait for event
-	sleep_for_event(ctx->conn);
-	sleep_for_event(ctx->conn);
-	sleep_for_event(ctx->conn);
-	sleep_for_event(ctx->conn);
-	sleep_for_event(ctx->conn);
-	sleep_for_event(ctx->conn);
-
+	while (ctx->ev == EV_NONE) {
+		sleep_for_event(ctx->conn);
+	}
+	int ev = ctx->ev;
+	ctx->ev = EV_NONE;
+	if (ev != EV_CONNECTED_TO_AP) {
+		return -1;
+	}
+	
 	return 0;
 }

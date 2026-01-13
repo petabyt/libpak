@@ -1,7 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
+//#include <stdio.h>
+//#include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
+//#include <string.h>
 #include <regex.h>
 #include <quickjs/quickjs.h>
 #include <quickjs/quickjs-libc.h>

@@ -2,12 +2,6 @@ import { WiFi } from "pak:wifi";
 import * as net from "c:socket";
 import { BufferWriter } from "../ts/dist/buffer.js";
 
-function makeCInt(val) {
-	let yes = new ArrayBuffer(4);
-	new DataView(yes).setInt32(0, val, true);
-	return yes;
-}
-
 // http://192.168.169.1/app/getdeviceattr
 // http://192.168.169.1:80/app/settimezone?timezone=-5
 // http://192.168.169.1:80/app/setsystime?date=20251230141226
@@ -44,7 +38,7 @@ class Veement {
 
 		WiFi.bindSocketToAdapter(adapter, fd);
 
-		let yes = makeCInt(1);
+		let yes = net.createInt(1);
 		let rc = net.setsockopt(fd, net.IPPROTO_TCP, net.TCP_NODELAY, yes);
 		if (rc) throw "setsockopt";
 

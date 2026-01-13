@@ -8,6 +8,8 @@
 #include "bluetooth.h"
 #include "runtime.h"
 
+int get_module_dummy(struct Module *mod);
+
 JSModuleDef *js_init_module_socket(JSContext *ctx, const char *module_name);
 JSModuleDef *js_init_module_wifi(JSContext *ctx, const char *module_name);
 
@@ -59,7 +61,6 @@ int run_quickjs(const char *filename) {
 
 	return 0;
 }
-
 
 int test_bluetooth(void) {
 	struct PakBt *ctx = pak_bt_get_context();
@@ -123,6 +124,11 @@ int test_wifi(void) {
 	return 0;
 }
 
+static int test_module(struct Module *mod) {
+	mod->init(mod);
+	return 0;
+}
+
 int main(int argc, char **argv) {
 	for (int i = 0; i < argc; i++) {
 		if (!strcmp(argv[i], "--js")) {
@@ -133,6 +139,10 @@ int main(int argc, char **argv) {
 			return rc;
 		} else if (!strcmp(argv[i], "--dump-bt")) {
 			return test_bluetooth();
+		} else if (!strcmp(argv[i], "--test-dummy-mod")) {
+			struct Module mod;
+			get_module_dummy(&mod);
+			return test_module(&mod);
 		}
 	}
 	printf("Invalid argument\n");

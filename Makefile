@@ -10,6 +10,11 @@ bt: build
 	cmake --build build
 	build/pakcli --dump-bt
 
+mod:
+	cmake --build build
+	build/pakcli --test-dummy-mod
+
+
 build:
 	cmake -G Ninja -B build -DPAK_INCLUDE_TEST=ON
 

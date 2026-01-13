@@ -47,6 +47,7 @@ if(PAK_INCLUDE_CLI AND NOT ANDROID)
 	)
 	add_executable(pakcli
 		src/cli.c
+		examples/dummy.c
 		bindings/quickjs_wifi.c
 		bindings/quickjs_socket.c
 	)

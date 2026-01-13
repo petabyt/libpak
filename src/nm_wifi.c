@@ -21,7 +21,11 @@ struct PakWiFiAdapterPriv {
 };
 
 struct PakWiFiApPriv {
-	int x;
+	enum LastEvent {
+		EV_NONE,
+		EV_CONNECTED_TO_AP,
+		EV_FAILED_TO_CONNECT,
+	}ev;
 	char path[];
 };
 
@@ -595,6 +599,7 @@ int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, s
 		dbus_message_unref(resp);
 	}
 
+	// TODO: Wait for event
 	sleep_for_event(ctx->conn);
 	sleep_for_event(ctx->conn);
 	sleep_for_event(ctx->conn);

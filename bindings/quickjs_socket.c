@@ -29,6 +29,7 @@ enum Operations {
 	M_READ,
 	M_WRITE,
 	M_CREATESOCKADDRIN,
+	M_CREATEINT,
 };
 
 static fd_set *parse_fd_set(JSContext *ctx, fd_set *set, JSValue arr) {
@@ -144,6 +145,11 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 		JSValue val = JS_NewArrayBufferCopy(ctx, (void *)&sa, sizeof(sa));
 		return val;
 		}
+	case M_CREATEINT: {
+		int32_t n;
+		JS_ToInt32(ctx, &n, argv[0]);
+		return JS_NewArrayBufferCopy(ctx, (void *)&n, sizeof(n));
+		}
 	}
 	return JS_UNDEFINED;
 }
@@ -173,6 +179,7 @@ static const JSCFunctionListEntry socket_methods[] = {
 	JS_CFUNC_MAGIC_DEF("read", 3, generic_operation, M_READ),
 	JS_CFUNC_MAGIC_DEF("write", 3, generic_operation, M_WRITE),
 	JS_CFUNC_MAGIC_DEF("createSockAddrIn", 2, generic_operation, M_CREATESOCKADDRIN),
+	JS_CFUNC_MAGIC_DEF("createInt", 2, generic_operation, M_CREATEINT),
 
 	JS_CONSTANT(SOL_SOCKET),
 

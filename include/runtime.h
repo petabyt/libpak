@@ -9,18 +9,17 @@
 #define PAK_DEVICE_PROFESSIONAL_CAMERA "professional-camera"
 #define PAK_DEVICE_ACTION_CAMERA "action-camera"
 #define PAK_DEVICE_DASHCAM "dashcam"
-#define PAK_DEVICE_SECURITY_CAMERA "security-camera"
-#define PAK_DEVICE_BABY_MONITOR "baby-monitor"
+//#define PAK_DEVICE_SECURITY_CAMERA "security-camera"
+//#define PAK_DEVICE_BABY_MONITOR "baby-monitor"
 #define PAK_DEVICE_GENERIC_CAMERA "generic-camera"
 #define PAK_DEVICE_WIFI_SD_CARD "wifi-sd-card"
 #define PAK_DEVICE_DOORBELL "doorbell"
 // Home class
-#define PAK_DEVICE_KITCHEN_APPLIANCE "kitchen-appliance"
-#define PAK_DEVICE_GENERIC_APPLIANCE "generic-appliance"
+//#define PAK_DEVICE_KITCHEN_APPLIANCE "kitchen-appliance"
+//#define PAK_DEVICE_GENERIC_APPLIANCE "generic-appliance"
 #define PAK_DEVICE_GENERIC_HOME_DEVICE "generic-home-device"
 #define PAK_DEVICE_DESK "desk"
 #define PAK_DEVICE_GENERIC_FURNITURE "generic-furniture"
-#define PAK_DEVICE_WIFI_ROUTER "wifi-router"
 #define PAK_DEVICE_3D_PRINTER "3d-printer"
 // Accessory class
 #define PAK_DEVICE_HEADPHONES "headphones"
@@ -33,6 +32,7 @@
 #define PAK_DEVICE_GENERIC_MEDICAL_WEARABLE "generic-medical-wearable"
 #define PAK_DEVICE_GENERIC_EXERCISE_MACHINE "generic-exercise-machine"
 // Non-photo gadget class
+#define PAK_DEVICE_POWER_TOOL "power-tool"
 #define PAK_DEVICE_GAME_CONTROLLER "game-controller"
 #define PAK_DEVICE_DRONE "drone"
 #define PAK_DEVICE_GENERIC_REMOTE_CONTROL "generic-remote-control"
@@ -43,28 +43,50 @@
 #define PAK_DEVICE_AUTOMOTIVE_DIAGNOSTIC "automotive-diagnostic"
 /// @}
 
+struct FileHandle {
+	int index_in_view;
+	const char *filename;
+};
+
 struct FileMetadata {
 	const char *filename;
 	const char *mime_type;
 };
 
+enum Screen {
+	/// A screen that has a list of WiFi access points to connect to
+	SCREEN_CONNECT_WIFI = 1,
+	/// A screen that has a list of connected USB devices
+	SCREEN_CONNECT_USB,
+	/// Has a list of currently/previously paired devices and scans for new devices
+	SCREEN_CONNECT_BLUETOOTH,
+	/// Screen that advertises on BLE or uses SDP to find a device to pair with
+	SCREEN_ADVERTISE_BLUETOOTH,
+	/// Transmit packet over UDP/SSDP in order to find a connection
+	SCREEN_TRANSMIT_UDP,
+	/// Receive packet over UDP/SSDP in order to find a connection
+	SCREEN_RECEIVE_UDP,
+	/// An option to test various functionality in this module using a fake emulator
+	SCREEN_TEST_SUITE,
+
+	/// A gallery of files, videos, or photos. Can include folders. Upon selecting a folder, on_switch_screen
+	/// will be called with SCREEN_FILE_GALLERY->SCREEN_FILE_GALLERY
+	/// Gallery may be a table of files with detailed info, or a thumbnail gallery of variable width.
+	/// In what order the files iterated through (LIFO/FIFO) can be controlled.
+	SCREEN_FILE_GALLERY,
+	/// A zoomable image viewer or video player. User may swipe left or right to view next/previous file. When this happens,
+	/// on_switch_screen will be called with SCREEN_FILE_VIEWER->SCREEN_FILE_VIEWER
+	SCREEN_FILE_VIEWER,
+	/// Can be used to send location data to the camera or apply location metadata to a specific photo.
+	SCREEN_GEOTAGGING,
+	/// A constant live view of the camera's sensor. Allows setting various settings such as ISO, aperture, exposure settings, image settings, or video settings.
+	/// Allows recording video, taking photos, controlling focus, zoom, or SLR mirror.
+	SCREEN_LIVEVIEW,
+	/// A feed of incoming files that are being created/captured/sent by the device.
+	SCREEN_LIVE_FEED,
+};
+
 struct Module {
-	enum Screen {
-		SCREEN_CONNECT_WIFI = 1,
-		SCREEN_CONNECT_USB,
-		SCREEN_CONNECT_BLUETOOTH,
-		SCREEN_ADVERTISE_BLUETOOTH,
-		SCREEN_TRANSMIT_UDP,
-		SCREEN_RECEIVE_UDP,
-		SCREEN_TEST_SUITE,
-
-		SCREEN_FILE_GALLERY,
-		SCREEN_FILE_VIEWER,
-		SCREEN_GEOTAGGING,
-		SCREEN_LIVEVIEW,
-		SCREEN_LIVE_FEED,
-	}default_screen;
-
 	int version;
 	struct ModulePriv *priv;
 	int (*get_manifest)(struct Module *);
@@ -75,25 +97,29 @@ struct Module {
 	int (*on_idle_tick)(struct Module *, unsigned int us_since_last_tick);
 	/// On user requested disconnect
 	int (*on_disconnect)(struct Module *);
-	/// Runs when a new screen is entered or returned to. This doesn't ask for any new data, it only notifies the module
-	/// to switch states for a different set of commands
-	int (*on_enter_screen)(struct Module *, int screen, int job);
-	/// When a screen is exited. When the previous screen is being entered back into, on_enter_screen will be called
-	/// TODO: switch to int (*on_switch_screen)(struct Module *, int old_screen, int new_screen, int job); 
-	int (*on_exit_screen)(struct Module *, int screen, int job);
-	/// 
-	int (*on_request_file_contents)(struct Module *, int screen, int job, void *file_tag);
+	// Runs when switching to a new screen, or switching back to an old screen.
+	int (*on_switch_screen)(struct Module *, int old_screen, int new_screen, int job);
+	/// Request entire contents of a file
+	int (*on_request_file_contents)(struct Module *, int screen, int job, struct FileHandle *file);
+	/// Request small thumbnail for a file
+	int (*on_request_thumbnail)(struct Module *, int screen, int job, struct FileHandle *file);
+	/// Request metadata for a file
+	int (*on_request_file_metadata)(struct Module *, int screen, int job, struct FileHandle *file);
 	/// Process an arbritrary command (from a console)
 	int (*on_custom_command)(struct Module *, const char *request);
 };
 
-int pak_mod_add_file_thumbnail(struct Module *mod, void *file_tag, void *image_data, unsigned int length);
-int pak_mod_add_file_metadata(struct Module *mod, void *file_tag, struct FileMetadata *metadata);
-int pak_mod_add_file_contents(struct Module *mod, void *file_tag, void *image_data, unsigned int length);
+int pak_mod_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
+int pak_mod_add_file_metadata(struct Module *mod, struct FileHandle *file, const struct FileMetadata *metadata);
+int pak_mod_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
 
+/// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
 int pak_mod_enter_screen(struct Module *mod, int screen);
+/// Enter a custom screen
 int pak_mod_enter_custom_screen(struct Module *mod);
+/// Set the percent of the current job's progress bar from 0-100. Is 100 by default for each job.
 int pak_mod_set_progress_bar(struct Module *mod, int job, int percent);
+/// Report how many bytes are being downloaded currently in X amount of time.
 int pak_mod_set_current_download_speed(struct Module *mod, long time, unsigned int n_bytes);
 int pak_mod_set_device_name(struct Module *mod, const char *name);
 int pak_mod_set_device_unique_id(struct Module *mod, const char *string);

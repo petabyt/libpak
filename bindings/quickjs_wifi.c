@@ -104,7 +104,7 @@ static JSValue js_wifi_constructor(JSContext *ctx, JSValueConst new_target, int 
 static void js_wifi_finalizer(JSRuntime *rt, JSValue val) {
 }
 
-static int module_wifi(JSContext* ctx, JSModuleDef *m) {
+static int module_wifi(JSContext *ctx, JSModuleDef *m) {
 	const char *class_name = "WiFi";
 
 	const JSClassDef js_class = {
@@ -126,7 +126,7 @@ static int module_wifi(JSContext* ctx, JSModuleDef *m) {
 	return 0;
 }
 
-static int module_wifi_all(JSContext* ctx, JSModuleDef *m) {
+static int module_wifi_all(JSContext *ctx, JSModuleDef *m) {
 	module_wifi(ctx, m);
 	module_wifi_adapter(ctx, m);
 	return 0;

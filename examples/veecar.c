@@ -13,7 +13,6 @@
 #include <arpa/inet.h>
 
 static int connected(struct PakNet *ctx, struct PakWiFiAdapter *adapter, void *arg) {
-
 	printf("Connected\n");
 
 	int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);

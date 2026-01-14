@@ -11,6 +11,12 @@ struct RuntimePriv {
 	int current_job;
 };
 
+struct Module *pak_create_mod(void) {
+	struct Module *mod = calloc(1, sizeof(struct Module));
+	mod->rt = malloc(sizeof(struct RuntimePriv));
+	return mod;
+}
+
 int pak_mod_set_progress_bar(struct Module *mod, int job, int percent) {	
 	printf("%d%%\n", percent);
 	return 0;

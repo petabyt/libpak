@@ -52,8 +52,7 @@ int run_quickjs(const char *filename) {
 		JS_FreeCString(ctx, str);
 		return -1;
 	}
-
-	printf("Return value: %d\n", JS_VALUE_GET_TAG(val));
+	//printf("Return value: %d\n", JS_VALUE_GET_TAG(val));
 
 	JS_FreeValue(ctx, val);
 
@@ -139,7 +138,7 @@ int main(int argc, char **argv) {
 		} else if (!strcmp(argv[i], "--dump-bt")) {
 			return test_bluetooth();
 		} else if (!strcmp(argv[i], "--test-dummy-mod")) {
-			struct Module mod;
+			struct Module mod = {0};
 			get_module_dummy(&mod);
 			return test_module(&mod);
 		}

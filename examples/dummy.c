@@ -8,7 +8,7 @@ struct ModulePriv {
 
 static int connected(struct PakNet *ctx, struct PakWiFiAdapter *adapter, void *arg) {
 	struct Module *mod = arg;
-	mod->on_try_connect_wifi(mod, adapter, -1);
+	return mod->on_try_connect_wifi(mod, adapter, -1);
 }
 
 static int manual_connect(struct Module *mod) {
@@ -51,19 +51,23 @@ static int on_switch_screen(struct Module *mod, int old_screen, int new_screen, 
 	return 0;
 }
 
-static int on_request_file_contents(struct Module *, int screen, int job, struct FileHandle *file) {
+static int on_request_file_contents(struct Module *mod, int screen, int job, struct FileHandle *file) {
 	return 0;
 }
 
-static int on_request_thumbnail(struct Module *, int screen, int job, struct FileHandle *file) {
+static int on_request_thumbnail(struct Module *mod, int screen, int job, struct FileHandle *file) {
 	return 0;
 }
 
-static int on_request_file_metadata(struct Module *, int screen, int job, struct FileHandle *file) {
+static int on_request_file_metadata(struct Module *mod, int screen, int job, struct FileHandle *file) {
 	return 0;
 }
 
-static int on_custom_command(struct Module *, const char *request) {
+static int on_run_test(struct Module *mod, int screen, int job) {
+	return 0;
+}
+
+static int on_custom_command(struct Module *mod, const char *request) {
 	return 0;
 }
 
@@ -73,4 +77,6 @@ int get_module_dummy(struct Module *mod) {
 	mod->on_idle_tick = on_idle_tick;
 	mod->on_disconnect = on_disconnect;
 	mod->on_switch_screen = on_switch_screen;
+
+	return 0;
 }

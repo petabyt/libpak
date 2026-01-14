@@ -153,6 +153,9 @@ struct Module {
 	int (*on_request_thumbnail)(struct Module *, int screen, int job, struct FileHandle *file);
 	/// Request metadata for a file
 	int (*on_request_file_metadata)(struct Module *, int screen, int job, struct FileHandle *file);
+	/// On request to run self test, test suite, debug dumps, or other diagnostics
+	int (*on_run_test)(struct Module *, int screen, int job);
+
 	/// Process an arbritrary command (from a console)
 	int (*on_custom_command)(struct Module *, const char *request);
 };
@@ -169,11 +172,14 @@ int pak_mod_enter_screen(struct Module *mod, int screen);
 int pak_mod_enter_custom_screen(struct Module *mod);
 /// Set the percent of the current job's progress bar from 0-100. Is 100 by default for each job.
 int pak_mod_set_progress_bar(struct Module *mod, int job, int percent);
-/// Report how many bytes are being downloaded currently in X amount of time.
+/// Report how many bytes are being downloaded currently in X amount of microseconds.
 int pak_mod_set_current_download_speed(struct Module *mod, long time, unsigned int n_bytes);
 int pak_mod_set_device_name(struct Module *mod, const char *name);
 int pak_mod_set_device_unique_id(struct Module *mod, const char *string);
 int pak_mod_load_device_unique_id(struct Module *mod, const char *string);
 int pak_mod_flip_kill_switch(struct Module *mod, const char *reason);
 int pak_mod_set_tick_interval(struct Module *mod, unsigned int us);
-const char *get_path(struct Module *mod, const char *filename);
+/// Get path for downloading a file
+const char *pak_mod_get_path(struct Module *mod, const char *filename);
+
+struct Module *pak_create_mod(void);

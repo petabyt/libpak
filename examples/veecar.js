@@ -32,7 +32,7 @@ class Veement extends Module {
 	userAgent = "PakUserAgent";
 	fd;
 	constructor() {
-		
+		super()
 	}
 	onTryConnectWiFi(wifiAdapter, job) {
 		let fd = net.socket(net.AF_INET, net.SOCK_STREAM, 0);
@@ -51,6 +51,9 @@ class Veement extends Module {
 	}
 	onDisconnect() {
 		net.close(this.fd);
+	}
+	onRunTest(job) {
+		console.log("Running test suite");
 	}
 	setTime() {
 		let timestamp =
@@ -81,3 +84,9 @@ class Veement extends Module {
 		return rc;
 	}
 };
+
+try {
+	Module.test(new Veement());
+} catch (e) {
+	console.log(e);
+}

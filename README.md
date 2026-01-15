@@ -3,11 +3,14 @@
 WIP cross-platform Bluetooth and WiFi library for pairing with consumer devices
 
 # Roadmap
-- [ ] QuickJS bindings
-- [ ] Communicate with cheap chinese dashcam in JS (HTTP/WiFi)
+- [x] QuickJS bindings
+- [x] Communicate with cheap chinese dashcam in JS (HTTP/WiFi)
 - [ ] Communicate with bluetooth classic devices
 - **Linux:**
-	- [ ] Basic NetworkManager APIs
+	- [x] Basic NetworkManager APIs
+		- [x] Query adapters
+		- [x] Scan for access points
+		- [x] Connect to an access point
 	- [ ] BlueZ BLE support
 	- [ ] BlueZ Bluetooth Classic support
 - **Android:**

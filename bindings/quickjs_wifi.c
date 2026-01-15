@@ -95,7 +95,11 @@ static int connected(struct PakNet *ctx, struct PakWiFiAdapter *adapter, void *a
 	JSValue args[1] = {
 		create_adapter(temp_priv->ctx, temp_priv->this_val, temp_priv->wifi_ctx, adapter),
 	};
-	JS_Call(temp_priv->ctx, temp_priv->fun_val, JS_UNDEFINED, 1, args);
+	JSValue rv = JS_Call(temp_priv->ctx, temp_priv->fun_val, JS_UNDEFINED, 1, args);
+	if (JS_IsException(rv)) {
+		printf("callback exception\n");
+		JS_FreeValue(temp_priv->ctx, rv);
+	}
 	JS_FreeValue(temp_priv->ctx, args[0]);
 	JS_FreeValue(temp_priv->ctx, temp_priv->fun_val);
 	JS_FreeValue(temp_priv->ctx, temp_priv->this_val);
@@ -130,6 +134,8 @@ static JSValue wifi_request_connection(JSContext *ctx, JSValueConst this_val, in
 
 	int rc = pak_wifi_request_connection(wifi_ctx, &spec, connected, temp_priv);
 	if (rc) {
+		JS_FreeValue(temp_priv->ctx, temp_priv->fun_val);
+		JS_FreeValue(temp_priv->ctx, temp_priv->this_val);
 		return JS_ThrowInternalError(ctx, "pak_wifi_request_connection: %d", rc);
 	}
 

@@ -52,7 +52,6 @@ int run_quickjs(const char *filename) {
 		JS_FreeCString(ctx, str);
 		return -1;
 	}
-	//printf("Return value: %d\n", JS_VALUE_GET_TAG(val));
 
 	JS_FreeValue(ctx, val);
 

@@ -105,8 +105,9 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 		uint32_t size;
 		size_t len;
 		JS_ToInt32(ctx, &fd, argv[0]);
-		JS_ToUint32(ctx, &size, argv[1]);
+		JS_ToUint32(ctx, &size, argv[2]);
 		void *src = JS_GetArrayBuffer(ctx, &len, argv[1]);
+		if (src == NULL) JS_ThrowInternalError(ctx, "arg");
 		return JS_NewInt32(ctx, write(fd, src, size));
 		}
 	case M_READ: {
@@ -114,10 +115,11 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 		uint32_t size;
 		size_t len;
 		JS_ToInt32(ctx, &fd, argv[0]);
-		JS_ToUint32(ctx, &size, argv[1]);
 		void *src = JS_GetArrayBuffer(ctx, &len, argv[1]);
+		if (src == NULL) JS_ThrowInternalError(ctx, "arg");
+		JS_ToUint32(ctx, &size, argv[2]);
 		if (size > len) return JS_NewInt32(ctx, EPIPE);
-		return JS_NewInt32(ctx, write(fd, src, size));
+		return JS_NewInt32(ctx, read(fd, src, size));
 		}
 	case M_SELECT: {
 		int32_t nfds;

@@ -1,7 +1,7 @@
 import { WiFi } from "pak:wifi";
 import { Module } from "pak:runtime";
 import * as net from "c:socket";
-import { BufferWriter } from "../ts/dist/buffer.js";
+import { BufferWriter, BufferReader } from "../ts/dist/buffer.js";
 
 // http://192.168.169.1/app/getdeviceattr
 // http://192.168.169.1:80/app/settimezone?timezone=-5
@@ -30,14 +30,29 @@ import { BufferWriter } from "../ts/dist/buffer.js";
 class Veement extends Module {
 	ip = "192.168.169.1";
 	userAgent = "PakUserAgent";
-	fd;
+	fd = -1;
 	constructor() {
 		super()
 	}
-	onTryConnectWiFi(wifiAdapter, job) {
-		let fd = net.socket(net.AF_INET, net.SOCK_STREAM, 0);
+	onFindConnection(job) {
+		let wifi = new WiFi();
+		let filter = {
+			"ssidPattern": "V300.*",
+			"password": "12345678",
+		};
+		wifi.requestConnection(filter, (adapter) => {
+			try {
+				this.onTryConnectWiFi(wifi, adapter, -1);
+			} catch (e) {
+				console.log(e);
+			}
+		});
+	}
+	onTryConnectWiFi(wifi, wifiAdapter, job) {
+		let fd = net.socket(net.AF_INET, net.SOCK_STREAM, net.IPPROTO_TCP);
+		if (fd < 0) throw "socket";
 
-		WiFi.bindSocketToAdapter(adapter, fd);
+		wifi.bindSocketToAdapter(wifiAdapter, fd);
 
 		let yes = net.createInt(1);
 		let rc = net.setsockopt(fd, net.IPPROTO_TCP, net.TCP_NODELAY, yes);
@@ -48,12 +63,21 @@ class Veement extends Module {
 		if (net.connect(fd, addr) != 0) throw "connect";
 
 		this.fd = fd;
+
+		console.log("Opened socket");
 	}
 	onDisconnect() {
+		console.log("Closing socket");
 		net.close(this.fd);
 	}
 	onRunTest(job) {
 		console.log("Running test suite");
+		try {
+			let resp = this.httpRequest("/app/getdeviceattr");
+			console.log(this.getHttpRequestJSON(resp[1]));
+		} catch (e) {
+			console.log(e);
+		}
 	}
 	setTime() {
 		let timestamp =
@@ -69,6 +93,9 @@ class Veement extends Module {
 	onIdleTick(sinceLastTick) {
 		
 	}
+	getHttpRequestJSON(resp) {
+		return resp.split("\n")[3];
+	}
 	httpRequest(path) {
 		let writer = new BufferWriter();
 		writer.addString("GET " + path + " HTTP/1.1\r\n");
@@ -76,12 +103,24 @@ class Veement extends Module {
 		writer.addString("Connection: close\r\n");
 		writer.addString("User-Agent: " + this.userAgent + "\r\n");
 		writer.addString("Host: " + this.ip + "\r\n");
-		let rc = net.write(this.fd, writer.buffer, writer.off);
+		let rc = net.write(this.fd, writer.arrayBuffer, writer.offset);
 		if (rc < 0) {
 			throw "write(): " + String(rc);
 		}
-		net.read(this.fd, writer.buffer, writer.buffer.length);
-		return rc;
+		let read = new BufferReader(new Uint8Array(1000));
+		rc = net.read(this.fd, read.arrayBuffer, read.buffer.length);
+		if (rc < 0) {
+			throw "read()";
+		}
+		read.offset = rc;
+		let head = read.toString();
+		rc = net.read(this.fd, read.arrayBuffer, read.buffer.length);
+		if (rc < 0) {
+			throw "read()";
+		}
+		read.offset = rc;
+		let contents = read.toString();
+		return [head, contents];
 	}
 };
 

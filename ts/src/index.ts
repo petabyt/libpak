@@ -1,11 +1,12 @@
-import { WiFi } from "pak:wifi";
 import { BufferWriter, BufferReader } from "./buffer.js";
 
-function testWifi() {
-	let wifi = new WiFi();
-}
+console.log("asdasdasd");
 
-function testBuffer() {
+try {
 	let x: BufferWriter = new BufferWriter();
-	x.addString("GET /info HTTP/1.1\r\n");
+	x.addString("A");
+	x.addString("B\n");
+	//console.log(x.toString());
+} catch (e) {
+	console.log(e);
 }

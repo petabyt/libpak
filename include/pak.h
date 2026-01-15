@@ -15,3 +15,5 @@ enum PakErrorCode {
 };
 
 int pak_main_loop(void);
+
+void pak_error(const char *fmt, ...);

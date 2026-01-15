@@ -19,7 +19,6 @@ static int connected(struct PakNet *ctx, struct PakWiFiAdapter *adapter, void *a
 
 	printf("pak_wifi_bind_socket_to_adapter: %d\n", pak_wifi_bind_socket_to_adapter(ctx, adapter, fd));
 
-
 	struct sockaddr_in sa;
 	memset(&sa, 0, sizeof(sa));
 	sa.sin_family = AF_INET;

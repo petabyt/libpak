@@ -140,6 +140,8 @@ struct Module {
 	struct ModulePriv *priv;
 	int (*init)(struct Module *);
 	/// Try to initiate a connection over a network handle
+	int (*on_find_connection)(struct Module *, int job);
+	/// Try to initiate a connection over a network handle
 	int (*on_try_connect_wifi)(struct Module *, struct PakWiFiAdapter *handle, int job);
 	/// Runs immediately after successful connection. Runs at a constant interval, 1s by default.
 	int (*on_idle_tick)(struct Module *, unsigned int us_since_last_tick);

@@ -5,7 +5,7 @@ declare module "pak:wifi" {
 		getAdapters(): WiFiAdapter[];
 		bindSocketToAdapter(fd: number, adapter: WiFiAdapter): void;
 
-		requestConnection(spec: WiFiApFilter, callback: (adapter: WiFiAdapter) => void);
+		requestConnection(spec: WiFiApFilter, callback: (adapter: WiFiAdapter) => void): void;
 
 		static WIFI_2GHZ: number;
 		static WIFI_5GHZ: number;

@@ -24,12 +24,12 @@ struct Adapter {
 	struct PakWiFiAdapter adapter;
 };
 
-static JSValue create_adapter(JSContext *ctx, JSValue wifi, struct PakNet *wifi_ctx, int index) {
+static JSValue create_adapter(JSContext *ctx, JSValue wifi, struct PakNet *wifi_ctx, struct PakWiFiAdapter *adapter) {
 	JSValue adapter_obj = JS_NewObjectClass(ctx, wifi_adapter_class_id);
 
 	struct Adapter *adapter_priv = js_malloc_rt(JS_GetRuntime(ctx), sizeof(struct Adapter));
 	adapter_priv->ctx = wifi_ctx;
-	pak_wifi_get_adapter(wifi_ctx, &adapter_priv->adapter, index);
+	adapter_priv->adapter = *adapter;
 
 	JS_SetOpaque(adapter_obj, adapter_priv);
 
@@ -66,27 +66,87 @@ static int module_wifi_adapter(JSContext* ctx, JSModuleDef *m) {
 
 static JSValue get_default_adapter(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
 	struct PakNet *wifi_ctx = JS_GetOpaque(this_val, wifi_class_id);
-	JSValue adapter = create_adapter(ctx, this_val, wifi_ctx, -1);
+	struct PakWiFiAdapter pakadapter;
+	pak_wifi_get_adapter(wifi_ctx, &pakadapter, -1);
+	JSValue adapter = create_adapter(ctx, this_val, wifi_ctx, &pakadapter);
 	return adapter;
 }
 
 static JSValue wifi_bind_to_adapter(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
 	struct PakNet *wifi_ctx = JS_GetOpaque(this_val, wifi_class_id);
-	struct PakWiFiAdapter *adapter_ctx = JS_GetOpaque(argv[0], wifi_adapter_class_id);
+	struct Adapter *adapter = JS_GetOpaque(argv[0], wifi_adapter_class_id);
 	int32_t fd;
 	JS_ToInt32(ctx, &fd, argv[1]);
-	if (pak_wifi_bind_socket_to_adapter(wifi_ctx, adapter_ctx, fd)) {
+	if (pak_wifi_bind_socket_to_adapter(wifi_ctx, &adapter->adapter, fd)) {
 		return JS_ThrowInternalError(ctx, "pak_wifi_bind_socket_to_adapter");
 	}
 	return JS_UNDEFINED;
 }
 
+struct RequestConnectionPriv {
+	struct PakNet *wifi_ctx;
+	JSContext *ctx;
+	JSValue this_val;
+	JSValue fun_val;
+};
+
+static int connected(struct PakNet *ctx, struct PakWiFiAdapter *adapter, void *arg) {
+	struct RequestConnectionPriv *temp_priv = arg;
+	JSValue args[1] = {
+		create_adapter(temp_priv->ctx, temp_priv->this_val, temp_priv->wifi_ctx, adapter),
+	};
+	JS_Call(temp_priv->ctx, temp_priv->fun_val, JS_UNDEFINED, 1, args);
+	JS_FreeValue(temp_priv->ctx, args[0]);
+	JS_FreeValue(temp_priv->ctx, temp_priv->fun_val);
+	JS_FreeValue(temp_priv->ctx, temp_priv->this_val);
+	free(temp_priv);
+	return 0;
+}
+
+static JSValue wifi_request_connection(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
+	struct PakNet *wifi_ctx = JS_GetOpaque(this_val, wifi_class_id);
+
+	struct PakWiFiApFilter spec;
+	JSValue ssid = JS_GetPropertyStr(ctx, argv[0], "ssidPattern");
+	if (JS_IsUndefined(ssid)) {
+		spec.has_ssid = 0;
+	} else {
+		spec.has_ssid = 1;
+		strlcpy(spec.ssid_pattern, JS_ToCString(ctx, ssid), sizeof(spec.ssid_pattern));
+	}
+	JSValue password = JS_GetPropertyStr(ctx, argv[0], "password");
+	if (JS_IsUndefined(password)) {
+		spec.has_password = 0;
+	} else {
+		spec.has_password = 1;
+		strlcpy(spec.password, JS_ToCString(ctx, password), sizeof(spec.password));
+	}
+
+	struct RequestConnectionPriv *temp_priv = malloc(sizeof(struct RequestConnectionPriv));
+	temp_priv->ctx = ctx;
+	temp_priv->wifi_ctx = wifi_ctx;
+	temp_priv->fun_val = JS_DupValue(ctx, argv[1]);
+	temp_priv->this_val = JS_DupValue(ctx, this_val);
+
+	int rc = pak_wifi_request_connection(wifi_ctx, &spec, connected, temp_priv);
+	if (rc) {
+		return JS_ThrowInternalError(ctx, "pak_wifi_request_connection: %d", rc);
+	}
+
+	JS_FreeValue(ctx, password);
+	JS_FreeValue(ctx, ssid);
+	
+	return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry wifi_methods[] = {
 	JS_CFUNC_DEF("getDefaultAdapter", 0, get_default_adapter),
-	JS_CFUNC_DEF("bindSocketToAdapter", 0, wifi_bind_to_adapter),
+	JS_CFUNC_DEF("bindSocketToAdapter", 2, wifi_bind_to_adapter),
+	JS_CFUNC_DEF("requestConnection", 2, wifi_request_connection),
 
-	JS_PROP_INT32_DEF("WIFI_2GHZ",		   1, JS_PROP_ENUMERABLE),
-	JS_PROP_INT32_DEF("WIFI_5GHZ",		   2, JS_PROP_ENUMERABLE),
+#define JS_CONSTANT(x) JS_PROP_INT32_DEF(#x, x, JS_PROP_CONFIGURABLE)
+	JS_CONSTANT(PAK_WIFI_2GHZ),
+	JS_CONSTANT(PAK_WIFI_2GHZ),
 };
 
 static JSValue js_wifi_constructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst argv[]) {

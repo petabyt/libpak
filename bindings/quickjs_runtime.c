@@ -43,7 +43,9 @@ static JSValue test_module(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 	JSValue obj = argv[0];
 	struct Module *mod = JS_GetOpaque(obj, module_class_id);	
 
+	mod->on_find_connection(mod, -1);
 	mod->on_run_test(mod, SCREEN_TEST_SUITE, -1);
+	mod->on_disconnect(mod);
 
 	return JS_UNDEFINED;
 }
@@ -62,15 +64,27 @@ static const JSCFunctionListEntry module_methods[] = {
 
 };
 
-static int manual_connect(struct Module *mod) {
-	return 0;
-}
-
-static int init(struct Module *mod) {
-	return 0;
-}
+static int init(struct Module *mod) { return 0; }
 
 static int on_try_connect_wifi(struct Module *mod, struct PakWiFiAdapter *handle, int job) {
+//	JSValue fun = JS_GetPropertyStr(mod->priv->ctx, mod->priv->object, "onTryConnectWiFi");
+//	JSValue args[1] = {
+//		JS_NewInt32(mod->priv->ctx, job),
+//	};
+//	JS_Call(mod->priv->ctx, fun, mod->priv->object, 1, args);
+//	JS_FreeValue(mod->priv->ctx, args[0]);
+//	JS_FreeValue(mod->priv->ctx, fun);
+	return 0;
+}
+
+static int on_find_connection(struct Module *mod, int job) {
+	JSValue fun = JS_GetPropertyStr(mod->priv->ctx, mod->priv->object, "onFindConnection");
+	JSValue args[1] = {
+		JS_NewInt32(mod->priv->ctx, job),
+	};
+	JS_Call(mod->priv->ctx, fun, mod->priv->object, 1, args);
+	JS_FreeValue(mod->priv->ctx, args[0]);
+	JS_FreeValue(mod->priv->ctx, fun);
 	return 0;
 }
 
@@ -87,6 +101,13 @@ static int on_run_test(struct Module *mod, int screen, int job) {
 	return 0;
 }
 
+static int on_disconnect(struct Module *mod) {
+	JSValue fun = JS_GetPropertyStr(mod->priv->ctx, mod->priv->object, "onDisconnect");
+	JS_Call(mod->priv->ctx, fun, mod->priv->object, 0, NULL);
+	JS_FreeValue(mod->priv->ctx, fun);
+	return 0;
+}
+
 static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst argv[]) {
 	JSValue proto = JS_GetPropertyStr(ctx, new_target, "prototype");
 	JSValue obj = JS_NewObjectProtoClass(ctx, proto, module_class_id);
@@ -96,6 +117,8 @@ static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, in
 	mod->init = init;
 	mod->on_run_test = on_run_test;
 	mod->on_try_connect_wifi = on_try_connect_wifi;
+	mod->on_find_connection = on_find_connection;
+	mod->on_disconnect = on_disconnect;
 	mod->priv = malloc(sizeof(struct ModulePriv));
 	mod->priv->object = obj;
 	mod->priv->ctx = ctx;

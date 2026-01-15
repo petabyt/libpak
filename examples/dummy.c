@@ -11,7 +11,7 @@ static int connected(struct PakNet *ctx, struct PakWiFiAdapter *adapter, void *a
 	return mod->on_try_connect_wifi(mod, adapter, -1);
 }
 
-static int manual_connect(struct Module *mod) {
+static int on_find_connection(struct Module *mod, int job) {
 	struct PakNet *ctx = pak_net_get_context();
 	struct PakWiFiApFilter spec = {
 		.has_ssid = 1,

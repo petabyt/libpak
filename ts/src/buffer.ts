@@ -1,16 +1,15 @@
 export class BufferReader {
-	private buffer: Uint8Array;
-	private off: number;
+	public buffer: Uint8Array;
+	public arrayBuffer: ArrayBuffer;
+	public offset: number;
 	private extendBuffer: boolean;
 
 	constructor(buf: Uint8Array, byteOffset = 0) {
 		this.buffer = buf;
-		this.off = byteOffset;
+		this.offset = byteOffset;
 		this.extendBuffer = false;
+		this.arrayBuffer = buf.buffer;
 	}
-
-	get byteLength() { return this.buffer.length; }
-	get byteOffset() { return this.off; }
 
 	private chk(o: number, n: number) {
 		if (o + n > this.buffer.length) {
@@ -39,15 +38,26 @@ export class BufferReader {
 
 		return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
 	}
+
+	toString() {
+		let s = "";
+		for (let i = 0; i < this.offset; i++) {
+			if (this.buffer[i] == 13) continue;
+			s += String.fromCharCode(this.buffer[i]);
+		}
+		return s;
+	}
 }
 
 export class BufferWriter {
-	private buffer: Uint8Array;
-	private off: number;
+	public buffer: Uint8Array;
+	public arrayBuffer: ArrayBuffer;
+	public offset: number;
 
 	constructor(size: number = 0x1000) {
 		this.buffer = new Uint8Array(size);
-		this.off = 0x0;
+		this.arrayBuffer = this.buffer.buffer;
+		this.offset = 0x0;
 	}
 
 	private chk(o: number, n: number) {
@@ -55,6 +65,7 @@ export class BufferWriter {
 			let newbuffer = new Uint8Array(this.buffer.length);
 			newbuffer.set(this.buffer);
 			this.buffer = newbuffer;
+			this.arrayBuffer = this.buffer.buffer;
 		}
 	}
 
@@ -80,7 +91,7 @@ export class BufferWriter {
 	setString(o: number, s: string, nullTerminate = false): number {
 		let i = 0;
 		for (i = 0; i < s.length; i++) {
-			this.buffer[o + i] = s[i].charCodeAt(i);
+			this.buffer[o + i] = s[i].charCodeAt(0);
 		}
 		if (nullTerminate) {
 			this.buffer[o + i] = 0;
@@ -89,11 +100,7 @@ export class BufferWriter {
 		return i;
 	}
 
-	setOffset(o: number) {
-		this.off = o;
-	}
-
 	addString(s: string, nullTerminate = false) {
-		this.off += this.setString(this.off, s, nullTerminate);
+		this.offset += this.setString(this.offset, s, nullTerminate);
 	}
 }

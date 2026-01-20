@@ -3,6 +3,7 @@
 #include <wifi.h>
 #include <bluetooth.h>
 
+// TODO:
 struct Manifest {
 	const char *name;
 	const char *description;
@@ -57,14 +58,10 @@ struct Manifest {
 #define PAK_DEVICE_PROFESSIONAL_CAMERA "professional-camera"
 #define PAK_DEVICE_ACTION_CAMERA "action-camera"
 #define PAK_DEVICE_DASHCAM "dashcam"
-//#define PAK_DEVICE_SECURITY_CAMERA "security-camera"
-//#define PAK_DEVICE_BABY_MONITOR "baby-monitor"
 #define PAK_DEVICE_GENERIC_CAMERA "generic-camera"
 #define PAK_DEVICE_WIFI_SD_CARD "wifi-sd-card"
 #define PAK_DEVICE_DOORBELL "doorbell"
 // Home class
-//#define PAK_DEVICE_KITCHEN_APPLIANCE "kitchen-appliance"
-//#define PAK_DEVICE_GENERIC_APPLIANCE "generic-appliance"
 #define PAK_DEVICE_GENERIC_HOME_DEVICE "generic-home-device"
 #define PAK_DEVICE_DESK "desk"
 #define PAK_DEVICE_GENERIC_FURNITURE "generic-furniture"
@@ -75,7 +72,7 @@ struct Manifest {
 #define PAK_DEVICE_SPEAKERS "speakers"
 #define PAK_DEVICE_GENERIC_AUDIO "generic-audio"
 #define PAK_DEVICE_SMART_GLASSES "smart-glasses"
-#define PAK_DEVICE_GENERIC_TV "generic-tv"
+#define PAK_DEVICE_SMART_TV "smart-tv"
 #define PAK_DEVICE_SMARTWATCH "smartwatch"
 #define PAK_DEVICE_GENERIC_MEDICAL_WEARABLE "generic-medical-wearable"
 #define PAK_DEVICE_GENERIC_EXERCISE_MACHINE "generic-exercise-machine"
@@ -89,6 +86,7 @@ struct Manifest {
 #define PAK_DEVICE_GENERIC_RIDEABLE "generic-rideable"
 #define PAK_DEVICE_AUTOMOTIVE_INFOTAINMENT "automotive-infotainment"
 #define PAK_DEVICE_AUTOMOTIVE_DIAGNOSTIC "automotive-diagnostic"
+#define PAK_DEVICE_GENERIC_AUTOMOTIVE "generic-automotive"
 /// @}
 
 struct FileHandle {
@@ -99,6 +97,27 @@ struct FileHandle {
 struct FileMetadata {
 	const char *filename;
 	const char *mime_type;
+};
+
+enum PakTransport {
+	/// Bluetooth low energy
+	PAK_BLE = 1,
+	/// Bluetooth classic
+	PAK_BTC,
+	/// USB host access
+	PAK_USB,
+	/// Become a USB device
+	PAK_USB_DEVICE_MODE,
+	/// Connect to a WiFi access point
+	PAK_WIFI_AP,
+	/// Host an access point (hotspot) for something to connect to
+	PAK_HOST_WIFI_AP,
+	/// Listen to local network over UPnP
+	PAK_LOCAL_NETWORK_UPNP_LISTEN,
+	/// Broadcast datagram over local network
+	PAK_LOCAL_NETWORK_UPNP_BROADCAST,
+	/// Connect to something over the internet
+	PAK_INTERNET,
 };
 
 enum Screen {
@@ -134,12 +153,17 @@ enum Screen {
 	SCREEN_LIVE_FEED,
 };
 
+/// @brief A library that connects to and performs actions with an external device.
+/// @info Most "on_" methods are given a job number. This job number can be passed to other functions
+/// to check if the job is cancelled, set current progress, etc
+/// @info Each method is fully blocking and thread safe by default.
 struct Module {
 	int version;
 	struct RuntimePriv *rt;
 	struct ModulePriv *priv;
+	/// Initialize global variables or context data in priv field
 	int (*init)(struct Module *);
-	/// Try to initiate a connection over a network handle
+	/// Use WiFi or Bluetooth APIs manually to find a device to connect to.
 	int (*on_find_connection)(struct Module *, int job);
 	/// Try to initiate a connection over a network handle
 	int (*on_try_connect_wifi)(struct Module *, struct PakWiFiAdapter *handle, int job);
@@ -155,33 +179,49 @@ struct Module {
 	int (*on_request_thumbnail)(struct Module *, int screen, int job, struct FileHandle *file);
 	/// Request metadata for a file
 	int (*on_request_file_metadata)(struct Module *, int screen, int job, struct FileHandle *file);
+
+	int (*on_request_liveview_frame)(struct Module *, int screen, int job, struct FileHandle *file);
+
 	/// On request to run self test, test suite, debug dumps, or other diagnostics
 	int (*on_run_test)(struct Module *, int screen, int job);
-
-	/// Process an arbritrary command (from a console)
-	int (*on_custom_command)(struct Module *, const char *request);
+	/// Process an arbritrary command
+	int (*on_custom_command)(struct Module *, int argc, char **argv);
 };
 
-int pak_update_manifest(struct Module *mod, const struct Manifest *m);
+/// Update module manifest info on runtime
+int pak_rt_update_manifest(struct Module *mod, const struct Manifest *m);
 
-int pak_mod_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
-int pak_mod_add_file_metadata(struct Module *mod, struct FileHandle *file, const struct FileMetadata *metadata);
-int pak_mod_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
+int pak_rt_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
+int pak_rt_add_file_metadata(struct Module *mod, struct FileHandle *file, const struct FileMetadata *metadata);
+int pak_rt_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
 
+/// Returns true if user requested to cancel the job.
+int pak_rt_is_job_cancelled(struct Module *mod, int job);
 /// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
-int pak_mod_enter_screen(struct Module *mod, int screen);
-/// Enter a custom screen
-int pak_mod_enter_custom_screen(struct Module *mod);
-/// Set the percent of the current job's progress bar from 0-100. Is 100 by default for each job.
-int pak_mod_set_progress_bar(struct Module *mod, int job, int percent);
-/// Report how many bytes are being downloaded currently in X amount of microseconds.
-int pak_mod_set_current_download_speed(struct Module *mod, long time, unsigned int n_bytes);
-int pak_mod_set_device_name(struct Module *mod, const char *name);
-int pak_mod_set_device_unique_id(struct Module *mod, const char *string);
-int pak_mod_load_device_unique_id(struct Module *mod, const char *string);
-int pak_mod_flip_kill_switch(struct Module *mod, const char *reason);
-int pak_mod_set_tick_interval(struct Module *mod, unsigned int us);
+int pak_rt_enter_screen(struct Module *mod, int screen);
+/// Enter a custom screen (TODO)
+int pak_rt_enter_custom_screen(struct Module *mod);
+/// Set the percent of a job's progress bar from 0-100. Is 100 by default for each job.
+int pak_rt_se_progress_bar(struct Module *mod, int job, int percent);
+/// Report how many bytes are being downloaded for a job currently in X amount of microseconds.
+int pak_rt_set_current_download_speed(struct Module *mod, int job, long time, unsigned int n_bytes);
+/// Set the unique ID of the current connected device. Will be stored for future use.
+/// If the string is already stored, it will be loaded to the current session.
+int pak_rt_set_device_unique_id(struct Module *mod, const char *string);
+/// Send the name of the connected device to the runtime. Will appear in the UI and will associate
+/// with the current unique ID.
+int pak_rt_set_device_name(struct Module *mod, const char *name);
+/// Set the battery percentage of the connected device
+int pak_rt_set_device_battery(struct Module *mod, int percent);
+/// Report device information to the UI
+int pak_rt_notify_device_stat(struct Module *mod, const char *key, const char *value);
+/// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
+int pak_rt_disconnect(struct Module *mod, const char *reason);
+/// Set the tick interval in microseconds
+int pak_rt_set_tick_interval(struct Module *mod, unsigned int us);
 /// Get path for downloading a file
-const char *pak_mod_get_path(struct Module *mod, const char *filename);
+const char *pak_rt_get_path(struct Module *mod, const char *filename);
 
 struct Module *pak_create_mod(void);
+int pak_rt_test_module(struct Module *mod);
+struct Module *pak_rt_mod_from_native(int (*get)(struct Module *mod));

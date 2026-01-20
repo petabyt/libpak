@@ -12,8 +12,9 @@ option(PAK_INCLUDE_WIFI "WiFi APIs" ON)
 option(PAK_INCLUDE_BT "Bluetooth APIs" ON)
 
 if(ANDROID)
-	add_library(pak SHARED
+	add_library(pak STATIC
 		ndk/bluetooth.c
+		ndk/android.c
 	)
 	find_library(log-lib log)
 	find_library(android-lib android)

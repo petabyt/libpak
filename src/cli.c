@@ -124,7 +124,7 @@ int test_wifi(void) {
 	return 0;
 }
 
-int test_module(struct Module *mod);
+int pak_rt_test_module(struct Module *mod);
 
 int main(int argc, char **argv) {
 	for (int i = 0; i < argc; i++) {
@@ -137,9 +137,7 @@ int main(int argc, char **argv) {
 		} else if (!strcmp(argv[i], "--dump-bt")) {
 			return test_bluetooth();
 		} else if (!strcmp(argv[i], "--test-dummy-mod")) {
-			struct Module mod = {0};
-			get_module_dummy(&mod);
-			return test_module(&mod);
+			return pak_rt_test_module(pak_rt_mod_from_native(get_module_dummy));
 		}
 	}
 	printf("Invalid argument\n");

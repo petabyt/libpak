@@ -75,7 +75,7 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 		pak_wifi_unref_ap(ctx, &adapter, &ap);
 		cb(ctx, &adapter, arg);
 		//pak_wifi_unref_adapter(ctx, &adapter);
-		return PAK_CONNECTED;
+		return 0;
 	}
 
 	pak_wifi_unref_adapter(ctx, &adapter);

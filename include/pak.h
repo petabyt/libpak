@@ -9,9 +9,7 @@ enum PakErrorCode {
 	PAK_PERMISSION_DENIED = -1,
 	PAK_UNSUPPORTED = -2,
 	PAK_UNIMLPEMENTED = -3,
-
-	PAK_CONNECTED,
-	PAK_NOT_CONNECTED,
+	PAK_NOT_CONNECTED = -4,
 };
 
 int pak_main_loop(void);

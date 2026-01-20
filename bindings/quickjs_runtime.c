@@ -43,9 +43,9 @@ static JSValue test_module(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 	JSValue obj = argv[0];
 	struct Module *mod = JS_GetOpaque(obj, module_class_id);	
 
-	if (mod->on_find_connection(mod, -1)) return JS_UNDEFINED;
-	if (mod->on_run_test(mod, SCREEN_TEST_SUITE, -1)) return JS_UNDEFINED;
-	if (mod->on_disconnect(mod)) return JS_UNDEFINED;
+	if (pak_rt_test_module(mod)) {
+		return JS_UNDEFINED;
+	}
 
 	return JS_UNDEFINED;
 }

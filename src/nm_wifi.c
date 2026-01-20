@@ -633,6 +633,6 @@ int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, s
 	if (ev != EV_CONNECTED_TO_AP) {
 		return -1;
 	}
-	
+
 	return 0;
 }

@@ -19,9 +19,11 @@ android {
             )
         }
     }
-    externalNativeBuild {
-        cmake {
-            path = file("../CMakeLists.txt")
+    if (!rootProject.extra.has("noNativeModule")) {
+        externalNativeBuild {
+            cmake {
+                path = file("../CMakeLists.txt")
+            }
         }
     }
     compileOptions {
@@ -32,5 +34,5 @@ android {
 
 dependencies {
     testImplementation(libs.junit)
-    androidTestImplementation(libs.ext.junit)
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
 }

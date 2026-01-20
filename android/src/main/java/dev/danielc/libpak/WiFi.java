@@ -223,7 +223,7 @@ public class WiFi {
     public static boolean isHotSpotEnabled(Context ctx) {
         WifiManager wm = (WifiManager)ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         try {
-            Method m = wm.getClass().getDeclaredMethod("isWifiApEnabled");
+            @SuppressLint("PrivateApi") Method m = wm.getClass().getDeclaredMethod("isWifiApEnabled");
             m.setAccessible(true);
             if ((boolean)m.invoke(wm) == false) {
                 return false;

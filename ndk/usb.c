@@ -6,7 +6,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <jni.h>
+#include "ndk.h"
 
 struct PakUsbPriv {
 	jobject obj;
@@ -151,7 +151,7 @@ static int get_usb_permission(JNIEnv *env, jobject ctx, jobject man, jobject dev
 
 	if (pending_intent == NULL) {
 		(*env)->PopLocalFrame(env, NULL);
-		return PTP_NO_PERM;
+		return -1;
 	}
 
 	jmethodID req_perm_m = (*env)->GetMethodID(env, man_c, "requestPermission", "(Landroid/hardware/usb/UsbDevice;Landroid/app/PendingIntent;)V");
@@ -168,7 +168,7 @@ static int get_usb_permission(JNIEnv *env, jobject ctx, jobject man, jobject dev
 	}
 
 	(*env)->PopLocalFrame(env, NULL);
-	return PTP_NO_PERM;
+	return -1;
 }
 
 int ptp_device_open(struct PtpRuntime *r, struct PtpDeviceEntry *entry) {

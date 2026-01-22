@@ -1,0 +1,23 @@
+{
+	"name": "Veecar",
+	"description": "Implemenets Veement/Veecar dashcam protocol",
+	"author": "Daniel Cook",
+	"authorUrl": "https://danielc.dev/",
+	"languagecode": "en-us",
+	"version": 1,
+
+	"targets": [
+		{
+			"deviceType": "action-camera",
+			"companies": "Veement",
+			"products": "V300"
+		}
+	],
+
+	"discovery": [
+		{
+			"type": "wifi",
+			"ssidPattern": "V300*.",
+		}
+	]
+}

@@ -47,6 +47,7 @@ class Veement extends Module {
 				console.log(e);
 			}
 		});
+		// TODO: This function is meant to be blocking
 	}
 	onTryConnectWiFi(wifi, wifiAdapter, job) {
 		let fd = net.socket(net.AF_INET, net.SOCK_STREAM, net.IPPROTO_TCP);

@@ -1,3 +1,4 @@
+// QuickJS test
 import { WiFi } from "pak:wifi";
 import * as net from "c:socket";
 import * as std from "qjs:std";

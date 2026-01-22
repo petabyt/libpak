@@ -434,10 +434,9 @@ int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int
 	return 0;
 }
 
-// https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1
-int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, uint8_t uuid128[16], struct PakBtSocket **conn) {
+static int get_service_channel(const char *mac_address, uint8_t uuid128[16]) {
 	bdaddr_t target;
-	str2ba(dev->mac_address, &target);
+	str2ba(mac_address, &target);
 	const bdaddr_t bdaddr_any = {{0, 0, 0, 0, 0, 0}};
 	sdp_session_t *session = sdp_connect(&bdaddr_any, &target, SDP_RETRY_IF_BUSY);
 	if (session == NULL) {
@@ -454,13 +453,13 @@ int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev
 	int rc = sdp_service_search_attr_req(session, search_list, SDP_ATTR_REQ_RANGE, attrid_list, &seq);
 	sdp_list_free(search_list, 0);
 	sdp_list_free(attrid_list, 0);
+	sdp_close(session);
 	if (rc) {
 		fprintf(stderr, "sdp_service_search_attr_req: %d\n", rc);
-		sdp_close(session);
 		return -1;
 	}
 
-	uint8_t channel;
+	int channel = -1;
 	for (; seq; seq = seq->next) {
 		sdp_record_t *rec = (sdp_record_t *)seq->data;
 		sdp_list_t *proto_list = NULL;
@@ -473,6 +472,13 @@ int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev
 		fprintf(stderr, "failed to find rfcomm port channel\n");
 		return -1;
 	}
+	return channel;
+}
+
+// https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1
+int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, uint8_t uuid128[16], struct PakBtSocket **conn) {
+	int channel = get_service_channel(dev->mac_address, uuid128);
+	if (channel < 0) return -1;
 
 	int fd = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
 	if (fd < 0) return -1;

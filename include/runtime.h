@@ -103,21 +103,21 @@ enum PakTransport {
 	/// Bluetooth low energy
 	PAK_BLE = 1,
 	/// Bluetooth classic
-	PAK_BTC,
+	PAK_BTC = 2,
 	/// USB host access
-	PAK_USB,
+	PAK_USB = 3,
 	/// Become a USB device
-	PAK_USB_DEVICE_MODE,
+	PAK_USB_DEVICE_MODE = 4,
 	/// Connect to a WiFi access point
-	PAK_WIFI_AP,
+	PAK_WIFI_AP = 5,
 	/// Host an access point (hotspot) for something to connect to
-	PAK_HOST_WIFI_AP,
+	PAK_HOST_WIFI_AP = 6,
 	/// Listen to local network over UPnP
-	PAK_LOCAL_NETWORK_UPNP_LISTEN,
+	PAK_LOCAL_NETWORK_UPNP_LISTEN = 7,
 	/// Broadcast datagram over local network
-	PAK_LOCAL_NETWORK_UPNP_BROADCAST,
+	PAK_LOCAL_NETWORK_UPNP_BROADCAST = 8,
 	/// Connect to something over the internet
-	PAK_INTERNET,
+	PAK_INTERNET = 9,
 };
 
 enum Screen {
@@ -133,9 +133,9 @@ enum Screen {
 	SCREEN_TRANSMIT_UDP,
 	/// Receive packet over UDP/SSDP in order to find a connection
 	SCREEN_RECEIVE_UDP,
-	/// An option to test various functionality in this module using a fake emulator
-	SCREEN_TEST_SUITE,
 
+	/// An option to test various functionality in this module using a fake emulator
+	SCREEN_TEST_SUITE = 100,
 	/// A gallery of files, videos, or photos. Can include folders. Upon selecting a folder, on_switch_screen
 	/// will be called with SCREEN_FILE_GALLERY->SCREEN_FILE_GALLERY
 	/// Gallery may be a table of files with detailed info, or a thumbnail gallery of variable width.
@@ -180,7 +180,7 @@ struct Module {
 	/// Request metadata for a file
 	int (*on_request_file_metadata)(struct Module *, int screen, int job, struct FileHandle *file);
 
-	int (*on_request_liveview_frame)(struct Module *, int screen, int job, struct FileHandle *file);
+	int (*on_request_liveview_frame)(struct Module *, int screen, int job);
 
 	/// On request to run self test, test suite, debug dumps, or other diagnostics
 	int (*on_run_test)(struct Module *, int screen, int job);
@@ -210,11 +210,11 @@ int pak_rt_set_current_download_speed(struct Module *mod, int job, long time, un
 int pak_rt_set_device_unique_id(struct Module *mod, const char *string);
 /// Send the name of the connected device to the runtime. Will appear in the UI and will associate
 /// with the current unique ID.
-int pak_rt_set_device_name(struct Module *mod, const char *name);
+int pak_rt_report_device_name(struct Module *mod, const char *name);
 /// Set the battery percentage of the connected device
-int pak_rt_set_device_battery(struct Module *mod, int percent);
+int pak_rt_report_device_battery(struct Module *mod, int percent);
 /// Report device information to the UI
-int pak_rt_notify_device_stat(struct Module *mod, const char *key, const char *value);
+int pak_rt_set_device_info(struct Module *mod, const char *key, const char *value);
 /// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
 int pak_rt_disconnect(struct Module *mod, const char *reason);
 /// Set the tick interval in microseconds

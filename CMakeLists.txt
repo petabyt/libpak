@@ -15,6 +15,7 @@ if(ANDROID)
 	add_library(pak STATIC
 		ndk/bluetooth.c
 		ndk/android.c
+		ndk/wifi.c
 	)
 	find_library(log-lib log)
 	find_library(android-lib android)

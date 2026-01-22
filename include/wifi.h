@@ -86,10 +86,12 @@ struct PakWiFiApFilter {
 int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec, int (*cb)(struct PakNet *ctx, struct PakWiFiAdapter *, void *arg), void *arg);
 
 struct PakNetworkHandle {
-	struct PakWiFiAdapter *adapter;
 	enum PakAdapterType type;
 	union {
-		struct PakWiFiAp ap;
+		struct PakNetworkHandleWiFi {
+			struct PakWiFiAdapter *adapter;
+			struct PakWiFiAp ap;
+		}wifi;
 	}u;
 };
 int pak_net_bind_handle_to_socket(struct PakNet *ctx, struct PakNetworkHandle *handle, int fd);

@@ -38,7 +38,7 @@ int pak_rt_test_module(struct Module *mod) {
 		}
 	}
 	if (mod->on_run_test) {
-		if (mod->on_run_test(mod, SCREEN_TEST_SUITE, new_job(r))) return -1;
+		if (mod->on_run_test(mod, SCREEN_CONSOLE, new_job(r))) return -1;
 	}
 	if (mod->on_disconnect) {
 		if (mod->on_disconnect(mod)) return -1;

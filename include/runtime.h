@@ -3,55 +3,6 @@
 #include <wifi.h>
 #include <bluetooth.h>
 
-// TODO:
-struct Manifest {
-	const char *name;
-	const char *description;
-	const char *author;
-	const char *author_url;
-	const char *language_code;
-	int version;
-	const char *root_url;
-	const char *manifest_path;
-	const char *script_path;
-	const char *icon_path;
-
-	const char *script_signature;
-	const char *script_public_key;
-
-	struct TargetInfo {
-		const char *device_type;
-		const char **companies;
-		const char **products;
-	}target;
-
-	int primary_discovery_type;
-
-	struct ManifestWiFiDiscovery {
-		const char *ssid_pattern;
-	}wifi_options;
-
-	struct ManifestBLEDiscovery {
-		uint8_t mfg_data_match[0xff];
-		uint8_t mfg_data_mask[0xff];
-		const char *service_uuid1;
-		const char *service_uuid2;
-	}ble_options;
-
-	struct ManifestUSBDiscovery {
-		int pid_mask;
-		int pid;
-		int vid_mask;
-		int vid;
-		int class_mask;
-		int class_;
-	}usb_options;
-
-	struct ManifestDatagramDiscovery {
-		const char *http_request;
-	}upnp_options;
-};
-
 /// @addtogroup PakDevice
 /// @{
 // Photo class
@@ -134,8 +85,10 @@ enum Screen {
 	/// Receive packet over UDP/SSDP in order to find a connection
 	SCREEN_RECEIVE_UDP,
 
-	/// An option to test various functionality in this module using a fake emulator
-	SCREEN_TEST_SUITE = 100,
+	/// Prints lines of text into a terminal-like widget
+	SCREEN_CONSOLE = 100,
+	// Allows user to disconnect, change settings, switch to other screens
+	SCREEN_DASHBOARD,
 	/// A gallery of files, videos, or photos. Can include folders. Upon selecting a folder, on_switch_screen
 	/// will be called with SCREEN_FILE_GALLERY->SCREEN_FILE_GALLERY
 	/// Gallery may be a table of files with detailed info, or a thumbnail gallery of variable width.
@@ -158,6 +111,9 @@ enum Screen {
 /// to check if the job is cancelled, set current progress, etc
 /// @info Each method is fully blocking and thread safe by default.
 struct Module {
+	struct PakNet *net;
+	struct PakBt *bt;
+
 	int version;
 	struct RuntimePriv *rt;
 	struct ModulePriv *priv;
@@ -187,9 +143,6 @@ struct Module {
 	/// Process an arbritrary command
 	int (*on_custom_command)(struct Module *, int argc, char **argv);
 };
-
-/// Update module manifest info on runtime
-int pak_rt_update_manifest(struct Module *mod, const struct Manifest *m);
 
 int pak_rt_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
 int pak_rt_add_file_metadata(struct Module *mod, struct FileHandle *file, const struct FileMetadata *metadata);

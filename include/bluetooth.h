@@ -4,6 +4,8 @@
 #include <string.h>
 #include "pak.h"
 
+#define UUID_STR_LENGTH 37
+
 /// Bluetooth context
 struct PakBt;
 
@@ -18,6 +20,8 @@ void pak_bt_unref_context(struct PakBt *ctx);
 enum PakBtEvent {
 	PAK_EVENT_LE_ADVERTISEMENT = 1,
 	PAK_EVENT_GATT_UUID_CHANGED,
+	PAK_EVENT_DEVICE_PAIRED,
+	PAK_EVENT_DEVICE_UNPAIRED,
 };
 
 enum PakBtFeature {
@@ -44,7 +48,7 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter);
 
 struct PakUuidList {
 	unsigned int length;
-	uint8_t (*uuids)[16];
+	char (*uuids)[37];
 };
 
 struct PakBtDevice {
@@ -74,36 +78,15 @@ enum PakBtSocketOption {
 };
 
 /// Setup RFCOMM connection to a UUID via SDP lookup
-int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, uint8_t uuid[16], struct PakBtSocket **conn);
-
+int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid, struct PakBtSocket **conn);
+/// write()
 int pak_bt_write(struct PakBtSocket *conn, const void *data, unsigned int length);
+/// read()
 int pak_bt_read(struct PakBtSocket *conn, void *data, unsigned int length);
+/// close()
 int pak_bt_close_socket(struct PakBtSocket *conn);
 
-typedef int pak_bt_listen(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtDevice *adv);
+typedef int pak_bt_listen_adv(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtDevice *adv, void *arg);
+typedef int pak_bt_listen_gatt(struct PakBt *ctx, enum PakBtEvent evtype, const char *uuid);
 
-int pak_bt_listen_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, pak_bt_listen *cb, void *cb_arg);
-
-static int pak_str_to_uuid128(const char *str, uint8_t copy[16]) {
-	int32_t v[16];
-	if (sscanf(str, "%2x%2x%2x%2x-%2x%2x-%2x%2x-%2x%2x-%2x%2x%2x%2x%2x%2x",
-			&v[0], &v[1], &v[2], &v[3],
-			&v[4], &v[5],
-			&v[6], &v[7],
-			&v[8], &v[9],
-			&v[10], &v[11], &v[12], &v[13], &v[14], &v[15]) != 16)
-		return -1;
-	for (int i = 0; i < 16; i++) {
-		copy[i] = v[i];
-	}
-	return 0;
-}
-
-static void pak_uuid128_to_str(const uint8_t in[16], char str[37]) {
-	sprintf(str, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-		in[0], in[1], in[2], in[3],
-		in[4], in[5],
-		in[6], in[7],
-		in[8], in[9],
-		in[10], in[11], in[12], in[13], in[14], in[15]);
-}
+int pak_bt_listen_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, pak_bt_listen_adv *cb, void *cb_arg);

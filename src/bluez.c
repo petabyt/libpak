@@ -10,9 +10,12 @@
 #include <errno.h>
 #include "dbus.h"
 #include "bluetooth.h"
+#include "uuid.h"
 
 struct PakBt {
 	DBusConnection *conn;
+	pak_bt_listen_gatt *listen_gatt;
+	pak_bt_listen_adv *listen_adv;
 };
 
 struct PakBtSocket {
@@ -28,6 +31,30 @@ struct PakBtAdapterPriv {
 	int x;
 	char path[];
 };
+
+static int pak_str_to_uuid128(const char *str, uint8_t copy[16]) {
+	int32_t v[16];
+	if (sscanf(str, "%2x%2x%2x%2x-%2x%2x-%2x%2x-%2x%2x-%2x%2x%2x%2x%2x%2x",
+			&v[0], &v[1], &v[2], &v[3],
+			&v[4], &v[5],
+			&v[6], &v[7],
+			&v[8], &v[9],
+			&v[10], &v[11], &v[12], &v[13], &v[14], &v[15]) != 16)
+		return -1;
+	for (int i = 0; i < 16; i++) {
+		copy[i] = v[i];
+	}
+	return 0;
+}
+
+static void pak_uuid128_to_str(const uint8_t in[16], char str[37]) {
+	sprintf(str, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		in[0], in[1], in[2], in[3],
+		in[4], in[5],
+		in[6], in[7],
+		in[8], in[9],
+		in[10], in[11], in[12], in[13], in[14], in[15]);
+}
 
 static DBusHandlerResult handle_messages(DBusConnection *conn, DBusMessage *message, void *user_data) {
 	if (dbus_message_get_type(message) != DBUS_MESSAGE_TYPE_SIGNAL)
@@ -322,7 +349,7 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 			dbus_message_iter_recurse(&dict, &dict2);
 
 			dev->uuids.length = (unsigned int)dbus_message_iter_get_element_count(&dict2);
-			dev->uuids.uuids = malloc(sizeof(struct PakUuidList) + 16 * dev->uuids.length);
+			dev->uuids.uuids = malloc(sizeof(struct PakUuidList) + UUID_STR_LENGTH * dev->uuids.length);
 
 			struct DBusMessageIter dict3;
 			dbus_message_iter_recurse(&dict2, &dict3);
@@ -331,7 +358,7 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 			while (dbus_message_iter_get_arg_type(&dict3) != DBUS_TYPE_INVALID) {
 				const char *uuid = NULL;
 				dbus_message_iter_get_basic(&dict3, &uuid);
-				pak_str_to_uuid128(uuid, dev->uuids.uuids[i]);
+				strlcpy(dev->uuids.uuids[i], uuid, UUID_STR_LENGTH);
 				dbus_message_iter_next(&dict3);
 				i++;
 			}
@@ -434,7 +461,7 @@ int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int
 	return 0;
 }
 
-static int get_service_channel(const char *mac_address, uint8_t uuid128[16]) {
+static int get_service_channel(const char *mac_address, const char *uuid) {
 	bdaddr_t target;
 	str2ba(mac_address, &target);
 	const bdaddr_t bdaddr_any = {{0, 0, 0, 0, 0, 0}};
@@ -443,9 +470,11 @@ static int get_service_channel(const char *mac_address, uint8_t uuid128[16]) {
 		return -1;
 	}
 
+	uint8_t uuid128[17];
+	pak_str_to_uuid128(uuid, uuid128);
+
 	uuid_t svc_uuid;
-	uint32_t range = 0x0000ffff;
-	sdp_uuid128_create(&svc_uuid, uuid128);
+	uint32_t range = 0x0000ffff;	sdp_uuid128_create(&svc_uuid, uuid128);
 	sdp_list_t *search_list = sdp_list_append(0, &svc_uuid);
 	sdp_list_t *attrid_list = sdp_list_append(0, &range);
 
@@ -476,8 +505,8 @@ static int get_service_channel(const char *mac_address, uint8_t uuid128[16]) {
 }
 
 // https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1
-int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, uint8_t uuid128[16], struct PakBtSocket **conn) {
-	int channel = get_service_channel(dev->mac_address, uuid128);
+int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid, struct PakBtSocket **conn) {
+	int channel = get_service_channel(dev->mac_address, uuid);
 	if (channel < 0) return -1;
 
 	int fd = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);

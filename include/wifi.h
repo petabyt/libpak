@@ -77,6 +77,7 @@ struct PakWiFiApFilter {
 	char bssid[6];
 	int has_password;
 	char password[64];
+	int has_band;
 	enum PakWiFiBand band;
 	int is_hidden;
 };

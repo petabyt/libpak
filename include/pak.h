@@ -8,7 +8,7 @@ typedef char _pad_pointer[(sizeof(uintptr_t) - sizeof(uint32_t)) ? 4 : 0];
 enum PakErrorCode {
 	PAK_PERMISSION_DENIED = -1,
 	PAK_UNSUPPORTED = -2,
-	PAK_UNIMLPEMENTED = -3,
+	PAK_UNIMPLEMENTED = -3,
 	PAK_NOT_CONNECTED = -4,
 };
 

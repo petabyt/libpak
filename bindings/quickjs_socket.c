@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <quickjs/quickjs.h>
-#include <quickjs/quickjs-libc.h>
+#include <quickjs.h>
+#include <quickjs-libc.h>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>

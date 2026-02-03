@@ -9,24 +9,89 @@ import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.le.ScanFilter;
+import android.companion.AssociatedDevice;
+import android.companion.AssociationInfo;
+import android.companion.AssociationRequest;
+import android.companion.BluetoothDeviceFilter;
+import android.companion.BluetoothLeDeviceFilter;
+import android.companion.CompanionDeviceManager;
+import android.companion.WifiDeviceFilter;
 import android.content.Intent;
 
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.regex.Pattern;
 
 import android.content.Context;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
+import android.net.MacAddress;
+import android.net.wifi.ScanResult;
+import android.os.Build;
+import android.os.Parcel;
+import android.os.ParcelUuid;
 import android.util.Log;
 
 public class Bluetooth {
     public static final String TAG = "bt";
-    Context context;
-    private BluetoothAdapter adapter;
+    private static BluetoothManager btman;
+    private static BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
 
-    private BluetoothDevice dev;
-    public BluetoothGatt gatt;
+    static class BtDevice {
+        private BluetoothAdapter adapter;
+        private BluetoothDevice dev;
+        public BluetoothGatt gatt;
 
-    private static class NativeBluetoothGattCallback extends BluetoothGattCallback {
+        public int connectGatt(Context ctx, NativeBluetoothGattCallback callback) {
+            try {
+                gatt = dev.connectGatt(ctx, false, callback);
+                return 0;
+            } catch (SecurityException e) {
+                return Pak.Error.PERMISSION_DENIED.getCode();
+            }
+        }
+
+        public int readAsync(String uuid) {
+            UUID uuidObj = UUID.fromString(uuid);
+            BluetoothGattService service = gatt.getService(uuidObj);
+            BluetoothGattCharacteristic characteristic = service.getCharacteristic(uuidObj);
+            try {
+                return gatt.readCharacteristic(characteristic) ? 0 : -1;
+            } catch (SecurityException e) {
+                return Pak.Error.PERMISSION_DENIED.getCode();
+            }
+        }
+
+        public int writeAsync(String uuid, byte[] data) {
+            UUID uuidObj = UUID.fromString(uuid);
+            BluetoothGattService service = gatt.getService(uuidObj);
+            BluetoothGattCharacteristic writeCharacteristic = service.getCharacteristic(uuidObj);
+            writeCharacteristic.setValue(data);
+            try {
+                return gatt.writeCharacteristic(writeCharacteristic) ? 0 : -1;
+            } catch (SecurityException e) {
+                return Pak.Error.PERMISSION_DENIED.getCode();
+            }
+        }
+
+        public int watchUuid(String uuid, boolean watching) {
+            UUID uuidObj = UUID.fromString(uuid);
+            BluetoothGattService service = gatt.getService(uuidObj);
+            BluetoothGattCharacteristic notifyCharacteristic = service.getCharacteristic(uuidObj);
+            try {
+                return gatt.setCharacteristicNotification(notifyCharacteristic, watching) ? 0 : -1;
+            } catch (SecurityException e) {
+                return Pak.Error.PERMISSION_DENIED.getCode();
+            }
+        }
+    }
+
+    public static class NativeBluetoothGattCallback extends BluetoothGattCallback {
         byte[] struct;
         @Override
         public native void onConnectionStateChange(BluetoothGatt gatt, int status, int newState);
@@ -42,112 +107,69 @@ public class Bluetooth {
         public native void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status);
     }
 
-    private final BluetoothGattCallback callback = new BluetoothGattCallback() {
-        @Override
-        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            if (newState==BluetoothProfile.STATE_CONNECTED) {
-                // Bluetooth connected, you can now discover services
-                if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED) {
-                    return;
+    public static class BtFilter {
+        boolean isClassic;
+        String[] serviceUuids;
+        byte[] manufacData;
+        byte[] manufacDataMask;
+    }
+
+    public static void init(Context ctx) {
+        btman = (BluetoothManager)ctx.getSystemService(Context.BLUETOOTH_SERVICE);
+        adapter = BluetoothAdapter.getDefaultAdapter();
+    }
+
+    /// Opens a dialog to save an access point as a companion device
+    public static int pairWithDeviceCompanion(Context ctx, BtFilter btFilter, String companionName) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return Pak.Error.UNSUPPORTED.getCode();
+        }
+
+        CompanionDeviceManager deviceManager = (CompanionDeviceManager)ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);
+
+        AssociationRequest.Builder associationBuilder = new AssociationRequest.Builder();
+
+        if (btFilter.isClassic) {
+            BluetoothDeviceFilter.Builder builder = new BluetoothDeviceFilter.Builder();
+            if (btFilter.serviceUuids != null) {
+                for (String uuid : btFilter.serviceUuids) {
+                    builder.addServiceUuid(ParcelUuid.fromString(uuid), null);
                 }
-                gatt.discoverServices();
-            } else if (newState==BluetoothProfile.STATE_DISCONNECTED) {
-                // Bluetooth disconnected, clean up resources if needed
             }
-        }
-
-        @Override
-        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            if (status==BluetoothGatt.GATT_SUCCESS) {
-                // Services discovered, you can now read/write characteristics or enable notifications
-
-                // Example: Reading a characteristic
-//                BluetoothGattService service = gatt.getService(UUID.fromString(XX));
-//                BluetoothGattCharacteristic characteristic = service.getCharacteristic(UUID.fromString(XX));
-//                gatt.readCharacteristic(characteristic);
-//
-//                // Example: Enabling notifications for a characteristic
-//                BluetoothGattCharacteristic notifyCharacteristic = service.getCharacteristic(UUID.fromString(XX));
-//                gatt.setCharacteristicNotification(notifyCharacteristic, true);
-//
-//                // Example: Writing to a characteristic
-//                BluetoothGattCharacteristic writeCharacteristic = service.getCharacteristic(UUID.fromString(XX));
-//                byte[] dataToWrite = {0x01, 0x02}; // Sample data to write
-//                writeCharacteristic.setValue(dataToWrite);
-//                gatt.writeCharacteristic(writeCharacteristic);
+            associationBuilder.addDeviceFilter(builder.build());
+        } else {
+            BluetoothLeDeviceFilter.Builder builder = new BluetoothLeDeviceFilter.Builder();
+            ScanFilter.Builder scanfilter = new ScanFilter.Builder();
+            if (btFilter.manufacData != null) {
+                if (btFilter.manufacDataMask != null) {
+                    scanfilter.setManufacturerData(0, btFilter.manufacData, btFilter.manufacDataMask);
+                } else {
+                    scanfilter.setManufacturerData(0, btFilter.manufacData);
+                }
             }
+            builder.setScanFilter(scanfilter.build());
+            associationBuilder.addDeviceFilter(builder.build());
         }
 
-        @Override
-        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            if (status==BluetoothGatt.GATT_SUCCESS) {
-                // Characteristic read successfully, handle the data here
-                byte[] data = characteristic.getValue();
-                // Do something with the data
-            }
-        }
+        // TODO: finish this
 
-        @Override
-        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            if (status==BluetoothGatt.GATT_SUCCESS) {
-                // Characteristic write successful
-            }
-        }
+        return 0;
+    }
 
-        @Override
-        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            // Characteristic notification or indication received, handle the updated value here
-            byte[] data = characteristic.getValue();
-            // Do something with the updated data
-        }
-
-        @Override
-        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-            if (status==BluetoothGatt.GATT_SUCCESS) {
-                // Descriptor write successful, if you've enabled notifications, this callback will be called
-            }
-        }
-
-        // Implement other callback methods as needed for onDescriptorRead, onMtuChanged, etc.
-    };
-
-    /// Return an Intent that is to be run by the caller
-    public Intent getIntent() throws Exception {
-        try {
-            adapter = BluetoothAdapter.getDefaultAdapter();
-        } catch (Exception e) {
-            throw new Exception("Failed to get bluetooth adapter");
-        }
-
-        try {
-            if (adapter.isEnabled()) {
-                return new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            } else {
-                throw new Exception("Bluetooth adapter is disabled");
-            }
-        } catch (Exception e) {
-            throw new Exception("Failed to get bluetooth request intent");
+    private boolean checkPermission(Context ctx) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return ctx.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+        } else {
+            return false;
         }
     }
 
-    @SuppressLint("MissingPermission")
-    public BluetoothDevice getConnectedDevice() {
+    public void enableBluetoothDialog(Context ctx) {
+        Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+    }
+
+    public Set<BluetoothDevice> getConnectedDevice() throws SecurityException {
         Set<BluetoothDevice> bondedDevices = adapter.getBondedDevices();
-        if (bondedDevices!=null) {
-            for (BluetoothDevice device : bondedDevices) {
-                Log.d(TAG, "Currently connected to " + device.getName());
-            }
-        }
-        return null; // No connected device found
-    }
-
-    public void connectGATT(Context c) throws Exception {
-        context = c;
-        if (dev != null) {
-            if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED) {
-                throw new Exception("Bluetooth permission denied");
-            }
-            gatt = dev.connectGatt(context, false, callback);
-        }
+        return bondedDevices;
     }
 }

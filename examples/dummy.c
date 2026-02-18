@@ -26,12 +26,6 @@ static int on_find_connection(struct Module *mod, int job) {
 static int init(struct Module *mod) {
 	mod->priv = (struct ModulePriv *)malloc(sizeof(struct ModulePriv));
 
-	struct Manifest m = {
-		.name = "Dummy module",
-		.description = "A dummy module that doesn't do much",
-		.author = "Daniel Cook",
-	};
-	
 	return 0;
 }
 

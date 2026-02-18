@@ -74,6 +74,5 @@ if(PAK_INCLUDE_CLI AND NOT ANDROID)
 		pak
 		m
 	)
-	add_executable(veecar examples/veecar.c)
-	target_link_libraries(veecar PRIVATE pak)
+	install(TARGETS pakcli)
 endif()

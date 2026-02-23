@@ -10,24 +10,27 @@
 struct PakBt;
 
 struct PakBt *pak_bt_get_context(void);
+void pak_bt_unref_context(struct PakBt *ctx);
 
 /// Checks if system-wide bluetooth is enabled
 int pak_bt_is_enabled(struct PakBt *ctx);
 
-struct PakBt *pak_bt_get_context(void);
-void pak_bt_unref_context(struct PakBt *ctx);
-
 enum PakBtEvent {
-	PAK_EVENT_LE_ADVERTISEMENT = 1,
-	PAK_EVENT_GATT_UUID_CHANGED,
-	PAK_EVENT_DEVICE_PAIRED,
-	PAK_EVENT_DEVICE_UNPAIRED,
+	PAK_BT_EVENT_CONNECTION_STATE_CHANGED = 1,
+	PAK_BT_EVENT_CONNECTED,
+	PAK_BT_EVENT_DISCONNECTED,
+	PAK_BT_EVENT_GATT_UUID_WRITTEN,
+	PAK_BT_EVENT_GATT_UUID_READ,
+	PAK_BT_EVENT_DEVICE_PAIRED,
+	PAK_BT_EVENT_DEVICE_UNPAIRED,
 };
 
 enum PakBtFeature {
-	PAK_SUPPORT_LE = 1,
-	PAK_SUPPORT_LE_ADVERTISING,
-	PAK_SUPPORT_LE_AUDIO,
+	/// Support BLE
+	PAK_SUPPORT_BLE = 1,
+	PAK_SUPPORT_BLE_ADVERTISING,
+	PAK_SUPPORT_BLE_AUDIO,
+	/// Support bluetooth classic
 	PAK_SUPPORT_BTC,
 	PAK_SUPPORT_PERIPHERAL_MODE,
 };
@@ -63,13 +66,58 @@ struct PakBtDevice {
 	struct PakUuidList uuids;
 };
 
+/// Get devices currently paired with the system
 int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index);
+
+/// Get devices that are currently not paired but saved to the system's bluetooth manager
+int pak_bt_get_saved_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index);
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device);
 
+/// Use generic API to read battery level
 int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int *percent);
 
-/// Bluetooth RFCOMM socket
+/// Establish connection with a bluetooth device for this context
+int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device);
+
+struct PakGattService {
+	struct PakGattServicePriv *priv;
+	_pad_pointer pad_priv;
+	char uuid[37];
+	uint16_t handle;
+};
+
+/// Get GATT services within a device
+int pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService *service, int index);
+int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service);
+
+struct PakGattCharacteristic {
+	struct PakGattCharacteristicPriv *priv;
+	_pad_pointer pad_priv;
+	int flags;
+	char uuid[37];
+	uint16_t handle;
+	uint16_t mtu;
+};
+
+/// Get GATT characteristics associated with a GATT service
+int pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *service, struct PakGattCharacteristic *characteristic, int index);
+int pak_bt_unref_gatt_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *chr);
+
+/// Request to read characteristic value. Result will be fired in the callback
+int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic);
+
+/// Request to write data to a characteristic. Write acknowledgement will be fired in the callback
+int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *data, unsigned int length);
+
+struct PakGattDescriptor {
+	struct PakGattDescriptorPriv *priv;
+	_pad_pointer pad_priv;
+	char uuid[37];
+	uint16_t handle;
+};
+
+/// Bluetooth Classic RFCOMM socket
 struct PakBtSocket;
 
 enum PakBtSocketOption {

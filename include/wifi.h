@@ -84,6 +84,7 @@ struct PakWiFiApFilter {
 
 /// Tries to open a connection with the specified PakWiFiApFilter
 /// Will automatically select an adapter, prefers one that is not currently connected to anything
+/// callback must call pak_wifi_unref_adapter when it doesn't need the adapter handle anymore
 int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec, int (*cb)(struct PakNet *ctx, struct PakWiFiAdapter *, void *arg), void *arg);
 
 struct PakNetworkHandle {

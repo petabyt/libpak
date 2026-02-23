@@ -59,7 +59,7 @@ if(PAK_INCLUDE_CLI AND NOT ANDROID)
 	    PATH_SUFFIXES quickjs
 	    REQUIRED
 	)
-	add_executable(pakcli
+	add_executable(pakit
 		src/cli.c
 		src/cli_runtime.c
 		examples/dummy.c
@@ -67,12 +67,12 @@ if(PAK_INCLUDE_CLI AND NOT ANDROID)
 		bindings/quickjs_socket.c
 		bindings/quickjs_runtime.c
 	)
-	target_include_directories(pakcli PUBLIC /usr/include/quickjs)
-	target_link_libraries(pakcli
+	target_include_directories(pakit PUBLIC /usr/include/quickjs)
+	target_link_libraries(pakit
 		PRIVATE
 		${QUICKJS_LIB}
 		pak
 		m
 	)
-	install(TARGETS pakcli)
+	install(TARGETS pakit)
 endif()

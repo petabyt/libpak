@@ -421,25 +421,13 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 			dbus_message_iter_recurse(&val_dict, &val_dict2);
 			dbus_message_iter_get_basic(&val_dict2, &is_connected);
 
-			if (filter & (FILTER_IS_CONNECTED | FILTER_IS_SAVED)) {
-				if (is_connected && (filter & FILTER_IS_CONNECTED)) {
-					if (found == index) {
-						fill_from_device1(&adapter_dict, dev);
-						dev->priv = (struct PakBtDevicePriv *)alloc_priv(sizeof(struct PakBtDevicePriv), path);
-						dbus_message_unref(resp);
-						return 0;
-					}
-					found++;
-				} else if (filter & FILTER_IS_SAVED) {
-					if (found == index) {
-						fill_from_device1(&adapter_dict, dev);
-						dev->priv = (struct PakBtDevicePriv *)alloc_priv(sizeof(struct PakBtDevicePriv), path);
-						dbus_message_unref(resp);
-						return 0;
-					}
-					found++;
+			if ((is_connected && (filter & FILTER_IS_CONNECTED)) || (!is_connected && (filter & FILTER_IS_SAVED))) {
+				if (found == index) {
+					fill_from_device1(&adapter_dict, dev);
+					dev->priv = (struct PakBtDevicePriv *)alloc_priv(sizeof(struct PakBtDevicePriv), path);
+					dbus_message_unref(resp);
+					return 0;
 				}
-			} else {
 				found++;
 			}
 		}
@@ -613,6 +601,8 @@ int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *
 
 	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
 	if (resp == NULL) return -1;
+
+	// TODO: Parse resp
 
 	dbus_message_unref(resp);
 

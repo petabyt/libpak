@@ -603,16 +603,42 @@ int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service)
 }
 
 int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic) {
-	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "ReadValue");
+	DBusMessage *call = dbus_message_new_method_call("org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "ReadValue");
+	DBusMessageIter iter;
+	dbus_message_iter_init_append(call, &iter);
+
+	DBusMessageIter dict_options;
+	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "{sv}", &dict_options);
+	dbus_message_iter_close_container(&iter, &dict_options);
+
+	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
 	if (resp == NULL) return -1;
-    dbus_message_unref(resp);
+
+	dbus_message_unref(resp);
+
 	return 0;
 }
 
 int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *data, unsigned int length) {
-	// TODO:
-	
-	//DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "WriteValue");
+	DBusMessage *call = dbus_message_new_method_call("org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "WriteValue");
+	DBusMessageIter iter;
+	dbus_message_iter_init_append(call, &iter);
+
+	DBusMessageIter dict_value;
+	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "y", &dict_value);
+	for (unsigned int i = 0; i < length; i++) {
+		dbus_message_iter_append_basic(&dict_value, DBUS_TYPE_BYTE, &data[i]);
+	}
+	dbus_message_iter_close_container(&iter, &dict_value);
+
+	DBusMessageIter dict_options;
+	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "{sv}", &dict_options);
+	dbus_message_iter_close_container(&iter, &dict_options);
+
+	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
+	if (resp == NULL) return -1;
+
+	dbus_message_unref(resp);
 	return 0;
 }
 

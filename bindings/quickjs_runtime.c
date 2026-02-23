@@ -5,6 +5,9 @@
 #include <quickjs-libc.h>
 #include <runtime.h>
 
+JSModuleDef *js_init_module_socket(JSContext *ctx, const char *module_name);
+JSModuleDef *js_init_module_wifi(JSContext *ctx, const char *module_name);
+
 __attribute__((weak))
 int JS_GetLength(JSContext *ctx, JSValueConst obj, int64_t *pres) {
 	JSValue length = JS_GetPropertyStr(ctx, obj, "length");
@@ -50,8 +53,19 @@ static JSValue test_module(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 	return JS_UNDEFINED;
 }
 
+static JSValue export_module(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
+	JSValue obj = argv[0];
+	struct Module *mod = JS_GetOpaque(obj, module_class_id);	
+
+	JS_SetContextOpaque(ctx, mod);
+
+	return JS_UNDEFINED;
+}
+
+
 static const JSCFunctionListEntry module_funcs[] = {
 	JS_CFUNC_DEF("test", 1, test_module),
+	JS_CFUNC_DEF("export", 1, export_module),
 };
 
 static const JSCFunctionListEntry module_methods[] = {
@@ -117,15 +131,15 @@ static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, in
 	JSValue obj = JS_NewObjectProtoClass(ctx, proto, module_class_id);
 	JS_FreeValue(ctx, proto);
 
-	struct Module *mod = pak_create_mod();
+	struct Module *mod = calloc(1, sizeof(struct Module));
 	mod->init = init;
 	mod->on_run_test = on_run_test;
 	mod->on_try_connect_wifi = on_try_connect_wifi;
 	mod->on_find_connection = on_find_connection;
 	mod->on_disconnect = on_disconnect;
+
 	mod->priv = malloc(sizeof(struct ModulePriv));
 	mod->priv->object = obj;
-	mod->priv->ctx = ctx;
 	mod->priv->ctx = ctx;
 
 	JS_SetOpaque(obj, mod);
@@ -168,4 +182,69 @@ JSModuleDef *js_init_module_pak_runtime(JSContext *ctx, const char *module_name)
 	JSModuleDef *m = JS_NewCModule(ctx, module_name, module_wifi_all);
 	if (!m) return NULL;
 	return m;
+}
+
+int free_module_and_runtime(struct Module *mod) {
+	js_std_free_handlers(mod->priv->rt);
+	JS_FreeContext(mod->priv->ctx);
+	JS_FreeRuntime(mod->priv->rt);
+}
+
+int setup_quickjs_module(struct Module **mod, const char *filename) {
+	JSRuntime *rt = JS_NewRuntime();
+
+	JSContext *ctx = JS_NewContext(rt);
+	JS_SetContextOpaque(ctx, NULL);
+	js_std_add_helpers(ctx, 0, NULL);
+
+	JS_AddModuleExport(ctx, js_init_module_wifi(ctx, "pak:wifi"), "WiFi");
+	JS_AddModuleExport(ctx, js_init_module_pak_runtime(ctx, "pak:runtime"), "Module");
+	js_init_module_socket(ctx, "c:socket");
+	js_init_module_std(ctx, "qjs:std");
+	//JS_SetModuleLoaderFunc2(rt, NULL, js_module_loader, js_module_check_attributes, NULL);
+	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
+	js_std_init_handlers(rt);
+
+	FILE *file = fopen(filename, "rb");
+	if (!file) {
+		printf("Failed to open '%s'\n", filename);
+		return -1;
+	}
+	
+	fseek(file, 0, SEEK_END);
+	long file_size = ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	char *buffer = (char *)malloc(file_size + 1);
+	if (!buffer) return -1;
+	
+	fread(buffer, 1, file_size, file);
+	buffer[file_size] = '\0';
+
+	fclose(file);
+
+	JSValue val = JS_Eval(ctx, buffer, file_size, filename, JS_EVAL_TYPE_MODULE);
+	if (JS_IsException(val)) {
+		const char *str = JS_ToCString(ctx, val);
+		printf("JS error: %s\n", str);
+		JS_FreeCString(ctx, str);
+		return -1;
+	}
+
+	JS_FreeValue(ctx, val);
+
+	struct Module *exported_module = JS_GetContextOpaque(ctx);
+	if (exported_module != NULL) {
+		exported_module->priv->rt = rt;
+		exported_module->free = free_module_and_runtime; // override free method so it closes down quickjs instance
+		(*mod) = exported_module;
+		return 0;
+	}
+
+	js_std_free_handlers(rt);
+	JS_FreeContext(ctx);
+	JS_FreeRuntime(rt);
+
+	printf("JS didn't export module\n");
+	return -1;
 }

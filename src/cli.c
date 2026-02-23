@@ -1,66 +1,15 @@
 #include <stdio.h>
-#include <stdlib.h>
+//#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <quickjs/quickjs.h>
-#include <quickjs/quickjs-libc.h>
+#include <quickjs.h>
+#include <quickjs-libc.h>
 #include "wifi.h"
 #include "bluetooth.h"
 #include "runtime.h"
 
 int get_module_dummy(struct Module *mod);
-
-JSModuleDef *js_init_module_socket(JSContext *ctx, const char *module_name);
-JSModuleDef *js_init_module_wifi(JSContext *ctx, const char *module_name);
-JSModuleDef *js_init_module_pak_runtime(JSContext *ctx, const char *module_name);
-
-int run_quickjs(const char *filename) {
-	JSRuntime *rt = JS_NewRuntime();
-
-	JSContext *ctx = JS_NewContext(rt);
-	js_std_add_helpers(ctx, 0, NULL);
-
-	JS_AddModuleExport(ctx, js_init_module_wifi(ctx, "pak:wifi"), "WiFi");
-	JS_AddModuleExport(ctx, js_init_module_pak_runtime(ctx, "pak:runtime"), "Module");
-	js_init_module_socket(ctx, "c:socket");
-	js_init_module_std(ctx, "qjs:std");
-	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
-	js_std_init_handlers(rt);
-
-	FILE *file = fopen(filename, "rb");
-	if (!file) {
-		printf("Failed to open '%s'\n", filename);
-		return -1;
-	}
-	
-	fseek(file, 0, SEEK_END);
-	long file_size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	char *buffer = (char *)malloc(file_size + 1);
-	if (!buffer) return -1;
-	
-	fread(buffer, 1, file_size, file);
-	buffer[file_size] = '\0';
-
-	fclose(file);
-
-	JSValue val = JS_Eval(ctx, buffer, file_size, filename, JS_EVAL_TYPE_MODULE);
-	if (JS_IsException(val)) {
-		const char *str = JS_ToCString(ctx, val);
-		printf("JS error: %s\n", str);
-		JS_FreeCString(ctx, str);
-		return -1;
-	}
-
-	JS_FreeValue(ctx, val);
-
-	js_std_free_handlers(rt);
-	JS_FreeContext(ctx);
-	JS_FreeRuntime(rt);
-
-	return 0;
-}
+int setup_quickjs_module(struct Module **mod, const char *filename);
 
 int test_bluetooth(void) {
 	struct PakBt *ctx = pak_bt_get_context();
@@ -78,11 +27,13 @@ int test_bluetooth(void) {
 			char uuid[37];
 			printf("%s\n", dev.uuids.uuids[z]);
 		}
-		printf("Mfgdata: {");
-		for (int z = 0; z < 0x10; z++) {
-			printf("%02x,", dev.mfg_data[z]);
+		if (!dev.is_classic) {
+			printf("Mfgdata: {");
+			for (int z = 0; z < 0x10; z++) {
+				printf("%02x,", dev.mfg_data[z]);
+			}
+			printf("}\n");
 		}
-		printf("}\n");
 
 		int percent;
 		if (pak_bt_get_device_battery(ctx, &dev, &percent)) return -1;
@@ -123,18 +74,49 @@ int test_wifi(void) {
 	return 0;
 }
 
+int test_bluetooth_connect(void) {
+	struct PakBt *ctx = pak_bt_get_context();
+
+	int len = pak_bt_get_n_adapters(ctx);
+	if (len <= 0) return -1;
+	struct PakBtAdapter adapter;
+	if (pak_bt_get_adapter(ctx, &adapter, 0)) return -1;
+
+	struct PakBtDevice dev;
+	int rc = pak_bt_get_saved_device(ctx, &adapter, &dev, 0);
+	printf("Saved device: %s\n", dev.name);
+
+	struct PakGattService service;
+	struct PakGattCharacteristic chr;
+	if (!pak_bt_get_gatt_service(ctx, &dev, &service, 0)) {
+		printf("Service: %s\n", service.uuid);
+		if (!pak_bt_get_gatt_characteristic(ctx, &service, &chr, 0)) {
+			printf("Characteristic: %s\n", chr.uuid);
+		}
+	}
+
+	pak_bt_unref_adapter(ctx, &adapter);
+
+	return 0;
+}
+
+
 int pak_rt_test_module(struct Module *mod);
 
 int main(int argc, char **argv) {
 	for (int i = 0; i < argc; i++) {
-		if (!strcmp(argv[i], "--js")) {
-			return run_quickjs(argv[i + 1]);
+		if (!strcmp(argv[i], "--test-js")) {
+			struct Module *mod;
+			setup_quickjs_module(&mod, argv[i + 1]);
+			return pak_rt_test_module(mod);
 		} else if (!strcmp(argv[i], "--test")) {
 			int rc = test_wifi();
 			rc |= test_bluetooth();
 			return rc;
 		} else if (!strcmp(argv[i], "--dump-bt")) {
 			return test_bluetooth();
+		} else if (!strcmp(argv[i], "--bt-con")) {
+			return test_bluetooth_connect();
 		} else if (!strcmp(argv[i], "--test-dummy-mod")) {
 			return pak_rt_test_module(pak_rt_mod_from_native(get_module_dummy));
 		}

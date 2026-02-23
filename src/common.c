@@ -19,6 +19,17 @@ void pak_error(const char *fmt, ...) {
 }
 
 __attribute__((weak))
+void pak_abort(const char *fmt, ...) {
+	printf("ERR: ");
+	va_list args;
+	va_start(args, fmt);
+	vprintf(fmt, args);
+	va_end(args);
+	fflush(stdout);
+	abort();
+}
+
+__attribute__((weak))
 int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec, int (*cb)(struct PakNet *ctx, struct PakWiFiAdapter *, void *arg), void *arg) {
 	regex_t regex;
 
@@ -74,7 +85,6 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 
 		pak_wifi_unref_ap(ctx, &adapter, &ap);
 		cb(ctx, &adapter, arg);
-		//pak_wifi_unref_adapter(ctx, &adapter);
 		return 0;
 	}
 

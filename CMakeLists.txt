@@ -19,6 +19,10 @@ if(TARGET qjs)
 endif()
 
 if(ANDROID)
+	add_library(usb-1.0 STATIC
+		ndk/usb.c
+	)
+	target_include_directories(usb-1.0 PUBLIC ${PROJECT_SOURCE_DIR}/ndk)
 	add_library(pak STATIC
 		${LIBPAK_SOURCES}
 		ndk/bluetooth.c

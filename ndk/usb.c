@@ -1,3 +1,4 @@
+// LibUSB wrapper around Android android.hardware.usb APIs
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -6,60 +7,72 @@
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <unistd.h>
+#include "libusb.h"
 #include "ndk.h"
 
-struct PakUsbPriv {
-	jobject obj;
-	jobject dev;
-	int fd;
-	int endpoint_in;
-	int endpoint_out;
+struct libusb_context {
+	jobject usbmanager;
 };
 
-static jobject get_usb_man(JNIEnv *env, jobject ctx) {
+struct libusb_device {
+	struct libusb_context *ctx;
+	jobject device;
+};
+
+struct libusb_device_handle {
+	struct libusb_device *dev;
+	jobject connection;
+	int fd;
+};
+
+int libusb_init(libusb_context **ctx) {
+	JNIEnv *env = get_jni_env();
+	jobject jctx = get_jni_ctx();
+	(*ctx) = malloc(sizeof(struct libusb_context));
+
 	jclass ClassContext = (*env)->FindClass(env, "android/content/Context");
 	jfieldID lid_USB_SERVICE = (*env)->GetStaticFieldID(env, ClassContext, "USB_SERVICE", "Ljava/lang/String;");
 	jobject USB_SERVICE = (*env)->GetStaticObjectField(env, ClassContext, lid_USB_SERVICE);
 
 	jmethodID get_sys_service_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "android/content/Context"), "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
-	return (*env)->CallObjectMethod(env, ctx, get_sys_service_m, USB_SERVICE);
+	jobject usbmanager = (*env)->CallObjectMethod(env, jctx, get_sys_service_m, USB_SERVICE);
+	(*ctx)->usbmanager = (*env)->NewGlobalRef(env, usbmanager);
+
+	return 0;
 }
 
-static jobject get_ptp_interface(JNIEnv *env, jobject dev) {
-	jclass ClassUsbInterface = (*env)->FindClass(env, "android/hardware/usb/UsbInterface");
-	jmethodID get_dev_class_m = (*env)->GetMethodID(env, ClassUsbInterface, "getInterfaceClass", "()I");
-	jclass ClassUsbDevice = (*env)->FindClass(env, "android/hardware/usb/UsbDevice");
-	jmethodID MethodgetInterfaceCount = (*env)->GetMethodID(env, ClassUsbDevice, "getInterfaceCount", "()I");
-	jmethodID MethodgetInterface = (*env)->GetMethodID(env, ClassUsbDevice, "getInterface", "(I)Landroid/hardware/usb/UsbInterface;");
-	int ifaceCount = (*env)->CallIntMethod(env, dev, MethodgetInterfaceCount);
-	for (int i = 0; i < ifaceCount; i++) {
-		jobject interf = (*env)->CallObjectMethod(env, dev, MethodgetInterface, i);
-		int interf_class = (*env)->CallIntMethod(env, interf, get_dev_class_m);
-		if (interf_class == 6) {
-			return interf;
-		}
-	}
-	return NULL;
-}
-
-#if 0
-struct PtpDeviceEntry *ptpusb_device_list(struct PtpRuntime *r) {
-	struct PtpDeviceEntry *curr_ent = malloc(sizeof(struct PtpDeviceEntry));
-	memset(curr_ent, 0, sizeof(struct PtpDeviceEntry));
-
-	struct PtpDeviceEntry *orig_ent = curr_ent;
-
+void libusb_exit(libusb_context *ctx) {
 	JNIEnv *env = get_jni_env();
-	jobject ctx = get_jni_ctx();
+	(*env)->DeleteGlobalRef(env, ctx->usbmanager);
+}
+
+void libusb_set_debug(libusb_context *ctx, int level) {}
+libusb_device *libusb_ref_device(libusb_device *dev) { return dev; }
+
+void libusb_unref_device(libusb_device *dev) {
+	JNIEnv *env = get_jni_env();
+	(*env)->DeleteGlobalRef(env, dev->device);
+	free(dev);
+}
+
+int libusb_get_configuration(libusb_device_handle *dev_handle, int *config) {
+	*config = 0;
+	return 0;
+}
+
+ssize_t libusb_get_device_list(libusb_context *ctx, libusb_device ***list) {
+	JNIEnv *env = get_jni_env();
 
 	(*env)->PushLocalFrame(env, 100);
-	jobject man = get_usb_man(env, ctx);
 
 	jclass man_c = (*env)->FindClass(env, "android/hardware/usb/UsbManager");
 	jmethodID get_dev_list_m = (*env)->GetMethodID(env, man_c, "getDeviceList", "()Ljava/util/HashMap;");
-	jobject deviceList = (*env)->CallObjectMethod(env, man, get_dev_list_m);
+	jobject deviceList = (*env)->CallObjectMethod(env, ctx->usbmanager, get_dev_list_m);
 
 	jclass hashmap_c = (*env)->FindClass(env, "java/util/HashMap");
+	jmethodID size_m = (*env)->GetMethodID(env, hashmap_c, "size", "()I");
+	int device_list_size = (*env)->CallIntMethod(env, deviceList, size_m);
 	jmethodID values_m = (*env)->GetMethodID(env, hashmap_c, "values", "()Ljava/util/Collection;");
 	jobject dev_list = (*env)->CallObjectMethod(env, deviceList, values_m);
 	jclass collection_c = (*env)->FindClass(env, "java/util/Collection");
@@ -69,67 +82,109 @@ struct PtpDeviceEntry *ptpusb_device_list(struct PtpRuntime *r) {
 	jmethodID has_next_m = (*env)->GetMethodID(env, iterator_c, "hasNext", "()Z" );
 	jmethodID next_m = (*env)->GetMethodID(env, iterator_c, "next", "()Ljava/lang/Object;" );
 
-	int valid_devices = 0;
-	while ((*env)->CallBooleanMethod(env, iterator, has_next_m)) {
-		ptp_verbose_log("Probing valid device\n");
+	(*list) = malloc(sizeof(void *) * device_list_size);
+
+	for (int i = 0; (*env)->CallBooleanMethod(env, iterator, has_next_m); i++) {
+		printf("Probing valid device\n");
 		jobject device = (*env)->CallObjectMethod(env, iterator, next_m);
 
-		jclass usb_dev_c = (*env)->FindClass(env, "android/hardware/usb/UsbDevice" );
-		jclass usb_interf_c = (*env)->FindClass(env, "android/hardware/usb/UsbInterface" );
-		jclass usb_endpoint_c = (*env)->FindClass(env, "android/hardware/usb/UsbEndpoint" );
-		jmethodID get_vendor_id_m = (*env)->GetMethodID(env, usb_dev_c, "getVendorId", "()I" );
-		jmethodID get_product_id_m = (*env)->GetMethodID(env, usb_dev_c, "getProductId", "()I" );
-
-		jmethodID get_endpoint_count_m = (*env)->GetMethodID(env, usb_interf_c, "getEndpointCount", "()I" );
-		jmethodID get_endpoint_m = (*env)->GetMethodID(env, usb_interf_c, "getEndpoint", "(I)Landroid/hardware/usb/UsbEndpoint;" );
-
-		jmethodID get_addr_m = (*env)->GetMethodID(env, usb_endpoint_c, "getAddress", "()I" );
-		jmethodID get_type_m = (*env)->GetMethodID(env, usb_endpoint_c, "getType", "()I" );
-		jmethodID get_dir_m = (*env)->GetMethodID(env, usb_endpoint_c, "getDirection", "()I" );
-
-		if (valid_devices != 0) {
-			struct PtpDeviceEntry *new_ent = malloc(sizeof(struct PtpDeviceEntry));
-			memset(new_ent, 0, sizeof(struct PtpDeviceEntry));
-
-			curr_ent->next = new_ent;
-			new_ent->prev = curr_ent;
-
-			curr_ent = new_ent;
-		}
-
-		jobject interf = get_ptp_interface(env, device);
-		if (interf == NULL) {
-			continue;
-		}
-
-		valid_devices++;
-
-		curr_ent->vendor_id = (*env)->CallIntMethod(env, device, get_vendor_id_m);
-		curr_ent->product_id = (*env)->CallIntMethod(env, device, get_product_id_m);
-		curr_ent->id = -1;
-		curr_ent->device_handle_ptr = (void *)(*env)->NewGlobalRef(env, device);
-
-		int epCount = (*env)->CallIntMethod(env, interf, get_endpoint_count_m);
-		for (int i = 0; i < epCount; i++) {
-			jobject ep = (*env)->CallObjectMethod(env, interf, get_endpoint_m, i);
-			int type = (*env)->CallIntMethod(env, ep, get_type_m);
-			int dir = (*env)->CallIntMethod(env, ep, get_dir_m);
-			int addr = (*env)->CallIntMethod(env, ep, get_addr_m);
-			if (type == 2) {
-				if (dir == 0x80) { // USB_DIR_IN
-					curr_ent->endpoint_in = addr;
-				} else if (dir == 0x0) {
-					curr_ent->endpoint_out = addr;
-				}
-			}
-		}
+		(*list)[i] = malloc(sizeof(libusb_device));
+		(*list)[i]->device = (*env)->NewGlobalRef(env, device);
 	}
 
-	ptp_verbose_log("Found %d devices\n", valid_devices);
 	(*env)->PopLocalFrame(env, NULL);
-	return orig_ent;
+
+	return (ssize_t)device_list_size;
 }
-#endif
+
+int libusb_get_device_descriptor(libusb_device *dev, struct libusb_device_descriptor *desc) {
+	JNIEnv *env = get_jni_env();
+	jclass usb_dev_c = (*env)->FindClass(env, "android/hardware/usb/UsbDevice" );
+	jmethodID get_vendor_id_m = (*env)->GetMethodID(env, usb_dev_c, "getVendorId", "()I" );
+	jmethodID get_product_id_m = (*env)->GetMethodID(env, usb_dev_c, "getProductId", "()I" );
+
+	desc->bLength = 24; // guessing
+	desc->bDescriptorType = LIBUSB_DT_DEVICE;
+	desc->bcdUSB = 0;
+	desc->bDeviceClass = 0;
+	desc->bDeviceSubClass = 0;
+	desc->bDeviceProtocol = 0;
+	desc->bMaxPacketSize0 = 0;
+	desc->idVendor = (uint16_t)(*env)->CallIntMethod(env, dev->device, get_vendor_id_m);
+	desc->idProduct = (uint16_t)(*env)->CallIntMethod(env, dev->device, get_product_id_m);
+	desc->bcdDevice = 0;
+	desc->iManufacturer = 0;
+	desc->iProduct = 0;
+	desc->iSerialNumber = 0;
+	desc->bNumConfigurations = 1; // todo
+	return 0;
+}
+
+int libusb_get_config_descriptor(libusb_device *dev, uint8_t config_index, struct libusb_config_descriptor **config) {
+	JNIEnv *env = get_jni_env();
+	jclass usb_dev_c = (*env)->FindClass(env, "android/hardware/usb/UsbDevice" );
+	jclass usb_interf_c = (*env)->FindClass(env, "android/hardware/usb/UsbInterface" );
+	jclass usb_endpoint_c = (*env)->FindClass(env, "android/hardware/usb/UsbEndpoint" );
+
+	jmethodID get_endpoint_count_m = (*env)->GetMethodID(env, usb_interf_c, "getEndpointCount", "()I" );
+	jmethodID get_endpoint_m = (*env)->GetMethodID(env, usb_interf_c, "getEndpoint", "(I)Landroid/hardware/usb/UsbEndpoint;" );
+
+	jmethodID get_addr_m = (*env)->GetMethodID(env, usb_endpoint_c, "getAddress", "()I" );
+	jmethodID get_type_m = (*env)->GetMethodID(env, usb_endpoint_c, "getType", "()I" );
+	jmethodID get_dir_m = (*env)->GetMethodID(env, usb_endpoint_c, "getDirection", "()I" );
+
+	jmethodID get_dev_class_m = (*env)->GetMethodID(env, usb_interf_c, "getInterfaceClass", "()I");
+	jmethodID MethodgetInterfaceCount = (*env)->GetMethodID(env, usb_dev_c, "getInterfaceCount", "()I");
+	jmethodID MethodgetInterface = (*env)->GetMethodID(env, usb_dev_c, "getInterface", "(I)Landroid/hardware/usb/UsbInterface;");
+
+	struct libusb_interface *interface = malloc(sizeof(struct libusb_interface));
+
+	(*config) = (struct libusb_config_descriptor *)malloc(sizeof(struct libusb_config_descriptor));
+	(*config)->bLength = 0;
+	(*config)->interface = interface;
+	(*config)->bNumInterfaces = 1;
+
+	interface->num_altsetting = (*env)->CallIntMethod(env, dev->device, MethodgetInterfaceCount);
+	struct libusb_interface_descriptor *altsettings = malloc(sizeof(struct libusb_interface_descriptor) * interface->num_altsetting);
+	for (int i = 0; i < interface->num_altsetting; i++) {
+		jobject interf = (*env)->CallObjectMethod(env, dev->device, MethodgetInterface, i);
+		struct libusb_interface_descriptor *altsetting = &altsettings[i];
+		altsetting->bLength = 0;
+		altsetting->bDescriptorType = 0;
+		altsetting->bInterfaceNumber = 0;
+		altsetting->bAlternateSetting = 0;
+		altsetting->bInterfaceClass = (uint8_t)(*env)->CallIntMethod(env, interf, get_dev_class_m);
+		altsetting->bInterfaceSubClass = 0;
+		altsetting->bInterfaceProtocol = 0;
+		altsetting->iInterface = 0;
+
+		altsetting->bNumEndpoints = (uint8_t)(*env)->CallIntMethod(env, interf, get_endpoint_count_m);
+		struct libusb_endpoint_descriptor *endpoints = malloc(sizeof(struct libusb_endpoint_descriptor) * altsetting->bNumEndpoints);
+		for (uint8_t e = 0; e < altsetting->bNumEndpoints; e++) {
+			struct libusb_endpoint_descriptor *ep = &endpoints[e];
+			jobject ep_obj = (*env)->CallObjectMethod(env, interf, get_endpoint_m, e);
+			ep->bLength = 0;
+			ep->bDescriptorType = (uint8_t)(*env)->CallIntMethod(env, ep_obj, get_type_m);
+			ep->bEndpointAddress = (uint8_t)(*env)->CallIntMethod(env, ep_obj, get_addr_m);
+			ep->bmAttributes = (uint8_t)(*env)->CallIntMethod(env, ep_obj, get_dir_m);
+			ep->wMaxPacketSize = 0;
+			ep->bInterval = 0;
+			ep->bRefresh = 0;
+			ep->bSynchAddress = 0;
+		}
+		altsetting->endpoint = endpoints;
+	}
+	interface->altsetting = altsettings;
+
+	return 0;
+}
+
+void libusb_free_config_descriptor(struct libusb_config_descriptor *config) {
+	free((void *)config->interface->altsetting->endpoint);
+	free((void *)config->interface->altsetting);
+	free((void *)config->interface);
+	free(config);
+}
 
 static int get_usb_permission(JNIEnv *env, jobject ctx, jobject man, jobject device) {
 	(*env)->PushLocalFrame(env, 20);
@@ -171,117 +226,92 @@ static int get_usb_permission(JNIEnv *env, jobject ctx, jobject man, jobject dev
 	return -1;
 }
 
-int ptp_device_open(struct PtpRuntime *r, struct PtpDeviceEntry *entry) {
+int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
 	JNIEnv *env = get_jni_env();
 	jobject ctx = get_jni_ctx();
 	(*env)->PushLocalFrame(env, 20);
 
-	jobject man = get_usb_man(env, ctx);
 	jclass man_c = (*env)->FindClass(env, "android/hardware/usb/UsbManager");
 
-	get_usb_permission(env, ctx, man, (jobject)entry->device_handle_ptr);
+	//get_usb_permission(env, ctx, man, dev->device);
 
 	jmethodID open_dev_m = (*env)->GetMethodID(env, man_c, "openDevice", "(Landroid/hardware/usb/UsbDevice;)Landroid/hardware/usb/UsbDeviceConnection;");
-	jobject connection = (*env)->CallObjectMethod(env, man, open_dev_m, (jobject)entry->device_handle_ptr);
+	jobject connection = (*env)->CallObjectMethod(env, dev->ctx->usbmanager, open_dev_m, dev->device);
 	if (connection == NULL) {
 		(*env)->PopLocalFrame(env, NULL);
-		return PTP_OPEN_FAIL;
+		return -1;
 	}
 
-	struct PtpCommPriv *priv = init_comm(r);
-	priv->obj = (*env)->NewGlobalRef(env, connection);
-	priv->dev = (*env)->NewGlobalRef(env, (jobject)entry->device_handle_ptr);
+	(*dev_handle) = (libusb_device_handle *)malloc(sizeof(struct libusb_device_handle));
+	(*dev_handle)->dev = dev;
+	(*dev_handle)->connection = (*env)->NewGlobalRef(env, connection);
 
 	jmethodID get_desc_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "android/hardware/usb/UsbDeviceConnection"), "getFileDescriptor", "()I");
-	priv->fd = (*env)->CallIntMethod(env, connection, get_desc_m);
-
-	r->io_kill_switch = 0;
-	r->operation_kill_switch = 0;
-
-	//jmethodID get_max_packet_size_m = (*env)->GetMethodID(env, usb_endpoint_c, "getMaxPacketSize", "()I" );
-	r->max_packet_size = 512;
-
-	priv->endpoint_in = (int)entry->endpoint_in;
-	priv->endpoint_out = (int)entry->endpoint_out;
+	(*dev_handle)->fd = (*env)->CallIntMethod(env, connection, get_desc_m);
 
 	(*env)->PopLocalFrame(env, NULL);
 	return 0;
 }
 
-void ptpusb_free_device_list_entry(void *ptr) {
-	JNIEnv *env = get_jni_env();
-	// TODO: release interface on dev object
-	(*env)->DeleteGlobalRef(env, (jobject)ptr);
-}
-
-int ptp_device_connect(struct PtpRuntime *r) {
-	// This can be a portable function in camlib/src/lib.c
-	return -1;
-}
-
-int ptp_cmd_write(struct PtpRuntime *r, void *to, unsigned int length) {
-	if (r->io_kill_switch) return -1;
-	struct PtpCommPriv *priv = init_comm(r);
-	struct usbdevfs_bulktransfer ctrl;
-	ctrl.ep = priv->endpoint_out;
-	ctrl.len = length;
-	ctrl.data = to;
-	ctrl.timeout = PTP_TIMEOUT;
-	int rc = ioctl(priv->fd, USBDEVFS_BULK, &ctrl);
-	return rc;
-}
-
-int ptp_cmd_read(struct PtpRuntime *r, void *to, unsigned int length) {
-	if (r->io_kill_switch) return -1;
-	struct PtpCommPriv *priv = init_comm(r);
-	struct usbdevfs_bulktransfer ctrl;
-	ctrl.ep = priv->endpoint_in;
-	ctrl.len = length;
-	ctrl.data = to;
-	ctrl.timeout = PTP_TIMEOUT;
-	int rc = ioctl(priv->fd, USBDEVFS_BULK, &ctrl);
-	if (rc > 0) ptp_report_read_progress((unsigned int)rc);
-	return rc;
-}
-
-int ptpusb_get_status(struct PtpRuntime *r) {
-	if (r->io_kill_switch) return -100;
-	struct PtpCommPriv *priv = init_comm(r);
-	struct usbdevfs_ctrltransfer ctrl;
-	ctrl.bRequestType = 0x80;
-	ctrl.bRequest = 0;
-	ctrl.wValue = 0;
-	ctrl.wIndex = 0;
-	char buffer[2];
-	ctrl.data = buffer;
-	ctrl.wLength = sizeof(buffer);
-	ctrl.timeout = PTP_TIMEOUT;
-	int rc = ioctl(priv->fd, USBDEVFS_CONTROL, &ctrl);
-	if (rc < 0) return -1;
+int libusb_get_string_descriptor_ascii(libusb_device_handle *dev, uint8_t desc_idx, unsigned char *data, int length) {
+	strncpy((char *)data, "", length);
 	return 0;
 }
 
-int ptp_device_close(struct PtpRuntime *r) {
-	JNIEnv *env = get_jni_env();
-	struct PtpCommPriv *priv = init_comm(r);
-	jclass class = (*env)->GetObjectClass(env, priv->obj);
+void libusb_free_device_list(libusb_device **list, int unref_devices) {
 
-	jobject interf = get_ptp_interface(env, priv->dev);
+}
+
+int libusb_set_auto_detach_kernel_driver(libusb_device_handle *dev_handle, int enable) {
+	return 0;
+}
+
+int libusb_claim_interface(libusb_device_handle *dev_handle, int interface_number) {
+	JNIEnv *env = get_jni_env();
+	jclass usb_dev_c = (*env)->FindClass(env, "android/hardware/usb/UsbDevice");
+	jmethodID MethodgetInterface = (*env)->GetMethodID(env, usb_dev_c, "getInterface", "(I)Landroid/hardware/usb/UsbInterface;");
+	jobject interface = (*env)->CallObjectMethod(env, dev_handle->dev->device, MethodgetInterface, interface_number);
+
+	jclass conn_c = (*env)->FindClass(env, "android/hardware/usb/UsbDeviceConnection");
+	jmethodID release_interf_m = (*env)->GetMethodID(env, conn_c, "claimInterface", "(Landroid/hardware/usb/UsbInterface;Z)Z");
+	(*env)->CallBooleanMethod(env, dev_handle->connection, release_interf_m, interface, 1);
+	return 0;
+}
+
+void libusb_close(libusb_device_handle *dev_handle) {
+	JNIEnv *env = get_jni_env();
+	jclass class = (*env)->FindClass(env, "android/hardware/usb/UsbDeviceConnection");
+
+	jmethodID close = (*env)->GetMethodID(env, class, "close", "()V");
+	(*env)->CallVoidMethod(env, dev_handle->connection, close);
+	(*env)->DeleteGlobalRef(env, dev_handle->connection);
+
+	free(dev_handle);
+}
+
+int libusb_release_interface(libusb_device_handle *dev_handle, int interface_number) {
+	JNIEnv *env = get_jni_env();
+	jclass usb_dev_c = (*env)->FindClass(env, "android/hardware/usb/UsbDevice");
+	jmethodID MethodgetInterface = (*env)->GetMethodID(env, usb_dev_c, "getInterface", "(I)Landroid/hardware/usb/UsbInterface;");
+	jobject interface = (*env)->CallObjectMethod(env, dev_handle->dev->device, MethodgetInterface, interface_number);
 
 	jclass conn_c = (*env)->FindClass(env, "android/hardware/usb/UsbDeviceConnection");
 	jmethodID release_interf_m = (*env)->GetMethodID(env, conn_c, "releaseInterface", "(Landroid/hardware/usb/UsbInterface;)Z");
-	(*env)->CallBooleanMethod(env, priv->obj, release_interf_m, interf);
-
-	jmethodID close = (*env)->GetMethodID(env, class, "close", "()V");
-	(*env)->CallVoidMethod(env, priv->obj, close);
-	(*env)->DeleteGlobalRef(env, priv->obj);
+	(*env)->CallBooleanMethod(env, dev_handle->connection, release_interf_m, interface);
 	return 0;
 }
 
-int ptp_device_reset(struct PtpRuntime *r) {
-	return -1;
+int libusb_bulk_transfer(libusb_device_handle *dev, unsigned char endpoint,
+						 unsigned char *data, int length, int *transferred, unsigned int timeout) {
+	struct usbdevfs_bulktransfer ctrl;
+	ctrl.ep = endpoint;
+	ctrl.len = length;
+	ctrl.data = data;
+	ctrl.timeout = timeout;
+	return ioctl(dev->fd, USBDEVFS_BULK, &ctrl);
 }
 
-int ptp_read_int(struct PtpRuntime *r, void *to, unsigned int length) {
-	return -1;
+int libusb_control_transfer(libusb_device_handle *dev, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned char *data, uint16_t wLength, unsigned int timeout) {
+	printf("Not implemented yet\n");
+	abort();
 }

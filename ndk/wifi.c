@@ -1,9 +1,18 @@
 #include <jni.h>
 #include <wifi.h>
 
+struct PakNet *pak_net_get_context(void) {
+	return NULL;
+}
+
+void pak_net_unref_context(struct PakNet *ctx) {
+
+}
+
 int pak_wifi_get_n_adapters(struct PakNet *ctx) {
 
 }
+
 int pak_wifi_get_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int index) {
 
 }

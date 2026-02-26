@@ -190,6 +190,33 @@ int free_module_and_runtime(struct Module *mod) {
 	JS_FreeRuntime(mod->priv->rt);
 }
 
+static JSModuleDef *my_module_loader(JSContext *ctx, const char *module_name, void *opaque) {
+	size_t buf_len;
+	uint8_t *buf;
+
+	buf = js_load_file(ctx, &buf_len, module_name);
+	if (!buf) {
+		JS_ThrowReferenceError(ctx, "could not load module filename '%s'",
+							   module_name);
+		return NULL;
+	}
+
+	JSValue func_val;
+	/* compile the module */
+	func_val = JS_Eval(ctx, (char *)buf, buf_len, module_name,
+					   JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
+	js_free(ctx, buf);
+	if (JS_IsException(func_val))
+		return NULL;
+	/* XXX: could propagate the exception */
+	js_module_set_import_meta(ctx, func_val, 1, 0);
+	/* the module is already referenced, so we must free it */
+	JSModuleDef *m = JS_VALUE_GET_PTR(func_val);
+	JS_FreeValue(ctx, func_val);
+
+	return m;
+}
+
 int setup_quickjs_module(struct Module **mod, const char *filename) {
 	JSRuntime *rt = JS_NewRuntime();
 
@@ -201,8 +228,7 @@ int setup_quickjs_module(struct Module **mod, const char *filename) {
 	JS_AddModuleExport(ctx, js_init_module_pak_runtime(ctx, "pak:runtime"), "Module");
 	js_init_module_socket(ctx, "c:socket");
 	js_init_module_std(ctx, "qjs:std");
-	//JS_SetModuleLoaderFunc2(rt, NULL, js_module_loader, js_module_check_attributes, NULL);
-	JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
+	JS_SetModuleLoaderFunc(rt, NULL, my_module_loader, NULL);
 	js_std_init_handlers(rt);
 
 	FILE *file = fopen(filename, "rb");

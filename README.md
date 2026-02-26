@@ -11,17 +11,20 @@ WIP cross-platform Bluetooth and WiFi library for pairing with consumer devices
 		- [x] Query adapters
 		- [x] Scan for access points
 		- [x] Connect to an access point
+	- [x] BlueZ Bluetooth Classic support
 	- [ ] BlueZ BLE support
-	- [ ] BlueZ Bluetooth Classic support
+	- [ ] BlueZ scanning and pairing
+	- [ ] BlueZ advertising
 - **Android:**
-	- [ ] Companion APIs for BLE/BTC/WiFi
-	- [ ] NetworkRequest APIs
+    - [x] USB bindings
+	- [x] NetworkRequest APIs
+    - [ ] Customizable permission requester
 	- [ ] BLE bindings
 	- [ ] BTC bindings
 
 ## Future
-- Module system
 - WASM bindings (c-api)
+  - Compile libfuji with Wasm
 - Start WiFi hotspot and expose a network interface
 - NFC?
 - UWB?

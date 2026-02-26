@@ -590,7 +590,7 @@ int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service)
 	return 0;
 }
 
-int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic) {
+int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int blocking) {
 	DBusMessage *call = dbus_message_new_method_call("org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "ReadValue");
 	DBusMessageIter iter;
 	dbus_message_iter_init_append(call, &iter);
@@ -609,7 +609,7 @@ int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *
 	return 0;
 }
 
-int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *data, unsigned int length) {
+int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *data, unsigned int length, int blocking) {
 	DBusMessage *call = dbus_message_new_method_call("org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "WriteValue");
 	DBusMessageIter iter;
 	dbus_message_iter_init_append(call, &iter);

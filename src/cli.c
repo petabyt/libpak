@@ -9,7 +9,10 @@
 #include "runtime.h"
 
 int get_module_dummy(struct Module *mod);
+
 int setup_quickjs_module(struct Module **mod, const char *filename);
+
+int pak_rt_test_module(struct Module *mod);
 
 int test_bluetooth(void) {
 	struct PakBt *ctx = pak_bt_get_context();
@@ -23,9 +26,15 @@ int test_bluetooth(void) {
 	int i = 0;
 	while (pak_bt_get_paired_device(ctx, &adapter, &dev, i) == 0) {
 		printf("Paired device: %s\n", dev.name);
+
+		int percent;
+		if (pak_bt_get_device_battery(ctx, &dev, &percent)) return -1;
+		printf("Battery: %d%%\n", percent);
+
+		printf("Service UUIDs:\n");
 		for (int z = 0; z < dev.uuids.length; z++) {
 			char uuid[37];
-			printf("%s\n", dev.uuids.uuids[z]);
+			printf("  %s\n", dev.uuids.uuids[z]);
 		}
 		if (!dev.is_classic) {
 			printf("Mfgdata: {");
@@ -33,11 +42,18 @@ int test_bluetooth(void) {
 				printf("%02x,", dev.mfg_data[z]);
 			}
 			printf("}\n");
-		}
 
-		int percent;
-		if (pak_bt_get_device_battery(ctx, &dev, &percent)) return -1;
-		printf("Battery: %d%%\n", percent);
+			struct PakGattService service;
+			struct PakGattCharacteristic chr;
+			for (int x = 0; !pak_bt_get_gatt_service(ctx, &dev, &service, x); x++) {
+				printf("Service: %s\n", service.uuid);
+				for (int i = 0; !pak_bt_get_gatt_characteristic(ctx, &service, &chr, i); i++) {
+					printf("  Characteristic: %s\n", chr.uuid);
+					pak_bt_unref_gatt_characteristic(ctx, &chr);
+				}
+				pak_bt_unref_gatt_service(ctx, &service);
+			}
+		}
 
 		i++;
 		pak_bt_unref_device(ctx, &dev);
@@ -88,20 +104,19 @@ int test_bluetooth_connect(void) {
 
 	struct PakGattService service;
 	struct PakGattCharacteristic chr;
-	if (!pak_bt_get_gatt_service(ctx, &dev, &service, 0)) {
+	for (int x = 0; !pak_bt_get_gatt_service(ctx, &dev, &service, x); x++) {
 		printf("Service: %s\n", service.uuid);
-		if (!pak_bt_get_gatt_characteristic(ctx, &service, &chr, 0)) {
-			printf("Characteristic: %s\n", chr.uuid);
+		for (int i = 0; !pak_bt_get_gatt_characteristic(ctx, &service, &chr, i); i++) {
+			printf("  Characteristic: %s\n", chr.uuid);
+			pak_bt_unref_gatt_characteristic(ctx, &chr);
 		}
+		pak_bt_unref_gatt_service(ctx, &service);
 	}
 
 	pak_bt_unref_adapter(ctx, &adapter);
 
 	return 0;
 }
-
-
-int pak_rt_test_module(struct Module *mod);
 
 int main(int argc, char **argv) {
 	for (int i = 0; i < argc; i++) {

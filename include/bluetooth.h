@@ -4,6 +4,7 @@
 #include <string.h>
 #include "pak.h"
 
+// Max size of RFC compliant cstring UUID
 #define UUID_STR_LENGTH 37
 
 /// Bluetooth context
@@ -51,7 +52,7 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter);
 
 struct PakUuidList {
 	unsigned int length;
-	char (*uuids)[37];
+	char (*uuids)[UUID_STR_LENGTH];
 };
 
 struct PakBtDevice {
@@ -83,7 +84,7 @@ int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device);
 struct PakGattService {
 	struct PakGattServicePriv *priv;
 	_pad_pointer pad_priv;
-	char uuid[37];
+	char uuid[UUID_STR_LENGTH];
 	uint16_t handle;
 };
 
@@ -95,7 +96,7 @@ struct PakGattCharacteristic {
 	struct PakGattCharacteristicPriv *priv;
 	_pad_pointer pad_priv;
 	int flags;
-	char uuid[37];
+	char uuid[UUID_STR_LENGTH];
 	uint16_t handle;
 	uint16_t mtu;
 };
@@ -105,15 +106,15 @@ int pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *ser
 int pak_bt_unref_gatt_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *chr);
 
 /// Request to read characteristic value. Result will be fired in the callback
-int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic);
+int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int blocking);
 
 /// Request to write data to a characteristic. Write acknowledgement will be fired in the callback
-int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *data, unsigned int length);
+int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *data, unsigned int length, int blocking);
 
 struct PakGattDescriptor {
 	struct PakGattDescriptorPriv *priv;
 	_pad_pointer pad_priv;
-	char uuid[37];
+	char uuid[UUID_STR_LENGTH];
 	uint16_t handle;
 };
 

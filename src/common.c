@@ -14,7 +14,7 @@ void pak_error(const char *fmt, ...) {
 	printf("ERR: ");
 	va_list args;
 	va_start(args, fmt);
-	vprintf(fmt, args);
+	vfprintf(stderr, fmt, args);
 	va_end(args);
 }
 
@@ -54,7 +54,7 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 		if (regexec(&regex, current_ap.ssid, 0, NULL, 0) == 0) {
 			pak_wifi_unref_ap(ctx, &adapter, &current_ap);
 			cb(ctx, &adapter, arg);
-			//pak_wifi_unref_adapter(ctx, &adapter);
+			// Callback should run pak_wifi_unref_adapter on adapter
 			return 0;
 		}
 		pak_wifi_unref_ap(ctx, &adapter, &current_ap);

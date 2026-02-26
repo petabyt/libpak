@@ -1,4 +1,6 @@
-// Runtime
+// A runtime similar to Linux kernel module system that allows libraries
+// that implement proprietary device protocols to be created and used
+// independently of libpak
 #pragma once
 #include <stdint.h>
 #include <wifi.h>

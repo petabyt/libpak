@@ -30,6 +30,10 @@ struct PakWiFiApPriv {
 	char path[];
 };
 
+#define NM_ACTIVE_CONNECTION_STATE_ACTIVATED 2
+#define NM_ACTIVE_CONNECTION_STATE_REASON_DEVICE_DISCONNECTED 3
+#define NM_ACTIVE_CONNECTION_STATE_DEACTIVATED 4
+
 static DBusHandlerResult handle_messages(DBusConnection *conn, DBusMessage *message, void *user_data) {
 	struct PakNet *ctx = (struct PakNet *)user_data;
 	if (dbus_message_get_type(message) != DBUS_MESSAGE_TYPE_SIGNAL)
@@ -65,16 +69,16 @@ static DBusHandlerResult handle_messages(DBusConnection *conn, DBusMessage *mess
 		dbus_message_iter_next(&iter);
 		dbus_message_iter_get_basic(&iter, &reason);
 
-		if (state == 2) { // NM_ACTIVE_CONNECTION_STATE_ACTIVATED
+		if (state == NM_ACTIVE_CONNECTION_STATE_ACTIVATED) {
 			ctx->ev = EV_CONNECTED_TO_AP;
 			return DBUS_HANDLER_RESULT_HANDLED;
-		} else if (state == 4) { // NM_ACTIVE_CONNECTION_STATE_DEACTIVATED
+		} else if (state == NM_ACTIVE_CONNECTION_STATE_DEACTIVATED) {
 			// If password fails, reason will be 3 (NM_ACTIVE_CONNECTION_STATE_REASON_DEVICE_DISCONNECTED)
 			// This is not the right way to handle this
 			ctx->ev = EV_FAILED_TO_CONNECT;
 			return DBUS_HANDLER_RESULT_HANDLED;
 		} else {
-			printf("%u %u\n", state, reason);
+			printf("TODO: %u %u\n", state, reason);
 		}
 
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -87,7 +91,7 @@ static DBusHandlerResult handle_messages(DBusConnection *conn, DBusMessage *mess
 	member = dbus_message_get_member(message);
 	path = dbus_message_get_path(message);
 
-	printf("signal iface=%s member=%s path=%s\n",
+	printf("TODO: signal iface=%s member=%s path=%s\n",
 	       iface ? iface : "(null)",
 	       member ? member : "(null)",
 	       path ? path : "(null)");
@@ -116,6 +120,12 @@ struct PakNet *pak_net_get_context(void) {
 	return ctx;
 }
 
+// Block and wait for a dbus event
+static int sleep_for_event(DBusConnection *conn) {
+	while (dbus_connection_read_write_dispatch(conn, 1000) == FALSE);
+	return 0;
+}
+
 static int get_networkmanager_basic_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, void *val, DBusMessage **resp) {
 	DBusError error;
 	dbus_error_init(&error);
@@ -129,13 +139,8 @@ static int get_networkmanager_basic_property(DBusConnection *conn, const char *p
 	DBusMessageIter subargs;
 	if (!dbus_message_iter_init(*resp, &args)) return -1;
 	dbus_message_iter_recurse(&args, &subargs);
-	dbus_message_iter_get_basic(&subargs, val); // is this a use after free?
+	dbus_message_iter_get_basic(&subargs, val);
 
-	return 0;
-}
-
-static int sleep_for_event(DBusConnection *conn) {
-	while (dbus_connection_read_write_dispatch(conn, 1000) == FALSE);
 	return 0;
 }
 
@@ -246,11 +251,13 @@ int pak_wifi_get_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int
 				get_networkmanager_basic_property(ctx->conn, path, "org.freedesktop.NetworkManager.Device", "Interface", &dev_iface, &tempresp);
 				strlcpy(adapter->name, dev_iface, sizeof(adapter->name));
 				dbus_message_unref(tempresp);
+
 				// TODO: Get ip address
 				// https://people.freedesktop.org/~lkundrak/nm-docs/gdbus-org.freedesktop.NetworkManager.IP4Config.html
 //				const char *ip4config = NULL;
 //				get_networkmanager_basic_property(ctx->conn, path, "org.freedesktop.NetworkManager.Device", "Ip4Config", &ip4config);
 //				printf("%s\n", ip4config);
+
 				return 0;
 			} else {
 				count++;
@@ -598,7 +605,7 @@ int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, s
 	const char *conn_path = NULL;
 	if (find_existing_connection(ctx->conn, adapter, ap, &conn_path)) {
 
-		// TODO: Update connection setting with new password (if changed)
+		// TODO: Update connection setting with new password if it has changed
 
 		DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager", "org.freedesktop.NetworkManager", "ActivateConnection");
 		DBusMessageIter iter;

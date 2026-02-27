@@ -5,6 +5,8 @@
 #include <quickjs-libc.h>
 #include <runtime.h>
 
+#include "buffer_js.h"
+
 JSModuleDef *js_init_module_socket(JSContext *ctx, const char *module_name);
 JSModuleDef *js_init_module_wifi(JSContext *ctx, const char *module_name);
 
@@ -188,24 +190,33 @@ int free_module_and_runtime(struct Module *mod) {
 	js_std_free_handlers(mod->priv->rt);
 	JS_FreeContext(mod->priv->ctx);
 	JS_FreeRuntime(mod->priv->rt);
+	return 0;
 }
 
+// Copied from quickjs source
 static JSModuleDef *my_module_loader(JSContext *ctx, const char *module_name, void *opaque) {
 	size_t buf_len;
 	uint8_t *buf;
+	int is_allocated = 0;
 
-	buf = js_load_file(ctx, &buf_len, module_name);
-	if (!buf) {
-		JS_ThrowReferenceError(ctx, "could not load module filename '%s'",
-							   module_name);
-		return NULL;
+	if (!strcmp(module_name, "pak:buffer")) {
+		buf = buffer_js;
+		buf_len = buffer_js_len;
+	} else {
+		buf = js_load_file(ctx, &buf_len, module_name);
+		if (!buf) {
+			JS_ThrowReferenceError(ctx, "could not load module filename '%s'",
+								   module_name);
+			return NULL;
+		}
+		is_allocated = 1;
 	}
 
 	JSValue func_val;
 	/* compile the module */
 	func_val = JS_Eval(ctx, (char *)buf, buf_len, module_name,
 					   JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
-	js_free(ctx, buf);
+	if (is_allocated) js_free(ctx, buf);
 	if (JS_IsException(func_val))
 		return NULL;
 	/* XXX: could propagate the exception */
@@ -259,6 +270,7 @@ int setup_quickjs_module(struct Module **mod, const char *filename) {
 
 	JS_FreeValue(ctx, val);
 
+	// If a module was exported, it was stored in the context opaque pointer.
 	struct Module *exported_module = JS_GetContextOpaque(ctx);
 	if (exported_module != NULL) {
 		exported_module->priv->rt = rt;

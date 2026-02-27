@@ -1,15 +1,5 @@
-all:
-	bun x tsgo
-	bun run src/index.ts
-
 esbuild:
-	esbuild --format=esm --external:pak:wifi --bundle src/index.ts
+	esbuild --format=esm --external:pak:wifi --bundle src/buffer.ts | xxd -i -n buffer_js > ../bindings/buffer_js.h
 
-x:
-	cat dist/index.js
-
-all3:
-	bun run index.ts
-
-all2:
-	esbuild src/index.ts
+check:
+	bun x tsgo

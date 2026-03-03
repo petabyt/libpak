@@ -82,15 +82,43 @@ static const JSCFunctionListEntry module_methods[] = {
 
 static int init(struct Module *mod) { return 0; }
 
+static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
+{
+    const char *str;
+
+    str = JS_ToCString(ctx, val);
+    if (str) {
+        fprintf(f, "%s\n", str);
+        JS_FreeCString(ctx, str);
+    } else {
+        fprintf(f, "[exception]\n");
+    }
+}
+
+static void dump_error(JSContext *ctx) {
+	JSValue exception_val = JS_GetException(ctx);
+    JSValue val;
+    int is_error;
+
+    is_error = JS_IsError(ctx, exception_val);
+    js_dump_obj(ctx, stderr, exception_val);
+    if (is_error) {
+        val = JS_GetPropertyStr(ctx, exception_val, "stack");
+    }
+    if (!JS_IsUndefined(val)) {
+        js_dump_obj(ctx, stderr, val);
+        JS_FreeValue(ctx, val);
+    }
+    JS_FreeValue(ctx, exception_val);
+}
+
 static int call_module_method(struct JSContext *ctx, JSValue obj, const char *name, int argc, JSValue *argv) {
 	int rc = 0;
 	JSValue fun = JS_GetPropertyStr(ctx, obj, name);
 	JSValue rv = JS_Call(ctx, fun, obj, argc, argv);
 	if (JS_IsException(rv)) {
-		const char *str = JS_ToCString(ctx, rv);
-		printf("%s: %s\n", name, str);
-		JS_FreeCString(ctx, str);
 		JS_FreeValue(ctx, rv);
+		dump_error(ctx);
 		rc = -1;
 	}
 	for (int i = 0; i < argc; i++) {
@@ -141,7 +169,7 @@ static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, in
 	mod->on_disconnect = on_disconnect;
 
 	mod->priv = malloc(sizeof(struct ModulePriv));
-	mod->priv->object = obj;
+	mod->priv->object = JS_DupValue(ctx, obj);
 	mod->priv->ctx = ctx;
 
 	JS_SetOpaque(obj, mod);
@@ -187,6 +215,7 @@ JSModuleDef *js_init_module_pak_runtime(JSContext *ctx, const char *module_name)
 }
 
 int free_module_and_runtime(struct Module *mod) {
+	JS_FreeValue(mod->priv->ctx, mod->priv->object);
 	js_std_free_handlers(mod->priv->rt);
 	JS_FreeContext(mod->priv->ctx);
 	JS_FreeRuntime(mod->priv->rt);

@@ -154,9 +154,8 @@ static int get_bluez_string_property(DBusConnection *conn, const char *path, con
 }
 
 int pak_bt_is_enabled(struct PakBt *ctx) {
-	DBusConnection *conn = get_dbus_system();
 	dbus_bool_t v;
-	get_bluez_bool_property(conn, "/org/bluez/hci0", "org.bluez.Adapter1", "Powered", &v);
+	get_bluez_bool_property(ctx->conn, "/org/bluez/hci0", "org.bluez.Adapter1", "Powered", &v);
 	return v;
 }
 
@@ -217,9 +216,7 @@ static int fill_adapter_from_dict(struct DBusMessageIter *dict_iter, struct PakB
 }
 
 int pak_bt_get_n_adapters(struct PakBt *ctx) {
-	DBusConnection *conn = get_dbus_system();
-
-	DBusMessage *resp = send_message_noargs(conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
 	if (resp == NULL) return -1;
 
 	DBusMessageIter iter;
@@ -249,9 +246,7 @@ int pak_bt_get_n_adapters(struct PakBt *ctx) {
 }
 
 int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int index) {
-	DBusConnection *conn = get_dbus_system();
-
-	DBusMessage *resp = send_message_noargs(conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
 	if (resp == NULL) return -1;
 
 	DBusMessageIter iter;
@@ -345,6 +340,10 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 			dbus_bool_t v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
 			dev->is_connected = (int)v;
+		}if (!strcmp(name, "Paired")) {
+			dbus_bool_t v;
+			dbus_message_iter_get_basic(&dict_variant, &v);
+			dev->is_paired = (int)v;
 		} else if (!strcmp(name, "Name")) {
 			const char *v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
@@ -385,13 +384,11 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 	return 0;
 }
 
-#define FILTER_IS_CONNECTED (1 << 1)
+#define FILTER_IS_PAIRED (1 << 1)
 #define FILTER_IS_SAVED (1 << 2)
 
 static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *dev, int index, int filter) {
-	DBusConnection *conn = get_dbus_system();
-
-	DBusMessage *resp = send_message_noargs(conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
 	if (resp == NULL) return -1;
 
 	DBusMessageIter iter;
@@ -414,14 +411,14 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 		dbus_message_iter_next(&dict);
 		DBusMessageIter adapter_dict;
 		if (!find_dict(&dict, "org.bluez.Device1", &adapter_dict)) {
-			dbus_bool_t is_connected = 0;
+			dbus_bool_t is_paired = 0;
 			DBusMessageIter val_dict;
-			if (find_dict(&adapter_dict, "Connected", &val_dict)) return -1;
+			if (find_dict(&adapter_dict, "Paired", &val_dict)) return -1;
 			DBusMessageIter val_dict2;
 			dbus_message_iter_recurse(&val_dict, &val_dict2);
-			dbus_message_iter_get_basic(&val_dict2, &is_connected);
+			dbus_message_iter_get_basic(&val_dict2, &is_paired);
 
-			if ((is_connected && (filter & FILTER_IS_CONNECTED)) || (!is_connected && (filter & FILTER_IS_SAVED))) {
+			if ((is_paired && (filter & FILTER_IS_PAIRED)) || (!is_paired && (filter & FILTER_IS_SAVED))) {
 				if (found == index) {
 					fill_from_device1(&adapter_dict, dev);
 					dev->priv = (struct PakBtDevicePriv *)alloc_priv(sizeof(struct PakBtDevicePriv), path);
@@ -441,7 +438,7 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 }
 
 int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index) {
-	return pak_bt_get_object(ctx, adapter, device, index, FILTER_IS_CONNECTED);
+	return pak_bt_get_object(ctx, adapter, device, index, FILTER_IS_PAIRED);
 }
 
 int pak_bt_get_saved_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index) {
@@ -457,6 +454,7 @@ int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {
 int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int *percent) {
 	DBusMessage *resp;
 	int rc = get_dbus_property(ctx->conn, "org.bluez", device->priv->path, "org.bluez.Battery1", "Percentage", &resp);
+	if (rc) return rc;
 	if (resp == NULL) return -1;
 
 	DBusMessageIter args;
@@ -474,7 +472,22 @@ int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int
 }
 
 int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device) {
+	if (device->is_connected) return 0;
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", device->priv->path, "org.bluez.Device1", "Connect");
+	if (resp == NULL) return -1;
+    dbus_message_unref(resp);
+	return 0;
+}
+
+int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device) {
+	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", device->priv->path, "org.bluez.Device1", "Disconnect");
+	if (resp == NULL) return -1;
+    dbus_message_unref(resp);
+	return 0;
+}
+
+int pak_bt_device_pair(struct PakBt *ctx, struct PakBtDevice *device) {
+	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", device->priv->path, "org.bluez.Device1", "Pair");
 	if (resp == NULL) return -1;
     dbus_message_unref(resp);
 	return 0;
@@ -486,9 +499,7 @@ int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device) {
 
 // Some parameters are allowed to be NULL for different filter flags
 static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService *service, struct PakGattCharacteristic *characteristic, int index, int filter) {
-	DBusConnection *conn = get_dbus_system();
-
-	DBusMessage *resp = send_message_noargs(conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
 	if (resp == NULL) return -1;
 
 	DBusMessageIter iter;

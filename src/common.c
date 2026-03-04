@@ -12,6 +12,7 @@
 __attribute__((weak))
 void pak_error(const char *fmt, ...) {
 	printf("ERR: ");
+	fflush(stdout);
 	va_list args;
 	va_start(args, fmt);
 	vfprintf(stderr, fmt, args);
@@ -21,6 +22,7 @@ void pak_error(const char *fmt, ...) {
 __attribute__((weak))
 void pak_abort(const char *fmt, ...) {
 	printf("ERR: ");
+	fflush(stdout);
 	va_list args;
 	va_start(args, fmt);
 	vprintf(fmt, args);

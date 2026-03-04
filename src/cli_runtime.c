@@ -29,6 +29,10 @@ static int new_job(struct RuntimePriv *r) {
 }
 
 int pak_rt_test_module(struct Module *mod) {
+	// runtime was not inited by pak_create_mod
+	mod->rt = malloc(sizeof(struct RuntimePriv));
+	mod->rt->current_job = 1;
+
 	struct RuntimePriv *r = mod->rt;
 	if (mod->init) mod->init(mod);
 	if (mod->on_find_connection) {

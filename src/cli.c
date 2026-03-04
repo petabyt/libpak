@@ -10,6 +10,7 @@
 
 int get_module_dummy(struct Module *mod);
 
+/// Execute JS file and get the exported module handle
 int setup_quickjs_module(struct Module **mod, const char *filename);
 
 int pak_rt_test_module(struct Module *mod);
@@ -27,9 +28,10 @@ int test_bluetooth(void) {
 	while (pak_bt_get_paired_device(ctx, &adapter, &dev, i) == 0) {
 		printf("Paired device: %s\n", dev.name);
 
-		int percent;
-		if (pak_bt_get_device_battery(ctx, &dev, &percent)) return -1;
-		printf("Battery: %d%%\n", percent);
+//		int percent;
+//		if (!pak_bt_get_device_battery(ctx, &dev, &percent)) {
+//			printf("Battery: %d%%\n", percent);
+//		}
 
 		printf("Service UUIDs:\n");
 		for (int z = 0; z < dev.uuids.length; z++) {
@@ -118,11 +120,17 @@ int test_bluetooth_connect(void) {
 	return 0;
 }
 
+int help(void) {
+	printf("--test-js <js file>\n");
+	printf("--dump-bt\n");
+	return 0;
+}
+
 int main(int argc, char **argv) {
-	for (int i = 0; i < argc; i++) {
+	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--test-js")) {
 			struct Module *mod;
-			setup_quickjs_module(&mod, argv[i + 1]);
+			if (setup_quickjs_module(&mod, argv[i + 1])) return -1;
 			return pak_rt_test_module(mod);
 		} else if (!strcmp(argv[i], "--test")) {
 			int rc = test_wifi();
@@ -134,8 +142,9 @@ int main(int argc, char **argv) {
 			return test_bluetooth_connect();
 		} else if (!strcmp(argv[i], "--test-dummy-mod")) {
 			return pak_rt_test_module(pak_rt_mod_from_native(get_module_dummy));
+		} else {
+			printf("Invalid argument '%s'\n", argv[i]);
 		}
 	}
-	printf("Invalid argument\n");
-	return -1;
+	return help();
 }

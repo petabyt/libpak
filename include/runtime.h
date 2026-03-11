@@ -111,6 +111,8 @@ enum PakTransport {
 };
 
 enum Screen {
+	/// Dummy value for first screen change
+	SCREEN_NONE = 0,
 	/// A screen that has a list of WiFi access points to connect to
 	SCREEN_CONNECT_WIFI = 1,
 	/// A screen that has a list of connected USB devices
@@ -224,6 +226,8 @@ int pak_rt_disconnect(struct Module *mod, const char *reason);
 int pak_rt_set_tick_interval(struct Module *mod, unsigned int us);
 /// Get path for downloading a file
 //const char *pak_rt_get_path(struct Module *mod, const char *filename);
+/// Logging function for data specfic to this session
+void pak_debug_log(struct Module *mod, const char *fmt, ...);
 
 struct Module *pak_create_mod(void);
 int pak_rt_test_module(struct Module *mod);

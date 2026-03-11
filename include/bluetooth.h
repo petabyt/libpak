@@ -60,6 +60,7 @@ struct PakBtDevice {
 	_pad_pointer pad_priv;
 	int is_classic;
 	int is_connected;
+	int is_paired;
 	char name[64];
 	char mac_address[64];
 	uint32_t btclass;
@@ -80,6 +81,10 @@ int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int
 
 /// Establish connection with a bluetooth device for this context
 int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device);
+
+int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device);
+
+int pak_bt_device_pair(struct PakBt *ctx, struct PakBtDevice *device);
 
 struct PakGattService {
 	struct PakGattServicePriv *priv;

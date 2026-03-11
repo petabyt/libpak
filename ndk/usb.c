@@ -215,6 +215,7 @@ static int get_usb_permission(JNIEnv *env, jobject ctx, jobject man, jobject dev
 	jmethodID has_perm_m = (*env)->GetMethodID(env, man_c, "hasPermission", "(Landroid/hardware/usb/UsbDevice;)Z");
 
 	for (int i = 0; i < 10; i++) {
+		// TODO: limit of 10 is kinda stupid. do something better
 		if ((*env)->CallBooleanMethod(env, man, has_perm_m, device)) {
 			(*env)->PopLocalFrame(env, NULL);
 			return 0;

@@ -121,7 +121,7 @@ public class WiFi {
     }
 
     /// Opens a dialog to save an access point as a companion device
-    public static int connectToAccessPointCompanion(Context ctx, ApFilter apFilter, String companionName) {
+    public static int connectToAccessPointCompanion(Context ctx, ApFilter apFilter, String companionName, WiFiDiscoveryCallback callback) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return Pak.Error.UNSUPPORTED.getCode();
         }
@@ -139,13 +139,6 @@ public class WiFi {
         }
         WifiDeviceFilter filter = builder.build();
 
-        Executor executor = new Executor() {
-            @Override
-            public void execute(Runnable runnable) {
-                runnable.run();
-            }
-        };
-
         AssociationRequest.Builder associationBuilder = new AssociationRequest.Builder();
         associationBuilder.addDeviceFilter(filter);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -153,7 +146,7 @@ public class WiFi {
         }
         AssociationRequest request = associationBuilder.build();
 
-        CompanionDeviceManager.Callback callback = new CompanionDeviceManager.Callback() {
+        CompanionDeviceManager.Callback companionCallback = new CompanionDeviceManager.Callback() {
             // Called when a device is found. Launch the IntentSender so the user can
             // select the device they want to pair with.
             @Override
@@ -164,6 +157,12 @@ public class WiFi {
                 } catch (IntentSender.SendIntentException e) {
                     throw new RuntimeException(e);
                 }
+            }
+
+            @Override
+            public void onFailure(CharSequence error) {
+                Log.d(TAG, "Association failure");
+                callback.failed(error.toString(), -1);
             }
 
             @Override
@@ -179,16 +178,9 @@ public class WiFi {
                     Log.d(TAG, scan.toString());
                 }
             }
-
-            @Override
-            public void onFailure(CharSequence errorMessage) {
-                Log.d(TAG, "association failure");
-            }
         };
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            deviceManager.associate(request, executor, callback);
-        }
+        deviceManager.associate(request, companionCallback, null);
         return 0;
     }
 

@@ -11,36 +11,53 @@ import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
-import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.ScanFilter;
-import android.companion.AssociatedDevice;
 import android.companion.AssociationInfo;
 import android.companion.AssociationRequest;
 import android.companion.BluetoothDeviceFilter;
 import android.companion.BluetoothLeDeviceFilter;
 import android.companion.CompanionDeviceManager;
-import android.companion.WifiDeviceFilter;
 import android.content.Intent;
 
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.Executor;
-import java.util.regex.Pattern;
+import java.util.concurrent.Semaphore;
 
 import android.content.Context;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
-import android.net.MacAddress;
-import android.net.wifi.ScanResult;
 import android.os.Build;
-import android.os.Parcel;
 import android.os.ParcelUuid;
 import android.util.Log;
 
 public class Bluetooth {
     public static final String TAG = "bt";
-    private static BluetoothManager btman;
     private static BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+
+    public static void requestConnectPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            Pak.requirePermissionBlocking(Manifest.permission.BLUETOOTH_CONNECT);
+        }
+    }
+
+    public static BluetoothDevice[] getBondedDevices(BluetoothAdapter adapter) {
+        if (Pak.getActivity().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            return null;
+        }
+        return adapter.getBondedDevices().toArray(new BluetoothDevice[0]);
+    }
+
+    public static BluetoothAdapter getDefaultAdapter() {
+        return BluetoothAdapter.getDefaultAdapter();
+    }
+
+    public static String adapterName() {
+        if (Pak.getActivity().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+            return adapter.getName();
+        }
+        return "???";
+    }
 
     static class BtDevice {
         private BluetoothAdapter adapter;
@@ -108,18 +125,20 @@ public class Bluetooth {
     }
 
     public static class BtFilter {
-        boolean isClassic;
-        String[] serviceUuids;
-        byte[] manufacData;
-        byte[] manufacDataMask;
+        public String deviceType;
+        public boolean isClassic;
+        public String[] serviceUuids;
+        public byte[] manufacData;
+        public byte[] manufacDataMask;
     }
 
     public static void init(Context ctx) {
-        btman = (BluetoothManager)ctx.getSystemService(Context.BLUETOOTH_SERVICE);
+        //btman = (BluetoothManager)ctx.getSystemService(Context.BLUETOOTH_SERVICE);
         adapter = BluetoothAdapter.getDefaultAdapter();
     }
 
     /// Opens a dialog to save an access point as a companion device
+    @SuppressLint("WrongConstant")
     public static int pairWithDeviceCompanion(Context ctx, BtFilter btFilter, String companionName) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return Pak.Error.UNSUPPORTED.getCode();
@@ -151,9 +170,77 @@ public class Bluetooth {
             associationBuilder.addDeviceFilter(builder.build());
         }
 
-        // TODO: finish this
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            associationBuilder.setDisplayName(companionName);
+        }
 
-        return 0;
+        // Automatically exits prompt when device is found
+        //associationBuilder.setSingleDevice(true);
+
+        if (Objects.equals(btFilter.deviceType, "smartwatch")) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                associationBuilder.setDeviceProfile(AssociationRequest.DEVICE_PROFILE_WATCH);
+            }
+        } else if (Objects.equals(btFilter.deviceType, "smart-glasses")) {
+            if (Build.VERSION.SDK_INT >= 34) {
+                associationBuilder.setDeviceProfile(AssociationRequest.DEVICE_PROFILE_GLASSES);
+            }
+        } else if (Objects.equals(btFilter.deviceType, "generic-medical-wearable")) {
+            if (Build.VERSION.SDK_INT >= 36) {
+                associationBuilder.setDeviceProfile("android.app.role.COMPANION_DEVICE_MEDICAL");
+            }
+        }
+
+        AssociationRequest request = associationBuilder.build();
+
+        class MyCallback extends CompanionDeviceManager.Callback {
+            Semaphore waitForCallback = new Semaphore(0, true);
+            public int returnCode = Pak.Error.OK.getCode();
+            public boolean waitForActivity = false;
+
+            @Override
+            public void onFailure(CharSequence error) {
+                Log.d(TAG, "association failure");
+                returnCode = Pak.Error.UNIMPLEMENTED.getCode();
+                waitForCallback.release();
+            }
+            @Override
+            public void onDeviceFound(IntentSender intentSender) {
+                super.onDeviceFound(intentSender);
+                Log.d(TAG, "device found\n");
+                try {
+                    Pak.startActivityForResult(intentSender);
+                    waitForActivity = true;
+                } catch (Exception e) {
+                    returnCode = Pak.Error.UNIMPLEMENTED.getCode();
+                }
+                waitForCallback.release();
+            }
+            @Override
+            public void onAssociationCreated(AssociationInfo associationInfo) {
+                super.onAssociationCreated(associationInfo);
+                returnCode = Pak.Error.UNIMPLEMENTED.getCode();
+                waitForCallback.release();
+            }
+            @Override
+            public void onAssociationPending(IntentSender intentSender) {
+                super.onAssociationPending(intentSender);
+            }
+        }
+
+        MyCallback callback = new MyCallback();
+        deviceManager.associate(request, callback, null);
+
+        try {
+            callback.waitForCallback.acquire();
+        } catch (Exception e) {
+            return Pak.Error.UNIMPLEMENTED.getCode();
+        }
+        if (callback.waitForActivity) {
+            Pak.waitForActivityResult();
+        }
+
+        return callback.returnCode;
     }
 
     private boolean checkPermission(Context ctx) {
@@ -166,10 +253,5 @@ public class Bluetooth {
 
     public void enableBluetoothDialog(Context ctx) {
         Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-    }
-
-    public Set<BluetoothDevice> getConnectedDevice() throws SecurityException {
-        Set<BluetoothDevice> bondedDevices = adapter.getBondedDevices();
-        return bondedDevices;
     }
 }

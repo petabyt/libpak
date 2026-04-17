@@ -11,11 +11,16 @@ option(PAK_INCLUDE_CLI "CLI program" ON)
 option(PAK_INCLUDE_WIFI "WiFi APIs" ON)
 option(PAK_INCLUDE_BT "Bluetooth APIs" ON)
 option(PAK_INCLUDE_RT "Runtime libraries" ON)
+option(PAK_INCLUDE_EXIF "EXIF Parser" ON)
 
 set(LIBPAK_SOURCES)
 
 if(TARGET qjs)
 	list(APPEND LIBPAK_SOURCES bindings/quickjs_wifi.c bindings/quickjs_socket.c bindings/quickjs_runtime.c)
+endif()
+
+if(PAK_INCLUDE_EXIF)
+	list(APPEND LIBPAK_SOURCES src/exif.c)
 endif()
 
 if(ANDROID)
@@ -79,4 +84,7 @@ if(PAK_INCLUDE_CLI AND NOT ANDROID)
 		m
 	)
 	install(TARGETS pakit)
+
+	add_executable(bt examples/bt.c)
+	target_link_libraries(bt PRIVATE pak m)
 endif()

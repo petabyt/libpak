@@ -1,7 +1,8 @@
 // A runtime similar to Linux kernel module system that allows libraries
 // that implement proprietary device protocols to be created and used
 // independently of libpak
-#pragma once
+#ifndef PAKRT_H
+#define PAKRT_H
 #include <stdint.h>
 #include <wifi.h>
 #include <bluetooth.h>
@@ -46,21 +47,39 @@
 /// @addtogroup PakProperty
 /// @{
 #define PAK_PROP_NAME "name"
+#define PAK_PROP_UNIQUE_IDENTIFIER "unique-identifier"
+#define PAK_PROP_BATTERY_MAIN "battery-main"
+#define PAK_PROP_BATTERY_LEFT "battery-left"
+#define PAK_PROP_BATTERY_RIGHT "battery-right"
 #define PAK_PROP_FW_VER "firmware-version"
 /// @}
 
+enum SortedBy {
+	PAK_DEFAULT = 0,
+	PAK_NEWEST_FIRST = 1,
+	PAK_OLDEST_FIRST = 2,
+	PAK_LARGEST_FIRST = 3,
+	PAK_SMALLEST_FIRST = 4,
+};
+
 struct FileHandle {
 	int index_in_view;
+	const char *storage_name;
+	// TODO: Might be used if file index with filenames was provided
 	const char *filename;
 };
 
 struct FileMetadata {
 	const char *filename;
+	// Mime types are borrowed from IANA: https://www.iana.org/assignments/media-types/media-types.xhtml
 	const char *mime_type;
+	int image_width;
+	int image_height;
 };
 
 struct PakUserSetting {
 	const char *name;
+	const char *title;
 	enum SettingType {
 		PAK_BOOLEAN,
 		PAK_INT,
@@ -85,6 +104,7 @@ struct PakUserSetting {
 		}stringv;
 		struct SettingDropDown {
 			const char **list;
+			int index_value;
 		}dropdownv;
 	}u;
 };
@@ -155,7 +175,7 @@ struct Module {
 	struct PakNet *net;
 	struct PakBt *bt;
 
-	// Instance specific runtime data
+	/// Instance specific runtime data
 	struct RuntimePriv *rt;
 	/// Priv pointer that can be optionally used by module instance
 	struct ModulePriv *priv;
@@ -167,6 +187,9 @@ struct Module {
 	int (*on_find_connection)(struct Module *, int job);
 	/// Try to initiate a connection over a network handle
 	int (*on_try_connect_wifi)(struct Module *, struct PakWiFiAdapter *handle, int job);
+	/// Try to initiate connection for a Bluetooth device
+	/// returns zero if device is supported and connetion established 
+	int (*on_try_connect_bluetooth)(struct Module *, struct PakBtDevice *handle, int job);
 	/// Runs immediately after successful connection. Runs at a constant interval, 1s by default.
 	int (*on_idle_tick)(struct Module *, unsigned int us_since_last_tick);
 	/// On user requested disconnect
@@ -175,49 +198,53 @@ struct Module {
 	int (*on_switch_screen)(struct Module *, int old_screen, int new_screen, int job);
 	/// Request entire contents of a file
 	/// send info back with pak_rt_add_file_contents
-	int (*on_request_file_contents)(struct Module *, int screen, int job, struct FileHandle *file);
+	int (*on_request_file_contents)(struct Module *, int job, struct FileHandle *file);
 	/// Request small thumbnail for a file
 	/// send info back with pak_rt_add_file_thumbnail
-	int (*on_request_thumbnail)(struct Module *, int screen, int job, struct FileHandle *file);
+	int (*on_request_thumbnail)(struct Module *, int job, struct FileHandle *file);
 	/// Request metadata for a file
 	/// send info back with pak_rt_add_file_metadata
-	int (*on_request_file_metadata)(struct Module *, int screen, int job, struct FileHandle *file);
+	int (*on_request_file_metadata)(struct Module *, int job, struct FileHandle *file);
 	/// Request liveview frame
 	/// send liveview frame contents with pak_rt_add_file_contents
-	int (*on_request_liveview_frame)(struct Module *, int screen, int job, struct FileHandle *file);
+	int (*on_request_liveview_frame)(struct Module *, int job, struct FileHandle *file);
 	/// Runs when a setting has been changed by 
-	int (*on_setting_changed)(struct Module *, int screen, int job, struct PakUserSetting *pane);
+	int (*on_setting_changed)(struct Module *, int screen, int job, struct PakUserSetting *setting);
 	/// On request to run self test, test suite, debug dumps, or other diagnostics
 	int (*on_run_test)(struct Module *, int screen, int job);
 	/// Process an arbritrary command
 	int (*on_custom_command)(struct Module *, int argc, char **argv);
 };
 
-int pak_rt_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
+/// Set info for a storage device by the name of storage_name
+/// If storage device doesn't exist, it will be created. Otherwise it will be updated
+/// @n_items sorted_by How many files are in the root filesystem folder
+/// @param sorted_by How the file list data set is sorted by default
+int pak_rt_set_storage_info(struct Module *mod, const char *storage_name, unsigned int n_items, enum SortedBy sorted_by);
+/// Submit metadata for a file
+/// @info May be freed and requested again later
 int pak_rt_add_file_metadata(struct Module *mod, struct FileHandle *file, const struct FileMetadata *metadata);
+/// Submit thumbnail contents for a file
+/// @info May be freed and requested again later
+int pak_rt_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
+// TODO: is_partial parameter
+/// Submit contents for a file for the user to view or download
 int pak_rt_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
+/// Registers a setting that is displayed in the UI and can be modified by the user
 int pak_rt_add_user_setting(struct Module *mod, const struct PakUserSetting *s);
-
 /// Returns true if user requested to cancel the job.
 int pak_rt_is_job_cancelled(struct Module *mod, int job);
 /// Enable or disable a screen
 int pak_rt_set_screen_supported(struct Module *mod, int screen, int v);
 /// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
 int pak_rt_enter_screen(struct Module *mod, int screen);
-/// Enter a custom screen (TODO)
-int pak_rt_enter_custom_screen(struct Module *mod);
 /// Set the percent of a job's progress bar from 0-100. Is 100 by default for each job.
-int pak_rt_se_progress_bar(struct Module *mod, int job, int percent);
+int pak_rt_set_progress_bar(struct Module *mod, int job, int percent);
 /// Report how many bytes are being downloaded for a job currently in X amount of microseconds.
 int pak_rt_set_download_stats(struct Module *mod, int job, long time, unsigned int n_bytes);
 /// Set the unique ID of the current connected device. Will be stored for future use.
 /// If the string is already stored, it will be loaded to the current session.
 int pak_rt_set_device_unique_id(struct Module *mod, const char *string);
-/// Send the name of the connected device to the runtime. Will appear in the UI and will associate
-/// with the current unique ID.
-int pak_rt_report_device_name(struct Module *mod, const char *name);
-/// Set the battery percentage of the connected device
-int pak_rt_report_device_battery(struct Module *mod, int percent);
 /// Report device information to the UI
 int pak_rt_set_session_property(struct Module *mod, const char *key, const char *value);
 /// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
@@ -229,6 +256,8 @@ int pak_rt_set_tick_interval(struct Module *mod, unsigned int us);
 /// Logging function for data specfic to this session
 void pak_debug_log(struct Module *mod, const char *fmt, ...);
 
+// debug stuff
 struct Module *pak_create_mod(void);
 int pak_rt_test_module(struct Module *mod);
 struct Module *pak_rt_mod_from_native(int (*get)(struct Module *mod));
+#endif

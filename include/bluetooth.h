@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PAKBLUETOOTH_H
+#define PAKBLUETOOTH_H
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -68,11 +69,18 @@ struct PakBtDevice {
 	struct PakUuidList uuids;
 };
 
-/// Get devices currently paired with the system
-int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index);
+enum PakDeviceStateFilter {
+	PAK_FILTER_BONDED = 1,
+	PAK_FILTER_CONNECTED = 2,
+};
 
-/// Get devices that are currently not paired but saved to the system's bluetooth manager
-int pak_bt_get_saved_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index);
+/// Get number of bluetooth devices that passthrough a filter
+/// @param filter See enum PakDeviceStateFilter
+int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int filter);
+
+/// Get bluetooth devices through a filter
+/// @param filter See enum PakDeviceStateFilter
+int pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index, int filter);
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device);
 
@@ -144,3 +152,4 @@ typedef int pak_bt_listen_adv(struct PakBt *ctx, enum PakBtEvent evtype, struct 
 typedef int pak_bt_listen_gatt(struct PakBt *ctx, enum PakBtEvent evtype, const char *uuid);
 
 int pak_bt_listen_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, pak_bt_listen_adv *cb, void *cb_arg);
+#endif

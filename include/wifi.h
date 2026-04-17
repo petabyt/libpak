@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PAKWIFI_H
+#define PAKWIFI_H
 #include <stdint.h>
 #include "pak.h"
 
@@ -87,13 +88,14 @@ struct PakWiFiApFilter {
 /// callback must call pak_wifi_unref_adapter when it doesn't need the adapter handle anymore
 int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec, int (*cb)(struct PakNet *ctx, struct PakWiFiAdapter *, void *arg), void *arg);
 
-struct PakNetworkHandle {
-	enum PakAdapterType type;
-	union {
-		struct PakNetworkHandleWiFi {
-			struct PakWiFiAdapter *adapter;
-			struct PakWiFiAp ap;
-		}wifi;
-	}u;
-};
-int pak_net_bind_handle_to_socket(struct PakNet *ctx, struct PakNetworkHandle *handle, int fd);
+//struct PakNetworkHandle {
+//	enum PakAdapterType type;
+//	union {
+//		struct PakNetworkHandleWiFi {
+//			struct PakWiFiAdapter *adapter;
+//			struct PakWiFiAp ap;
+//		}wifi;
+//	}u;
+//};
+//int pak_net_bind_handle_to_socket(struct PakNet *ctx, struct PakNetworkHandle *handle, int fd);
+#endif

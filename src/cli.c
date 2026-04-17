@@ -25,7 +25,7 @@ int test_bluetooth(void) {
 
 	struct PakBtDevice dev;
 	int i = 0;
-	while (pak_bt_get_paired_device(ctx, &adapter, &dev, i) == 0) {
+	while (pak_bt_get_device(ctx, &adapter, &dev, i, PAK_FILTER_BONDED) == 0) {
 		printf("Paired device: %s\n", dev.name);
 
 //		int percent;
@@ -101,7 +101,7 @@ int test_bluetooth_connect(void) {
 	if (pak_bt_get_adapter(ctx, &adapter, 0)) return -1;
 
 	struct PakBtDevice dev;
-	int rc = pak_bt_get_saved_device(ctx, &adapter, &dev, 0);
+	int rc = pak_bt_get_device(ctx, &adapter, &dev, 0, PAK_FILTER_CONNECTED);
 	printf("Saved device: %s\n", dev.name);
 
 	struct PakGattService service;

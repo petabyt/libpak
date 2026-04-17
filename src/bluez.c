@@ -384,9 +384,6 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 	return 0;
 }
 
-#define FILTER_IS_PAIRED (1 << 1)
-#define FILTER_IS_SAVED (1 << 2)
-
 static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *dev, int index, int filter) {
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
 	if (resp == NULL) return -1;
@@ -411,15 +408,21 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 		dbus_message_iter_next(&dict);
 		DBusMessageIter adapter_dict;
 		if (!find_dict(&dict, "org.bluez.Device1", &adapter_dict)) {
-			dbus_bool_t is_paired = 0;
-			DBusMessageIter val_dict;
-			if (find_dict(&adapter_dict, "Paired", &val_dict)) return -1;
-			DBusMessageIter val_dict2;
+			dbus_bool_t is_connected = 0;
+			dbus_bool_t is_bonded = 0;
+			DBusMessageIter val_dict, val_dict2;
+			if (find_dict(&adapter_dict, "Connected", &val_dict)) return -1;
 			dbus_message_iter_recurse(&val_dict, &val_dict2);
-			dbus_message_iter_get_basic(&val_dict2, &is_paired);
+			dbus_message_iter_get_basic(&val_dict2, &is_connected);
 
-			if ((is_paired && (filter & FILTER_IS_PAIRED)) || (!is_paired && (filter & FILTER_IS_SAVED))) {
-				if (found == index) {
+			if (find_dict(&adapter_dict, "Bonded", &val_dict)) return -1;
+			dbus_message_iter_recurse(&val_dict, &val_dict2);
+			dbus_message_iter_get_basic(&val_dict2, &is_bonded);
+
+			int matches = is_connected && (filter & PAK_FILTER_CONNECTED);
+			matches |= is_bonded && (filter & PAK_FILTER_BONDED);
+			if (matches) {
+				if (found == index && dev != NULL) {
 					fill_from_device1(&adapter_dict, dev);
 					dev->priv = (struct PakBtDevicePriv *)alloc_priv(sizeof(struct PakBtDevicePriv), path);
 					dbus_message_unref(resp);
@@ -434,15 +437,16 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 
 	dbus_message_unref(resp);
 
+	if (dev == NULL) return found;
 	return -1;
 }
 
-int pak_bt_get_paired_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index) {
-	return pak_bt_get_object(ctx, adapter, device, index, FILTER_IS_PAIRED);
+int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int filter) {
+	return pak_bt_get_object(ctx, adapter, NULL, 0, filter);
 }
 
-int pak_bt_get_saved_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index) {
-	return pak_bt_get_object(ctx, adapter, device, index, FILTER_IS_SAVED);
+int pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index, int filter) {
+	return pak_bt_get_object(ctx, adapter, device, index, filter);
 }
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {

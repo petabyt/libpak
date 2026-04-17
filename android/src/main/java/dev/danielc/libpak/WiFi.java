@@ -79,7 +79,7 @@ public class WiFi {
     /** Opens an Android 10+ popup to prompt the user to select a WiFi network */
     public int connectToAccessPoint(Context ctx, ApFilter filter, WiFiDiscoveryCallback callback) {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
-            return Pak.Error.UNSUPPORTED.getCode();
+            return Pak.Error.UNSUPPORTED;
         }
 
         ConnectivityManager connectivityManager = (ConnectivityManager)ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -123,7 +123,7 @@ public class WiFi {
     /// Opens a dialog to save an access point as a companion device
     public static int connectToAccessPointCompanion(Context ctx, ApFilter apFilter, String companionName, WiFiDiscoveryCallback callback) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return Pak.Error.UNSUPPORTED.getCode();
+            return Pak.Error.UNSUPPORTED;
         }
 
         CompanionDeviceManager deviceManager = (CompanionDeviceManager)ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);

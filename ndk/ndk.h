@@ -3,12 +3,13 @@
 
 #include <jni.h>
 
+// implemented by host
+JNIEnv *get_jni_env(void);
+jobject get_jni_ctx(void);
+
 enum AndroidPrefModes {
 	ANDROID_MODE_PRIVATE = 0x0,
 };
-
-JNIEnv *get_jni_env(void);
-jobject get_jni_ctx(void);
 
 /// @returns ctx.getPackageName()
 jstring jni_get_package_name(JNIEnv *env, jobject context);

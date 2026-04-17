@@ -93,21 +93,13 @@ public class Pak {
     }
 
     /// C error codes
-    public enum Error {
-        OK(0),
-        PERMISSION_DENIED(-1),
-        UNSUPPORTED(-2),
-        UNIMPLEMENTED(-3),
-        NOT_CONNECTED(-4);
-
-        private final int code;
-
-        Error(int code) {
-            this.code = code;
-        }
-
-        public int getCode() {
-            return code;
-        }
+    public static class Error {
+        public static final int IO = -1;
+        public static final int UNDEFINED = -2;
+        public static final int PERMISSION = -3;
+        public static final int UNSUPPORTED = -4;
+        public static final int UNIMPLEMENTED = -5;
+        public static final int DISCONNECTED = -6;
+        public static final int NO_CONNECTION = -7;
     }
 }

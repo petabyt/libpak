@@ -7,20 +7,21 @@
 typedef char _pad_pointer[(sizeof(uintptr_t) - sizeof(uint32_t)) ? 4 : 0];
 
 enum PakErrorCode {
+	PAK_ERR_NON_FATAL = -1,
 	/// IO or protocol error
-	PAK_ERR_IO = -1,
+	PAK_ERR_IO = -2,
 	/// Undefined or illegal behavior
-	PAK_ERR_UNDEFINED = -2,
+	PAK_ERR_UNDEFINED = -3,
 	/// Permission rejected
-	PAK_ERR_PERMISSION = -3,
+	PAK_ERR_PERMISSION = -4,
 	/// Unsupported feature or API
-	PAK_ERR_UNSUPPORTED = -4,
+	PAK_ERR_UNSUPPORTED = -5,
 	/// Unimplemented feature
-	PAK_ERR_UNIMPLEMENTED = -5,
+	PAK_ERR_UNIMPLEMENTED = -6,
 	/// Sudden device disconnect
-	PAK_ERR_DISCONNECTED = -6,
+	PAK_ERR_DISCONNECTED = -7,
 	/// Unable to establish connection
-	PAK_ERR_NO_CONNECTION = -7,
+	PAK_ERR_NO_CONNECTION = -8,
 };
 
 /// Runs main loop that supports callbacks

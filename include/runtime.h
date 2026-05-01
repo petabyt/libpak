@@ -65,14 +65,13 @@ enum SortedBy {
 struct FileHandle {
 	int index_in_view;
 	const char *storage_name;
-	// TODO: Might be used if file index with filenames was provided
-	const char *filename;
 };
 
 struct FileMetadata {
 	const char *filename;
 	// Mime types are borrowed from IANA: https://www.iana.org/assignments/media-types/media-types.xhtml
 	const char *mime_type;
+	int file_size;
 	int image_width;
 	int image_height;
 };
@@ -201,7 +200,7 @@ struct Module {
 	int (*on_request_file_contents)(struct Module *, int job, struct FileHandle *file);
 	/// Request small thumbnail for a file
 	/// send info back with pak_rt_add_file_thumbnail
-	int (*on_request_thumbnail)(struct Module *, int job, struct FileHandle *file);
+	int (*on_request_file_thumbnail)(struct Module *, int job, struct FileHandle *file);
 	/// Request metadata for a file
 	/// send info back with pak_rt_add_file_metadata
 	int (*on_request_file_metadata)(struct Module *, int job, struct FileHandle *file);
@@ -227,13 +226,16 @@ int pak_rt_add_file_metadata(struct Module *mod, struct FileHandle *file, const 
 /// Submit thumbnail contents for a file
 /// @info May be freed and requested again later
 int pak_rt_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
-// TODO: is_partial parameter
 /// Submit contents for a file for the user to view or download
-int pak_rt_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
+int pak_rt_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length, int is_partial);
 /// Registers a setting that is displayed in the UI and can be modified by the user
 int pak_rt_add_user_setting(struct Module *mod, const struct PakUserSetting *s);
 /// Returns true if user requested to cancel the job.
 int pak_rt_is_job_cancelled(struct Module *mod, int job);
+/// Fatal error, all no more jobs will be issued
+void pak_rt_fatal_error(struct Module *mod, const char *fmt, ...);
+/// Submit error message for user to read for a non-fatal error on a job that's in progress
+void pak_rt_error_message(struct Module *mod, int job, const char *fmt, ...);
 /// Enable or disable a screen
 int pak_rt_set_screen_supported(struct Module *mod, int screen, int v);
 /// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
@@ -255,6 +257,11 @@ int pak_rt_set_tick_interval(struct Module *mod, unsigned int us);
 //const char *pak_rt_get_path(struct Module *mod, const char *filename);
 /// Logging function for data specfic to this session
 void pak_debug_log(struct Module *mod, const char *fmt, ...);
+/// Get metadata
+/// free with pak_rt_release_metadata
+struct FileMetadata *pak_rt_get_metadata(struct Module *mod, struct FileHandle *file);
+/// Release metadata
+void pak_rt_release_metadata(struct Module *mod, struct FileMetadata *md);
 
 // debug stuff
 struct Module *pak_create_mod(void);

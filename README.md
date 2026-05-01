@@ -1,10 +1,16 @@
 # libpak
 
-WIP cross-platform Bluetooth and WiFi library for pairing with consumer devices
+Cross-platform Bluetooth and WiFi library for pairing with consumer devices
+
+Features:
+- Supports Android and Linux (BlueZ/NetworkManager)
+- Bluetooth Low Energy (BLE) and Bluetooth Classic
+- WiFi API allow probing APs, connect/disconnect, and socket binding
+- QuickJS bindings
 
 # Roadmap
 - [x] QuickJS bindings
-- [x] Communicate with cheap chinese dashcam in JS (HTTP/WiFi)
+- [x] Communicate with WiFi devices (HTTP)
 - [x] Communicate with bluetooth classic devices
 - **Linux:**
 	- [x] Basic NetworkManager APIs
@@ -20,7 +26,7 @@ WIP cross-platform Bluetooth and WiFi library for pairing with consumer devices
 	- [x] NetworkRequest APIs
     - [ ] Customizable permission requester
 	- [ ] BLE bindings
-	- [ ] BTC bindings
+	- [x] BTC bindings
 
 ## Future
 - WASM bindings (c-api)

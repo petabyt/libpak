@@ -94,12 +94,13 @@ public class Pak {
 
     /// C error codes
     public static class Error {
-        public static final int IO = -1;
-        public static final int UNDEFINED = -2;
-        public static final int PERMISSION = -3;
-        public static final int UNSUPPORTED = -4;
-        public static final int UNIMPLEMENTED = -5;
-        public static final int DISCONNECTED = -6;
-        public static final int NO_CONNECTION = -7;
+        public static final int NON_FATAL = -1;
+        public static final int IO = -2;
+        public static final int UNDEFINED = -3;
+        public static final int PERMISSION = -4;
+        public static final int UNSUPPORTED = -5;
+        public static final int UNIMPLEMENTED = -6;
+        public static final int DISCONNECTED = -7;
+        public static final int NO_CONNECTION = -8;
     }
 }

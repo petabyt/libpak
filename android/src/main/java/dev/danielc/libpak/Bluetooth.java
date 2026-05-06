@@ -110,6 +110,18 @@ public class Bluetooth {
             this.serviceUuids = dev.getUuids();
         }
 
+//  (      public boolean connect() {
+//            //dev.con
+//        })
+
+        public boolean isBonded() {
+            try {
+                return dev.getBondState() == BluetoothDevice.BOND_BONDED;
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
+
         public boolean isConnected() {
             // This method was added in 2014 so it should be okay to use.
             try {
@@ -145,15 +157,12 @@ public class Bluetooth {
             Pak.getActivity().registerReceiver(receiver, filter);
         }
 
-        public void removeListener() {
-            Pak.getActivity().unregisterReceiver(receiver);
+        public void closeAll() {
+            if (receiver != null) Pak.getActivity().unregisterReceiver(receiver);
+            try {
+                if (gatt != null) gatt.close();
+            } catch (SecurityException ignored) {}
         }
-
-        //        boolean isNativeInited = false;
-//        byte[] struct = null;
-//        native void nativeEvent(String intent);
-
-        private final Semaphore waitForUuid = new Semaphore(0, true);
 
         UUID findServiceUuid(String uuid) {
             for (ParcelUuid u: serviceUuids) {
@@ -163,6 +172,7 @@ public class Bluetooth {
             return null;
         }
 
+        private final Semaphore waitForUuid = new Semaphore(0, true);
         public void refreshSdpUuids() throws Exception {
             if (!Bluetooth.checkPermission()) throw new Exception("Perm");
 
@@ -191,12 +201,40 @@ public class Bluetooth {
             }
         }
 
+        public BluetoothGattService getService(int index) {
+            if (gatt == null) return null;
+            try {
+                return gatt.getServices().get(index);
+            } catch (Exception e) {
+                Log.d(TAG, e.getMessage());
+                return null;
+            }
+        }
+
+        public int connectGattNative(byte[] struct) {
+            NativeBluetoothGattCallback callback = new NativeBluetoothGattCallback(this);
+            callback.struct = struct;
+            return connectGatt(Pak.getActivity(), callback);
+        }
+
         public int connectGatt(Context ctx, NativeBluetoothGattCallback callback) {
             try {
                 gatt = dev.connectGatt(ctx, false, callback);
+                gatt.connect();
+                synchronized (callback.connectSignal) {
+                    callback.connectSignal.wait(5000);
+                }
+                gatt.discoverServices();
+                synchronized (callback.gattServicesDiscovered) {
+                    callback.gattServicesDiscovered.wait(5000);
+                }
+                Log.d(TAG, "Discovered GATT services");
                 return 0;
             } catch (SecurityException e) {
+                Log.d(TAG, e.getMessage());
                 return Pak.Error.PERMISSION;
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
         }
 
@@ -237,18 +275,53 @@ public class Bluetooth {
 
     public static class NativeBluetoothGattCallback extends BluetoothGattCallback {
         byte[] struct;
+        final Bluetooth.Device device;
+        final Object connectSignal = new Object();
+        final Object gattServicesDiscovered = new Object();
+        NativeBluetoothGattCallback(Bluetooth.Device device) {
+            this.device = device;
+        }
+
+        static final int EVENT_CONNECTION_STATE_CHANGED = 1;
+        static final int EVENT_CONNECTED = 2;
+        static final int EVENT_DISCONNECTED = 3;
+        static final int EVENT_GATT_UUID_WRITTEN = 4;
+        static final int EVENT_GATT_UUID_READ = 5;
+        static final int EVENT_DEVICE_PAIRED = 6;
+        static final int EVENT_DEVICE_UNPAIRED = 7;
+        public native void onEvent(int code, BluetoothGattCharacteristic characteristic);
+
         @Override
-        public native void onConnectionStateChange(BluetoothGatt gatt, int status, int newState);
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            onEvent(EVENT_CONNECTION_STATE_CHANGED, null);
+            synchronized (connectSignal) {
+                connectSignal.notify();
+            }
+        }
+
         @Override
-        public native void onServicesDiscovered(BluetoothGatt gatt, int status);
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            synchronized (gattServicesDiscovered) {
+                gattServicesDiscovered.notify();
+            }
+            //if (status == BluetoothGatt.GATT_SUCCESS) {}
+        }
         @Override
-        public native void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status);
+        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+
+        }
         @Override
-        public native void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status);
+        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+
+        }
         @Override
-        public native void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic);
+        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+
+        }
         @Override
-        public native void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status);
+        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+
+        }
     }
 
     public static class BtFilter {

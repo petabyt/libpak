@@ -25,14 +25,14 @@ endif()
 
 if(ANDROID)
 	add_library(usb-1.0 STATIC
-		ndk/usb.c
+		src/android/usb.c
 	)
-	target_include_directories(usb-1.0 PUBLIC ${PROJECT_SOURCE_DIR}/ndk)
+	target_include_directories(usb-1.0 PUBLIC ${PROJECT_SOURCE_DIR}/src/android)
 	add_library(pak STATIC
 		${LIBPAK_SOURCES}
-		ndk/bluetooth.c
-		ndk/android.c
-		ndk/wifi.c
+		src/android/bluetooth.c
+		src/android/android.c
+		src/android/wifi.c
 	)
 	find_library(log-lib log)
 	find_library(android-lib android)
@@ -49,9 +49,9 @@ elseif(LINUX)
 	pkg_check_modules(BLUETOOTH IMPORTED_TARGET GLOBAL bluez)
 	add_library(pak STATIC
 		${LIBPAK_SOURCES}
-		src/dbus.c
-		src/bluez.c
-		src/nm_wifi.c
+		src/linux/dbus.c
+		src/linux/bluez.c
+		src/linux/networkmanager.c
 		src/common.c
 	)
 	target_link_libraries(pak PRIVATE PkgConfig::DBUS PkgConfig::BLUETOOTH)
@@ -72,9 +72,9 @@ if(PAK_INCLUDE_CLI AND NOT ANDROID)
 		src/cli.c
 		src/cli_runtime.c
 		examples/dummy.c
-		bindings/quickjs_wifi.c
-		bindings/quickjs_socket.c
-		bindings/quickjs_runtime.c
+		src/bindings/quickjs_wifi.c
+		src/bindings/quickjs_socket.c
+		src/bindings/quickjs_runtime.c
 	)
 	target_include_directories(pakit PUBLIC /usr/include/quickjs)
 	target_link_libraries(pakit

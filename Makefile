@@ -23,3 +23,6 @@ build:
 
 list:
 	dbus-send --system      --print-reply   --dest=org.bluez        /       org.freedesktop.DBus.ObjectManager.GetManagedObjects
+
+clean:
+	rm -rf .cache build cmake-build-debug .idea

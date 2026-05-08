@@ -12,13 +12,17 @@ option(PAK_INCLUDE_WIFI "WiFi APIs" ON)
 option(PAK_INCLUDE_BT "Bluetooth APIs" ON)
 option(PAK_INCLUDE_RT "Runtime libraries" ON)
 option(PAK_INCLUDE_EXIF "EXIF Parser" ON)
+option(PAK_QUICKJS "QuickJS bindings" ON)
+option(PAK_WASM "WAMR bindings" ON)
 
 set(LIBPAK_SOURCES)
 
-if(TARGET qjs)
-	list(APPEND LIBPAK_SOURCES bindings/quickjs_wifi.c bindings/quickjs_socket.c bindings/quickjs_runtime.c)
+if(PAK_QUICKJS)
+	list(APPEND LIBPAK_SOURCES src/bindings/quickjs_wifi.c src/bindings/quickjs_socket.c src/bindings/quickjs_runtime.c)
 endif()
-
+if(PAK_WASM)
+	list(APPEND LIBPAK_SOURCES src/bindings/wasm.c)
+endif()
 if(PAK_INCLUDE_EXIF)
 	list(APPEND LIBPAK_SOURCES src/exif.c)
 endif()
@@ -40,8 +44,11 @@ if(ANDROID)
 		${log-lib}
 		${android-lib}
 	)
-	if(TARGET qjs)
+	if(PAK_QUICKJS AND TARGET qjs)
 		target_link_libraries(pak PRIVATE qjs)
+	endif()
+	if(PAK_WASM AND TARGET vmlib)
+		target_link_libraries(pak PRIVATE vmlib)
 	endif()
 elseif(LINUX)
 	find_package(PkgConfig REQUIRED)
@@ -68,18 +75,20 @@ if(PAK_INCLUDE_CLI AND NOT ANDROID)
 	    PATH_SUFFIXES quickjs
 	    REQUIRED
 	)
+	find_library(WAMR_LIB
+	    NAMES iwasm
+	    REQUIRED
+	)
 	add_executable(pakit
 		src/cli.c
 		src/cli_runtime.c
 		examples/dummy.c
-		src/bindings/quickjs_wifi.c
-		src/bindings/quickjs_socket.c
-		src/bindings/quickjs_runtime.c
 	)
 	target_include_directories(pakit PUBLIC /usr/include/quickjs)
 	target_link_libraries(pakit
 		PRIVATE
 		${QUICKJS_LIB}
+		${WAMR_LIB}
 		pak
 		m
 	)

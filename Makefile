@@ -1,3 +1,6 @@
+wasm:
+	cmake --build build && build/pakit --test-wasm /home/daniel/Documents/fantasyfudge/modules/build/dummy/dummy
+
 veecarjs:
 	cmake --build build
 	build/pakit --js examples/veecar.js

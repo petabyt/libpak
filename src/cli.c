@@ -13,6 +13,8 @@ int get_module_dummy(struct Module *mod);
 /// Execute JS file and get the exported module handle
 int setup_quickjs_module(struct Module **mod, const char *filename);
 
+int setup_wasm_module(struct Module **mod, const char *filename);
+
 int pak_rt_test_module(struct Module *mod);
 
 int test_bluetooth(void) {
@@ -129,8 +131,12 @@ int help(void) {
 int main(int argc, char **argv) {
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--test-js")) {
-			struct Module *mod;
+			struct Module *mod = NULL;
 			if (setup_quickjs_module(&mod, argv[i + 1])) return -1;
+			return pak_rt_test_module(mod);
+		} else if (!strcmp(argv[i], "--test-wasm")) {
+			struct Module *mod = NULL;
+			if (setup_wasm_module(&mod, argv[i + 1])) return -1;
 			return pak_rt_test_module(mod);
 		} else if (!strcmp(argv[i], "--test")) {
 			int rc = test_wifi();

@@ -9,8 +9,6 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGattService;
-import android.bluetooth.BluetoothManager;
-import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
 import android.bluetooth.le.ScanFilter;
 import android.companion.AssociationInfo;
@@ -32,9 +30,7 @@ import android.content.IntentFilter;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.os.Build;
-import android.os.Parcel;
 import android.os.ParcelUuid;
-import android.os.Parcelable;
 import android.util.Log;
 
 public class Bluetooth {

@@ -62,6 +62,22 @@ elseif(LINUX)
 		src/common.c
 	)
 	target_link_libraries(pak PRIVATE PkgConfig::DBUS PkgConfig::BLUETOOTH)
+	if(PAK_QUICKJS)
+		find_library(QUICKJS_LIB
+			NAMES quickjs
+			PATH_SUFFIXES quickjs
+			REQUIRED
+		)
+		target_include_directories(pak PUBLIC /usr/include/quickjs)
+		target_link_libraries(pak PRIVATE ${QUICKJS_LIB} m)
+	endif()
+	if(PAK_WASM)
+		find_library(WAMR_LIB
+			NAMES iwasm
+			REQUIRED
+		)
+		target_link_libraries(pak PRIVATE ${WAMR_LIB})
+	endif()
 endif()
 
 target_include_directories(pak
@@ -70,25 +86,13 @@ target_include_directories(pak
 )
 
 if(PAK_INCLUDE_CLI AND NOT ANDROID)
-	find_library(QUICKJS_LIB
-	    NAMES quickjs
-	    PATH_SUFFIXES quickjs
-	    REQUIRED
-	)
-	find_library(WAMR_LIB
-	    NAMES iwasm
-	    REQUIRED
-	)
 	add_executable(pakit
 		src/cli.c
 		src/cli_runtime.c
 		examples/dummy.c
 	)
-	target_include_directories(pakit PUBLIC /usr/include/quickjs)
 	target_link_libraries(pakit
 		PRIVATE
-		${QUICKJS_LIB}
-		${WAMR_LIB}
 		pak
 		m
 	)

@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothSocket;
 import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanResult;
 import android.companion.AssociationInfo;
 import android.companion.AssociationRequest;
 import android.companion.BluetoothDeviceFilter;
@@ -21,7 +22,10 @@ import android.content.Intent;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 
@@ -33,15 +37,17 @@ import android.os.Build;
 import android.os.ParcelUuid;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
 public class Bluetooth {
     public static final String TAG = "bt";
 
     public static abstract class Listener {
         public abstract void onUpdate(Boolean bluetoothEnabled);
-        public abstract void onAvailableDevices(Device[] devices);
+        public abstract void onAvailableDevices(@NonNull Device[] devices);
     }
 
-    private static boolean checkPermission() {
+    public static boolean checkPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return Pak.getActivity().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
         }
@@ -70,6 +76,10 @@ public class Bluetooth {
         return BluetoothAdapter.getDefaultAdapter();
     }
 
+    public static boolean isBluetoothEnabled() {
+        return getDefaultAdapter().isEnabled();
+    }
+
     public static void setupListener(Listener listener) {
         BroadcastReceiver receiver = new BroadcastReceiver() {
             @Override
@@ -91,29 +101,26 @@ public class Bluetooth {
     }
 
     public static class Device {
-        public final BluetoothAdapter adapter;
-        public final BluetoothDevice dev;
-        public final String name;
+        @NonNull public final BluetoothAdapter adapter;
+        @NonNull public final BluetoothDevice dev;
+        @NonNull public final String name;
         public ParcelUuid[] serviceUuids;
         public BluetoothGatt gatt = null;
         BroadcastReceiver receiver = null;
+        MyBluetoothGattCallback callback = null;
 
         @SuppressLint("MissingPermission")
-        Device(BluetoothAdapter adapter, BluetoothDevice dev) {
+        Device(@NonNull BluetoothAdapter adapter, BluetoothDevice dev) {
             this.adapter = adapter;
             this.dev = dev;
             this.name = dev.getName();
             this.serviceUuids = dev.getUuids();
         }
 
-//  (      public boolean connect() {
-//            //dev.con
-//        })
-
         public boolean isBonded() {
             try {
                 return dev.getBondState() == BluetoothDevice.BOND_BONDED;
-            } catch (Exception ignored) {
+            } catch (SecurityException ignored) {
                 return false;
             }
         }
@@ -150,6 +157,7 @@ public class Bluetooth {
             filter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
             filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
             filter.addAction(BluetoothDevice.ACTION_UUID);
+            filter.addAction(BluetoothDevice.ACTION_FOUND);
             Pak.getActivity().registerReceiver(receiver, filter);
         }
 
@@ -213,10 +221,14 @@ public class Bluetooth {
             return connectGatt(Pak.getActivity(), callback);
         }
 
-        public int connectGatt(Context ctx, NativeBluetoothGattCallback callback) {
+        public int connectGatt(Context ctx, MyBluetoothGattCallback callback) {
             try {
                 gatt = dev.connectGatt(ctx, false, callback);
-                gatt.connect();
+                this.callback = callback;
+//                if (!gatt.connect()) {
+//                    Log.d(TAG, "gatt.connect() fail");
+//                    return Pak.Error.NO_CONNECTION;
+//                }
                 synchronized (callback.connectSignal) {
                     callback.connectSignal.wait(5000);
                 }
@@ -234,47 +246,107 @@ public class Bluetooth {
             }
         }
 
-        public int readAsync(String uuid) {
-            UUID uuidObj = UUID.fromString(uuid);
-            BluetoothGattService service = gatt.getService(uuidObj);
-            BluetoothGattCharacteristic characteristic = service.getCharacteristic(uuidObj);
+        public BluetoothGattDescriptor getDescriptor(BluetoothGattCharacteristic characteristic, int index) {
+            return characteristic.getDescriptors().get(index);
+        }
+        public byte[] getCachedValue(BluetoothGattCharacteristic characteristic) {
+            Bluetooth.MyBluetoothGattCallback.CachedCharUpdates val = callback.checkCachedUpdate(characteristic, true);
+            if (val != null) return val.value;
+            return characteristic.getValue();
+        }
+        public int setNotification(BluetoothGattCharacteristic characteristic, boolean v) {
             try {
-                return gatt.readCharacteristic(characteristic) ? 0 : -1;
+                if (gatt.setCharacteristicNotification(characteristic, v)) {
+                    return 0;
+                }
+                return -1;
             } catch (SecurityException e) {
                 return Pak.Error.PERMISSION;
             }
         }
-
-        public int writeAsync(String uuid, byte[] data) {
-            UUID uuidObj = UUID.fromString(uuid);
-            BluetoothGattService service = gatt.getService(uuidObj);
-            BluetoothGattCharacteristic writeCharacteristic = service.getCharacteristic(uuidObj);
-            writeCharacteristic.setValue(data);
+        public int waitAsync(BluetoothGattCharacteristic characteristic, int ms) {
+            if (callback.checkCachedUpdate(characteristic, false) != null) {
+                return 0;
+            }
             try {
-                return gatt.writeCharacteristic(writeCharacteristic) ? 0 : -1;
+                synchronized (callback.gattCharacteristicChanged) {
+                    callback.gattCharacteristicChanged.wait(ms);
+                }
+                if (callback.checkCachedUpdate(characteristic, false) == null) return -1;
+                return 0;
             } catch (SecurityException e) {
                 return Pak.Error.PERMISSION;
+            } catch (InterruptedException e) {
+                return Pak.Error.UNDEFINED;
             }
         }
-
-        public int watchUuid(String uuid, boolean watching) {
-            UUID uuidObj = UUID.fromString(uuid);
-            BluetoothGattService service = gatt.getService(uuidObj);
-            BluetoothGattCharacteristic notifyCharacteristic = service.getCharacteristic(uuidObj);
+        public int readAsync(BluetoothGattCharacteristic characteristic) {
             try {
-                return gatt.setCharacteristicNotification(notifyCharacteristic, watching) ? 0 : -1;
+                if (gatt.readCharacteristic(characteristic)) {
+                    synchronized (callback.gattCharacteristicRead) {
+                        callback.gattCharacteristicRead.wait(5000);
+                    }
+                    return 0;
+                }
+                return -1;
             } catch (SecurityException e) {
                 return Pak.Error.PERMISSION;
+            } catch (InterruptedException e) {
+                return Pak.Error.UNDEFINED;
+            }
+        }
+        public int writeAsync(BluetoothGattCharacteristic characteristic, byte[] data) {
+            try {
+                characteristic.setValue(data);
+                if (gatt.writeCharacteristic(characteristic)) {
+                    synchronized (callback.gattCharacteristicWrote) {
+                        callback.gattCharacteristicWrote.wait(5000);
+                    }
+                    return 0;
+                }
+                return -1;
+            } catch (SecurityException e) {
+                return Pak.Error.PERMISSION;
+            } catch (InterruptedException e) {
+                return Pak.Error.UNDEFINED;
             }
         }
     }
 
-    public static class NativeBluetoothGattCallback extends BluetoothGattCallback {
+    public static class NativeBluetoothGattCallback extends MyBluetoothGattCallback {
         byte[] struct;
+        NativeBluetoothGattCallback(Device device) {
+            super(device);
+        }
+        public native void onEvent(int code, BluetoothGattCharacteristic characteristic);
+    }
+
+    public abstract static class MyBluetoothGattCallback extends BluetoothGattCallback {
         final Bluetooth.Device device;
         final Object connectSignal = new Object();
         final Object gattServicesDiscovered = new Object();
-        NativeBluetoothGattCallback(Bluetooth.Device device) {
+        final Object gattCharacteristicWrote = new Object();
+        final Object gattCharacteristicRead = new Object();
+        final Object gattCharacteristicChanged = new Object();
+        public static class CachedCharUpdates {
+            BluetoothGattCharacteristic chr;
+            byte[] value;
+            CachedCharUpdates(BluetoothGattCharacteristic chr, byte[] value) {
+                this.chr = chr;
+                this.value = value;
+            }
+        }
+        final private HashSet<CachedCharUpdates> cachedUpdates = new HashSet();
+        public CachedCharUpdates checkCachedUpdate(BluetoothGattCharacteristic chr, boolean clear) {
+            for (CachedCharUpdates e: cachedUpdates) {
+                if (e.chr.equals(chr)) {
+                    if (clear) cachedUpdates.remove(e);
+                    return e;
+                }
+            }
+            return null;
+        }
+        MyBluetoothGattCallback(Bluetooth.Device device) {
             this.device = device;
         }
 
@@ -285,7 +357,7 @@ public class Bluetooth {
         static final int EVENT_GATT_UUID_READ = 5;
         static final int EVENT_DEVICE_PAIRED = 6;
         static final int EVENT_DEVICE_UNPAIRED = 7;
-        public native void onEvent(int code, BluetoothGattCharacteristic characteristic);
+        public abstract void onEvent(int code, BluetoothGattCharacteristic characteristic);
 
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
@@ -304,15 +376,26 @@ public class Bluetooth {
         }
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-
+            super.onCharacteristicRead(gatt, characteristic, status);
+            synchronized (gattCharacteristicRead) {
+                gattCharacteristicRead.notify();
+            }
+            onEvent(EVENT_GATT_UUID_READ, characteristic);
         }
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-
+            synchronized (gattCharacteristicWrote) {
+                gattCharacteristicWrote.notify();
+            }
+            onEvent(EVENT_GATT_UUID_WRITTEN, characteristic);
         }
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-
+            super.onCharacteristicChanged(gatt, characteristic);
+            cachedUpdates.add(new CachedCharUpdates(characteristic, characteristic.getValue()));
+            synchronized (gattCharacteristicChanged) {
+                gattCharacteristicChanged.notify();
+            }
         }
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
@@ -321,6 +404,7 @@ public class Bluetooth {
     }
 
     public static class BtFilter {
+        public String namePattern;
         public String deviceType;
         public boolean isClassic;
         public String[] serviceUuids;
@@ -329,12 +413,32 @@ public class Bluetooth {
     }
 
     public static void init(Context ctx) {
-        // ...
+//        BroadcastReceiver receiver = new BroadcastReceiver() {
+//            @SuppressLint("MissingPermission")
+//            @Override
+//            public void onReceive(Context context, Intent intent) {
+//                String action = intent.getAction();
+//                Log.d("bt-action", action);
+//            }
+//        };
+//        IntentFilter filter = new IntentFilter();
+//        filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+//        filter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+//        filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+//        filter.addAction(BluetoothDevice.ACTION_UUID);
+//        filter.addAction(BluetoothDevice.ACTION_FOUND);
+//        ctx.registerReceiver(receiver, filter);
+    }
+
+    public static abstract class ScanCallback {
+        public abstract void onFound(@NonNull Device device);
+        public abstract void onFailure(@NonNull String reason);
     }
 
     /// Opens a dialog to save an access point as a companion device
     @SuppressLint("WrongConstant")
-    public static int pairWithDeviceCompanion(Context ctx, BtFilter btFilter, String companionName) {
+    public static int pairWithDeviceCompanion(BtFilter btFilter, String companionName, ScanCallback scanCallback) {
+        Context ctx = Pak.getActivity();
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return Pak.Error.UNSUPPORTED;
         }
@@ -354,11 +458,23 @@ public class Bluetooth {
         } else {
             BluetoothLeDeviceFilter.Builder builder = new BluetoothLeDeviceFilter.Builder();
             ScanFilter.Builder scanfilter = new ScanFilter.Builder();
+
+            if (btFilter.serviceUuids.length != 0) {
+                scanfilter.setServiceUuid(ParcelUuid.fromString(btFilter.serviceUuids[0]));
+            }
+
             if (btFilter.manufacData != null) {
-                if (btFilter.manufacDataMask != null) {
-                    scanfilter.setManufacturerData(0, btFilter.manufacData, btFilter.manufacDataMask);
-                } else {
-                    scanfilter.setManufacturerData(0, btFilter.manufacData);
+                byte[] trimmed = Arrays.copyOfRange(btFilter.manufacData, 2, btFilter.manufacData.length);
+                int companyIdentifier = (btFilter.manufacData[0] & 0xff) | ((btFilter.manufacData[1] & 0xff) << 8);
+                Log.d(TAG, "str: " + companyIdentifier);
+                try {
+                    if (btFilter.manufacDataMask != null) {
+                        scanfilter.setManufacturerData(0, btFilter.manufacData, btFilter.manufacDataMask);
+                    } else {
+                        scanfilter.setManufacturerData(companyIdentifier, trimmed);
+                    }
+                } catch (Exception e) {
+                    return Pak.Error.UNDEFINED;
                 }
             }
             builder.setScanFilter(scanfilter.build());
@@ -395,31 +511,24 @@ public class Bluetooth {
 
             @Override
             public void onFailure(CharSequence error) {
-                Log.d(TAG, "association failure");
-                returnCode = Pak.Error.UNIMPLEMENTED;
+                scanCallback.onFailure("association failure");
+                returnCode = Pak.Error.NON_FATAL;
                 waitForCallback.release();
             }
             @Override
             public void onDeviceFound(IntentSender intentSender) {
                 super.onDeviceFound(intentSender);
-                Log.d(TAG, "device found\n");
+                Log.d(TAG, "device found: " + intentSender);
                 try {
                     Pak.startActivityForResult(intentSender);
                     waitForActivity = true;
                 } catch (Exception e) {
-                    returnCode = Pak.Error.UNIMPLEMENTED;
+                    Log.d(TAG, e.getMessage());
+                    returnCode = Pak.Error.NON_FATAL;
+                    return;
                 }
+
                 waitForCallback.release();
-            }
-            @Override
-            public void onAssociationCreated(AssociationInfo associationInfo) {
-                super.onAssociationCreated(associationInfo);
-                returnCode = Pak.Error.UNIMPLEMENTED;
-                waitForCallback.release();
-            }
-            @Override
-            public void onAssociationPending(IntentSender intentSender) {
-                super.onAssociationPending(intentSender);
             }
         }
 
@@ -433,12 +542,24 @@ public class Bluetooth {
         }
         if (callback.waitForActivity) {
             Pak.waitForActivityResult();
+            if (Pak.lastIntent != null) {
+                Log.d(TAG, "found device");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    AssociationInfo associationInfo = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
+                    Log.d(TAG, String.format("association: %d", associationInfo.hashCode()));
+                }
+                ScanResult result = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
+                if (result != null) {
+                    scanCallback.onFound(new Bluetooth.Device(getDefaultAdapter(), result.getDevice()));
+                }
+            }
         }
 
         return callback.returnCode;
     }
 
-    public void enableBluetoothDialog(Context ctx) {
+    public static void enableBluetoothDialog() {
         Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+        Pak.startActivity(intent);
     }
 }

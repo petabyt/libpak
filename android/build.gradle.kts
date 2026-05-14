@@ -33,6 +33,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.annotation.jvm)
     testImplementation(libs.junit)
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
 }

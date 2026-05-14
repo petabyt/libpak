@@ -156,7 +156,7 @@ int exif_start(struct ExifParser *c, unsigned int *of) {
 	return -1;
 }
 
-int exif_start_raw(struct ExifParser *c, const uint8_t *buf, unsigned int length, get_additional_bytes *get_more, void *arg) {
+int exif_start_raw(struct ExifParser *c, uint8_t *buf, unsigned int length, get_additional_bytes *get_more, void *arg) {
 	memset(c, 0, sizeof(*c));
 	c->buf = buf;
 	c->length = length;

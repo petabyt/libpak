@@ -1,5 +1,14 @@
+#include <stdlib.h>
 #include <jni.h>
 #include <wifi.h>
+#include "ndk.h"
+
+int android_setsocknetwork(jlong handle, int fd);
+
+struct PakWiFiAdapterPriv {
+	jobject network_o;
+	jlong network_handle;
+};
 
 struct PakNet *pak_net_get_context(void) {
 	return NULL;
@@ -10,24 +19,50 @@ void pak_net_unref_context(struct PakNet *ctx) {
 }
 
 int pak_wifi_get_n_adapters(struct PakNet *ctx) {
+	return 1;
+}
 
+int pak_wifi_adapter_from_jobject(JNIEnv *env, struct PakWiFiAdapter *adapter, jobject wifi_adapter) {
+	(*env)->PushLocalFrame(env, 10);
+	jclass adapter_c = (*env)->FindClass(env, "dev/danielc/libpak/WiFi$Adapter");
+	jobject net_o = (*env)->GetObjectField(env, wifi_adapter, (*env)->GetFieldID(env, adapter_c, "net", "Landroid/net/Network;"));
+	jlong handle = (*env)->GetLongField(env, wifi_adapter, (*env)->GetFieldID(env, adapter_c, "handle", "J"));
+
+	adapter->priv = calloc(1, sizeof(struct PakWiFiAdapterPriv));
+	adapter->priv->network_handle = handle;
+	adapter->priv->network_o = (*env)->NewGlobalRef(env, net_o);
+
+	(*env)->PopLocalFrame(env, NULL);
+	return 0;
 }
 
 int pak_wifi_get_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int index) {
+	if (index != 0 && index != -1) return -1;
+	JNIEnv *env = get_jni_env();
+	(*env)->PushLocalFrame(env, 10);
 
+	jclass wifi_c = (*env)->FindClass(env, "dev/danielc/libpak/WiFi");
+	jobject adapter_o = (*env)->CallStaticObjectMethod(env, wifi_c, (*env)->GetStaticMethodID(env, wifi_c, "getPrimaryAdapter", "()Ldev/danielc/libpak/WiFi$Adapter;"));
+	pak_wifi_adapter_from_jobject(env, adapter, adapter_o);
+
+	(*env)->PopLocalFrame(env, NULL);
+	return 0;
 }
 int pak_wifi_unref_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {
-
+	JNIEnv *env = get_jni_env();
+	(*env)->DeleteGlobalRef(env, adapter->priv->network_o);
+	free(adapter->priv);
+	return -1;
 }
 
 /// Bind a socket file descriptor to a network adapter
 int pak_wifi_bind_socket_to_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int fd) {
-
+	return android_setsocknetwork(adapter->priv->network_handle, fd);
 }
 
 /// Request the adapter to perform a scan (roam)
 int pak_wifi_request_scan(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {
-
+	return -1;
 }
 
 int pak_wifi_get_n_aps(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {

@@ -1,9 +1,9 @@
 #include <stdint.h>
 
-typedef uint8_t *get_additional_bytes(void *arg, const uint8_t *buffer, unsigned int old_len, unsigned int last_len);
+typedef uint8_t *get_additional_bytes(void *arg, uint8_t *buffer, unsigned int old_len, unsigned int last_len);
 
 struct ExifParser {
-	const uint8_t *buf;
+	uint8_t *buf;
 	unsigned int length;
 	unsigned int exif_start;
 	void *arg;
@@ -13,4 +13,4 @@ struct ExifParser {
 	unsigned int thumb_size;
 };
 
-int exif_start_raw(struct ExifParser *c, const uint8_t *buf, unsigned int length, get_additional_bytes *get_more, void *arg);
+int exif_start_raw(struct ExifParser *c, uint8_t *buf, unsigned int length, get_additional_bytes *get_more, void *arg);

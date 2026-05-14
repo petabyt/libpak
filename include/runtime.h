@@ -109,24 +109,18 @@ struct PakUserSetting {
 };
 
 enum PakTransport {
-	/// Bluetooth low energy
-	PAK_BLE = 1,
-	/// Bluetooth classic
-	PAK_BTC = 2,
+	/// Bluetooth classic and low-energy
+	PAK_BLUETOOTH = 1,
 	/// USB host access
-	PAK_USB = 3,
+	PAK_USB = 2,
+	/// Connect to a WiFi access point
+	PAK_WIFI_AP = 3,
 	/// Become a USB device
 	PAK_USB_DEVICE_MODE = 4,
-	/// Connect to a WiFi access point
-	PAK_WIFI_AP = 5,
 	/// Host an access point (hotspot) for something to connect to
-	PAK_HOST_WIFI_AP = 6,
-	/// Listen to local network over UPnP
-	PAK_LOCAL_NETWORK_UPNP_LISTEN = 7,
-	/// Broadcast datagram over local network
-	PAK_LOCAL_NETWORK_UPNP_BROADCAST = 8,
-	/// Connect to something over the internet
-	PAK_INTERNET = 9,
+	PAK_HOST_WIFI_AP = 5,
+	/// Listen to/broadcast on local network, or connect over internet
+	PAK_INTERNET = 6,
 };
 
 enum Screen {
@@ -262,6 +256,8 @@ void pak_debug_log(struct Module *mod, const char *fmt, ...);
 struct FileMetadata *pak_rt_get_metadata(struct Module *mod, struct FileHandle *file);
 /// Release metadata
 void pak_rt_release_metadata(struct Module *mod, struct FileMetadata *md);
+/// Get option name that was selected during setup, NULL if none selected
+const char *pak_rt_get_setup_option(struct Module *mod);
 
 // debug stuff
 struct Module *pak_create_mod(void);

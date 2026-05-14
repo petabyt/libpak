@@ -23,6 +23,7 @@ public class Pak {
     public static PermissionRequester requester = null;
     private static Semaphore perm = new Semaphore(0, true);
     private static int permissionResult = 0;
+    static Intent lastIntent = null;
 
     public static class PermissionRequester {
         void permissionRequested(String permission) {
@@ -44,7 +45,7 @@ public class Pak {
     }
 
     public static void startActivity(Intent intent) {
-
+        Pak.getActivity().startActivity(intent);
     }
 
     public static void onPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -53,8 +54,9 @@ public class Pak {
         perm.release();
     }
 
-    public static void onActivityResult(int requestCode, int resultCode) {
+    public static void onActivityResult(int requestCode, int resultCode, Intent data) {
         Log.d(TAG, "onActivityResult");
+        lastIntent = data;
         perm.release();
     }
 
@@ -102,5 +104,7 @@ public class Pak {
         public static final int UNIMPLEMENTED = -6;
         public static final int DISCONNECTED = -7;
         public static final int NO_CONNECTION = -8;
+        public static final int CANCELLED = -9;
+        public static final int DEFERRED = -10;
     }
 }

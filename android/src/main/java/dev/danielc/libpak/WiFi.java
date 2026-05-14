@@ -33,12 +33,28 @@ import android.util.Log;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiInfo;
 
+import androidx.annotation.NonNull;
+
 import java.lang.reflect.Method;
 import java.util.concurrent.Executor;
 import java.util.regex.Pattern;
 
 public class WiFi {
     public static final String TAG = "wifi";
+
+    public static class Adapter {
+        Adapter(Network net) {
+            this.net = net;
+            this.handle = net.getNetworkHandle();
+        }
+        Network net;
+        long handle;
+    }
+
+    public static Adapter getPrimaryAdapter() {
+        if (primaryNetworkDevice == null) return null;
+        return new Adapter(primaryNetworkDevice);
+    }
 
     public static class ApFilter {
         public ApFilter() {
@@ -60,32 +76,35 @@ public class WiFi {
         WiFi.cm = cm;
     }
 
+    public static boolean isWiFiEnabled() {
+        WifiManager wifiMgr = (WifiManager) Pak.getActivity().getSystemService(Context.WIFI_SERVICE);
+        return wifiMgr.isWifiEnabled();
+    }
+
     static Network primaryNetworkDevice = null;
     static Network lastFoundWiFiDevice = null;
 
     public static abstract class WiFiDiscoveryCallback {
-        public abstract void found(Network net);
-        public abstract void failed(String reason, int code);
+        public abstract void found(@NonNull Adapter net);
+        public abstract void failed(@NonNull String reason, int code);
     }
 
-    public static class NativeWiFiDiscoveryCallback {
+    public static class NativeWiFiDiscoveryCallback extends WiFiDiscoveryCallback {
         byte[] struct;
-        native void found(Network net);
-        native void failed(String reason, int code);
+        @Override
+        public native void found(@NonNull Adapter net);
+        @Override
+        public native void failed(@NonNull String reason, int code);
     }
-
-    ConnectivityManager.NetworkCallback lastCallback = null;
 
     /** Opens an Android 10+ popup to prompt the user to select a WiFi network */
-    public int connectToAccessPoint(Context ctx, ApFilter filter, WiFiDiscoveryCallback callback) {
+    public static int connectToAccessPoint(ApFilter filter, WiFiDiscoveryCallback callback) {
+        Context ctx = Pak.getActivity();
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
             return Pak.Error.UNSUPPORTED;
         }
 
         ConnectivityManager connectivityManager = (ConnectivityManager)ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (lastCallback != null) {
-            connectivityManager.unregisterNetworkCallback(lastCallback);
-        }
 
         WifiNetworkSpecifier.Builder builder = new WifiNetworkSpecifier.Builder();
         builder.setSsidPattern(new PatternMatcher(filter.ssidPattern, PatternMatcher.PATTERN_ADVANCED_GLOB));
@@ -103,20 +122,23 @@ public class WiFi {
 
         ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
             @Override
-            public void onAvailable(Network network) {
+            public void onAvailable(@NonNull Network network) {
                 lastFoundWiFiDevice = network;
-                callback.found(network);
+                callback.found(new Adapter(network));
+                connectivityManager.unregisterNetworkCallback(this);
             }
             @Override
             public void onUnavailable() {
                 callback.failed("Access point not selected by user", -1);
             }
             @Override
-            public void onCapabilitiesChanged(Network network, NetworkCapabilities networkCapabilities) {
+            public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
                 Log.e(TAG, "capabilities changed");
             }
         };
-        connectivityManager.requestNetwork(request, lastCallback);
+        // Stock Android seems to cut off the dialog at 30s and never calls onUnavailable,
+        // so set the time limit a bit short of that to try and make sure onUnavailable gets called
+        connectivityManager.requestNetwork(request, networkCallback, 25000);
         return 0;
     }
 
@@ -150,7 +172,7 @@ public class WiFi {
             // Called when a device is found. Launch the IntentSender so the user can
             // select the device they want to pair with.
             @Override
-            public void onDeviceFound(IntentSender chooserLauncher) {
+            public void onDeviceFound(@NonNull IntentSender chooserLauncher) {
                 Log.d(TAG, "Device found");
                 try {
                     ((Activity)ctx).startIntentSenderForResult(chooserLauncher, 1001, null, 0, 0, 0);
@@ -166,7 +188,7 @@ public class WiFi {
             }
 
             @Override
-            public void onAssociationCreated(AssociationInfo associationInfo) {
+            public void onAssociationCreated(@NonNull AssociationInfo associationInfo) {
                 Log.d(TAG, "Association created");
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     int uniqueId = associationInfo.getId();
@@ -185,7 +207,7 @@ public class WiFi {
     }
 
     /// Start listener to obtain primary network (internet access) handle
-    public void startNetworkListeners(Context ctx) {
+    public static void startNetworkListeners(Context ctx) {
         ConnectivityManager m = (ConnectivityManager)ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkRequest.Builder requestBuilder = new NetworkRequest.Builder();
         requestBuilder.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
@@ -197,7 +219,7 @@ public class WiFi {
                 primaryNetworkDevice = network;
             }
             @Override
-            public void onLost(Network network) {
+            public void onLost(@NonNull Network network) {
                 Log.e(TAG, "Lost network\n");
                 primaryNetworkDevice = null;
             }
@@ -207,7 +229,7 @@ public class WiFi {
                 primaryNetworkDevice = null;
             }
             @Override
-            public void onCapabilitiesChanged(Network network, NetworkCapabilities networkCapabilities) {
+            public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
                 Log.e(TAG, "capabilities changed");
             }
         };

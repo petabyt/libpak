@@ -22,6 +22,10 @@ enum PakErrorCode {
 	PAK_ERR_DISCONNECTED = -7,
 	/// Unable to establish connection
 	PAK_ERR_NO_CONNECTION = -8,
+	/// Operation was cancelled and was not finished
+	PAK_ERR_CANCELLED = -9,
+	/// Operation has not completed yet
+	PAK_ERR_DEFERRED = -10,
 };
 
 /// Runs main loop that supports callbacks

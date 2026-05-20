@@ -11,6 +11,13 @@ export class BufferReader {
 		this.arrayBuffer = buf.buffer;
 	}
 
+	setSize(n: number) {
+		let newbuffer = new Uint8Array(n);
+		newbuffer.set(this.buffer);
+		this.buffer = newbuffer;
+		this.arrayBuffer = this.buffer.buffer;
+	}
+
 	private chk(o: number, n: number) {
 		if (o + n > this.buffer.length) {
 			throw new RangeError("offset");
@@ -60,12 +67,16 @@ export class BufferWriter {
 		this.offset = 0x0;
 	}
 
+	setSize(n: number) {
+		let newbuffer = new Uint8Array(n);
+		newbuffer.set(this.buffer);
+		this.buffer = newbuffer;
+		this.arrayBuffer = this.buffer.buffer;
+	}
+
 	private chk(o: number, n: number) {
 		if (o + n > this.buffer.length) {
-			let newbuffer = new Uint8Array(this.buffer.length);
-			newbuffer.set(this.buffer);
-			this.buffer = newbuffer;
-			this.arrayBuffer = this.buffer.buffer;
+			setSize(o + n);
 		}
 	}
 
@@ -102,5 +113,14 @@ export class BufferWriter {
 
 	addString(s: string, nullTerminate = false) {
 		this.offset += this.setString(this.offset, s, nullTerminate);
+	}
+
+	toString() {
+		let s = "";
+		for (let i = 0; i < this.offset; i++) {
+			if (this.buffer[i] == 13) continue;
+			s += String.fromCharCode(this.buffer[i]);
+		}
+		return s;
 	}
 }

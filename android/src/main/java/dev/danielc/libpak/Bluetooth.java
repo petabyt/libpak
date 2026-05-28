@@ -9,6 +9,7 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
@@ -25,7 +26,6 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 
@@ -190,7 +190,6 @@ public class Bluetooth {
             }
         }
 
-        //@SuppressLint("MissingPermission")
         public BluetoothSocket connectToServiceChannel(String uuid) throws Exception {
             UUID u = findServiceUuid(uuid);
             if (u == null) {
@@ -225,10 +224,6 @@ public class Bluetooth {
             try {
                 gatt = dev.connectGatt(ctx, false, callback);
                 this.callback = callback;
-//                if (!gatt.connect()) {
-//                    Log.d(TAG, "gatt.connect() fail");
-//                    return Pak.Error.NO_CONNECTION;
-//                }
                 synchronized (callback.connectSignal) {
                     callback.connectSignal.wait(5000);
                 }
@@ -336,7 +331,7 @@ public class Bluetooth {
                 this.value = value;
             }
         }
-        final private HashSet<CachedCharUpdates> cachedUpdates = new HashSet();
+        final private HashSet<CachedCharUpdates> cachedUpdates = new HashSet<>();
         public CachedCharUpdates checkCachedUpdate(BluetoothGattCharacteristic chr, boolean clear) {
             for (CachedCharUpdates e: cachedUpdates) {
                 if (e.chr.equals(chr)) {
@@ -350,29 +345,30 @@ public class Bluetooth {
             this.device = device;
         }
 
-        static final int EVENT_CONNECTION_STATE_CHANGED = 1;
-        static final int EVENT_CONNECTED = 2;
-        static final int EVENT_DISCONNECTED = 3;
-        static final int EVENT_GATT_UUID_WRITTEN = 4;
-        static final int EVENT_GATT_UUID_READ = 5;
-        static final int EVENT_DEVICE_PAIRED = 6;
-        static final int EVENT_DEVICE_UNPAIRED = 7;
+        static final int EVENT_CONNECTED = 1;
+        static final int EVENT_DISCONNECTED = 2;
+        static final int EVENT_GATT_UUID_WRITTEN = 3;
+        static final int EVENT_GATT_UUID_READ = 4;
+        static final int EVENT_GATT_UUID_CHANGED = 5;
         public abstract void onEvent(int code, BluetoothGattCharacteristic characteristic);
 
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            onEvent(EVENT_CONNECTION_STATE_CHANGED, null);
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+                onEvent(EVENT_CONNECTED, null);
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                onEvent(EVENT_DISCONNECTED, null);
+            }
             synchronized (connectSignal) {
                 connectSignal.notify();
             }
         }
-
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            if (status != BluetoothGatt.GATT_SUCCESS) Log.d(TAG, "onServicesDiscovered reports failure");
             synchronized (gattServicesDiscovered) {
                 gattServicesDiscovered.notify();
             }
-            //if (status == BluetoothGatt.GATT_SUCCESS) {}
         }
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
@@ -396,10 +392,15 @@ public class Bluetooth {
             synchronized (gattCharacteristicChanged) {
                 gattCharacteristicChanged.notify();
             }
+            onEvent(EVENT_GATT_UUID_CHANGED, characteristic);
         }
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-
+            super.onDescriptorRead(gatt, descriptor, status);
+        }
+        @Override
+        public void onDescriptorRead(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+            super.onDescriptorRead(gatt, descriptor, status);
         }
     }
 
@@ -410,24 +411,6 @@ public class Bluetooth {
         public String[] serviceUuids;
         public byte[] manufacData;
         public byte[] manufacDataMask;
-    }
-
-    public static void init(Context ctx) {
-//        BroadcastReceiver receiver = new BroadcastReceiver() {
-//            @SuppressLint("MissingPermission")
-//            @Override
-//            public void onReceive(Context context, Intent intent) {
-//                String action = intent.getAction();
-//                Log.d("bt-action", action);
-//            }
-//        };
-//        IntentFilter filter = new IntentFilter();
-//        filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
-//        filter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
-//        filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
-//        filter.addAction(BluetoothDevice.ACTION_UUID);
-//        filter.addAction(BluetoothDevice.ACTION_FOUND);
-//        ctx.registerReceiver(receiver, filter);
     }
 
     public static abstract class ScanCallback {
@@ -516,7 +499,7 @@ public class Bluetooth {
                 waitForCallback.release();
             }
             @Override
-            public void onDeviceFound(IntentSender intentSender) {
+            public void onDeviceFound(@NonNull IntentSender intentSender) {
                 super.onDeviceFound(intentSender);
                 Log.d(TAG, "device found: " + intentSender);
                 try {
@@ -558,7 +541,7 @@ public class Bluetooth {
         return callback.returnCode;
     }
 
-    public static void enableBluetoothDialog() {
+    public static void openEnableBluetoothDialog() {
         Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
         Pak.startActivity(intent);
     }

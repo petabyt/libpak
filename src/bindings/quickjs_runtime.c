@@ -6,6 +6,7 @@
 #include <runtime.h>
 
 #include "buffer_js.h"
+#include "http_js.h"
 
 JSModuleDef *js_init_module_socket(JSContext *ctx, const char *module_name);
 JSModuleDef *js_init_module_wifi(JSContext *ctx, const char *module_name);
@@ -231,6 +232,9 @@ static JSModuleDef *my_module_loader(JSContext *ctx, const char *module_name, vo
 	if (!strcmp(module_name, "pak:buffer")) {
 		buf = buffer_js;
 		buf_len = buffer_js_len;
+	} else if (!strcmp(module_name, "pak:http")) {
+		buf = http_js;
+		buf_len = http_js_len;
 	} else {
 		buf = js_load_file(ctx, &buf_len, module_name);
 		if (!buf) {
@@ -240,6 +244,9 @@ static JSModuleDef *my_module_loader(JSContext *ctx, const char *module_name, vo
 		}
 		is_allocated = 1;
 	}
+
+	// buf is required to be null terminated, assume file has endline
+	buf[buf_len - 1] = '\0'; buf_len--;
 
 	JSValue func_val;
 	/* compile the module */
@@ -291,9 +298,19 @@ int setup_quickjs_module(struct Module **mod, const char *filename) {
 
 	JSValue val = JS_Eval(ctx, buffer, file_size, filename, JS_EVAL_TYPE_MODULE);
 	if (JS_IsException(val)) {
-		const char *str = JS_ToCString(ctx, val);
-		printf("JS error: %s\n", str);
-		JS_FreeCString(ctx, str);
+		js_std_dump_error(ctx);
+//		JSValue stack = JS_GetPropertyStr(ctx, val, "stack");
+//		if (!JS_IsUndefined(stack)) {
+//			const char *str = JS_ToCString(ctx, stack);
+//			if (str) {
+//				printf("%s\n", str);
+//				JS_FreeCString(ctx, str);
+//			}
+//			JS_FreeValue(ctx, stack);
+//		} else {
+//			js_std_cmd(/*ErrorBackTrace*/2, ctx, &val);
+//			printf("JS Exception\n");
+//		}
 		return -1;
 	}
 

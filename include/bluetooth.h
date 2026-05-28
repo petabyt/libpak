@@ -18,13 +18,12 @@ void pak_bt_unref_context(struct PakBt *ctx);
 int pak_bt_is_enabled(struct PakBt *ctx);
 
 enum PakBtEvent {
-	PAK_BT_EVENT_CONNECTION_STATE_CHANGED = 1,
-	PAK_BT_EVENT_CONNECTED,
-	PAK_BT_EVENT_DISCONNECTED,
-	PAK_BT_EVENT_GATT_UUID_WRITTEN,
-	PAK_BT_EVENT_GATT_UUID_READ,
-	PAK_BT_EVENT_DEVICE_PAIRED,
-	PAK_BT_EVENT_DEVICE_UNPAIRED,
+	PAK_BT_EVENT_CONNECTED = 1,
+	PAK_BT_EVENT_DISCONNECTED = 2,
+	PAK_BT_EVENT_GATT_CHAR_WRITTEN = 3,
+	PAK_BT_EVENT_GATT_CHAR_READ = 4,
+	PAK_BT_EVENT_GATT_CHAR_CHANGED = 5,
+	PAK_BT_EVENT_GATT_DESC_WRITTEN = 6,
 };
 
 enum PakBtFeature {
@@ -87,7 +86,7 @@ int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device);
 int pak_bt_device_update(struct PakBt *ctx, struct PakBtDevice *dev);
 
 /// Use generic API to read battery level
-int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int *percent);
+//int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int *percent);
 
 /// Establish connection with a bluetooth device for this context
 int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device);
@@ -95,6 +94,8 @@ int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device);
 int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device);
 
 int pak_bt_device_pair(struct PakBt *ctx, struct PakBtDevice *device);
+
+unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max);
 
 struct PakGattService {
 	struct PakGattServicePriv *priv;

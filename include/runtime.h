@@ -80,11 +80,13 @@ struct PakUserSetting {
 	const char *name;
 	const char *title;
 	enum SettingType {
+		PAK_BUTTON = 0,
 		PAK_BOOLEAN,
 		PAK_INT,
 		PAK_SLIDER,
 		PAK_STRING,
 		PAK_DROPDOWN,
+		PAK_GRAPH,
 	}type;
 	union SettingUnion {
 		struct SettingBoolean {
@@ -105,6 +107,12 @@ struct PakUserSetting {
 			const char **list;
 			int index_value;
 		}dropdownv;
+		struct SettingGraph {
+			const char *x_axis_name;
+			const char *y_axis_name;
+			int n_points;
+			int *points;
+		}graphv;
 	}u;
 };
 
@@ -223,7 +231,7 @@ int pak_rt_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void 
 /// Submit contents for a file for the user to view or download
 int pak_rt_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length, int is_partial);
 /// Registers a setting that is displayed in the UI and can be modified by the user
-int pak_rt_add_user_setting(struct Module *mod, const struct PakUserSetting *s);
+int pak_rt_set_dashboard_pane(struct Module *mod, const struct PakUserSetting *s);
 /// Returns true if user requested to cancel the job.
 int pak_rt_is_job_cancelled(struct Module *mod, int job);
 /// Fatal error, all no more jobs will be issued
@@ -243,6 +251,7 @@ int pak_rt_set_download_stats(struct Module *mod, int job, long time, unsigned i
 int pak_rt_set_device_unique_id(struct Module *mod, const char *string);
 /// Report device information to the UI
 int pak_rt_set_session_property(struct Module *mod, const char *key, const char *value);
+int pak_rt_set_session_property_int(struct Module *mod, const char *key, int value);
 /// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
 int pak_rt_disconnect(struct Module *mod, const char *reason);
 /// Set the tick interval in microseconds

@@ -24,6 +24,10 @@ mod:
 build:
 	cmake -G Ninja -B build -DPAK_INCLUDE_TEST=ON
 
+js:
+	cd src/typescript && esbuild --format=esm --external:pak:wifi --bundle src/buffer.ts | xxd -i -n buffer_js > ../bindings/buffer_js.h
+	xxd -i -n http_js src/typescript/src/http.js > src/bindings/http_js.h
+
 list:
 	dbus-send --system      --print-reply   --dest=org.bluez        /       org.freedesktop.DBus.ObjectManager.GetManagedObjects
 

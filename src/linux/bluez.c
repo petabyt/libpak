@@ -42,7 +42,7 @@ struct PakGattCharacteristicPriv {
 };
 
 static int pak_str_to_uuid128(const char *str, uint8_t copy[16]) {
-	int32_t v[16];
+	uint32_t v[16];
 	if (sscanf(str, "%2x%2x%2x%2x-%2x%2x-%2x%2x-%2x%2x-%2x%2x%2x%2x%2x%2x",
 			&v[0], &v[1], &v[2], &v[3],
 			&v[4], &v[5],
@@ -129,6 +129,7 @@ struct PakBt *pak_bt_get_context(void) {
 static int get_bluez_bool_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, dbus_bool_t *v) {
 	DBusMessage *resp;
 	int rc = get_dbus_property(conn, "org.bluez", path, iface, prop, &resp);
+	if (rc) return rc;
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
@@ -143,6 +144,7 @@ static int get_bluez_bool_property(DBusConnection *conn, const char *path, const
 
 static int get_bluez_string_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, const char **v, DBusMessage **resp) {
 	int rc = get_dbus_property(conn, "org.bluez", path, iface, prop, resp);
+	if (rc) return rc;
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
@@ -365,13 +367,13 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 			struct DBusMessageIter dict3;
 			dbus_message_iter_recurse(&dict2, &dict3);
 
-			int i = 0;
+			int y = 0;
 			while (dbus_message_iter_get_arg_type(&dict3) != DBUS_TYPE_INVALID) {
 				const char *uuid = NULL;
 				dbus_message_iter_get_basic(&dict3, &uuid);
-				strlcpy(dev->uuids.uuids[i], uuid, UUID_STR_LENGTH);
+				strlcpy(dev->uuids.uuids[y], uuid, UUID_STR_LENGTH);
 				dbus_message_iter_next(&dict3);
-				i++;
+				y++;
 			}
 		} else if (!strcmp(name, "Class")) {
 			uint32_t v;
@@ -539,7 +541,6 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
 				service->priv = (struct PakGattServicePriv *)alloc_priv(sizeof(struct PakGattServicePriv), path);
 
 				const char *uuid;
-				uint16_t handle;
 				if (find_dict(&adapter_dict, "UUID", &val_dict)) return -1;
 				dbus_message_iter_recurse(&val_dict, &val_dict2);
 				dbus_message_iter_get_basic(&val_dict2, &uuid);
@@ -565,7 +566,6 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
 				characteristic->priv = (struct PakGattCharacteristicPriv *)alloc_priv(sizeof(struct PakGattCharacteristicPriv), path);
 
 				const char *uuid;
-				uint16_t handle;
 				if (find_dict(&adapter_dict, "UUID", &val_dict)) return -1;
 				dbus_message_iter_recurse(&val_dict, &val_dict2);
 				dbus_message_iter_get_basic(&val_dict2, &uuid);

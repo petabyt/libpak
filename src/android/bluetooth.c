@@ -386,6 +386,19 @@ unsigned int pak_bt_read_characteristic_cached_value(struct PakBt *ctx, struct P
 	(*env)->PushLocalFrame(env, 10);
 	jmethodID read_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "getCachedValue", "(Landroid/bluetooth/BluetoothGattCharacteristic;)[B");
 	jbyteArray data = (*env)->CallObjectMethod(env, characteristic->priv->device->priv->device, read_m, characteristic->priv->obj);
+	if (data == NULL) { (*env)->PopLocalFrame(env, NULL); return 0; }
+	jsize len = (*env)->GetArrayLength(env, data);
+	(*env)->GetByteArrayRegion(env, data, 0, (jsize)max < len ? (jsize)max : len, (jbyte *)buffer);
+	(*env)->PopLocalFrame(env, NULL);
+	return (unsigned int)len;
+}
+
+unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max) {
+	JNIEnv *env = get_jni_env();
+	(*env)->PushLocalFrame(env, 10);
+	jmethodID read_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "getManufacturerData", "(I)[B");
+	jbyteArray data = (*env)->CallObjectMethod(env, device->priv->device, read_m, index);
+	if (data == NULL) { (*env)->PopLocalFrame(env, NULL); return 0; }
 	jsize len = (*env)->GetArrayLength(env, data);
 	(*env)->GetByteArrayRegion(env, data, 0, (jsize)max < len ? (jsize)max : len, (jbyte *)buffer);
 	(*env)->PopLocalFrame(env, NULL);

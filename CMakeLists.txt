@@ -80,6 +80,10 @@ elseif(LINUX)
 	endif()
 endif()
 
+target_compile_options(pak
+    PRIVATE -Wall -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Werror=incompatible-pointer-types -Werror=deprecated-declarations -Wstrict-aliasing=3 -Werror=narrowing -Wno-unused-function
+		-Wno-unused-parameter
+)
 target_include_directories(pak
 	PUBLIC
 	${PROJECT_SOURCE_DIR}/include

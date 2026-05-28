@@ -1,12 +1,12 @@
 // https://www.media.mit.edu/pia/Research/deepview/exif.html
 #include <assert.h>
 #include <stdio.h>
-#include <stdlib.h>
+//#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <runtime_ext.h>
 
-static inline unsigned int read_be_u32(const void *b, uint32_t *o) {
+static inline unsigned int read_be_u32(void *b, uint32_t *o) {
 	uint32_t x = ((uint32_t *)b)[0];
 	*o = ((x & 0x000000FF) << 24) |
 		 ((x & 0x0000FF00) << 8)  |
@@ -15,19 +15,19 @@ static inline unsigned int read_be_u32(const void *b, uint32_t *o) {
 	return 4;
 }
 
-static inline unsigned int read_be_u16(const void *b, uint16_t *o) {
+static inline unsigned int read_be_u16(void *b, uint16_t *o) {
 	uint16_t x = ((uint16_t *)b)[0];
 	*o = ((x & 0x00FF) << 8) |
 		 ((x & 0xFF00) >> 8);
 	return 2;
 }
 
-static inline unsigned int read_u32(const void *b, uint32_t *o) {
+static inline unsigned int read_u32(void *b, uint32_t *o) {
 	*o = (((uint32_t *)b)[0]);
 	return 4;
 }
 
-static inline unsigned int read_u16(const void *b, uint16_t *o) {
+static inline unsigned int read_u16(void *b, uint16_t *o) {
 	*o = (((uint16_t *)b)[0]);
 	return 2;
 }
@@ -105,7 +105,7 @@ int exif_parse_ifd(struct ExifParser *c, unsigned int *of) {
 
 int exif_start_entries(struct ExifParser *c, unsigned int *of) {
 	uint32_t offset;
-	uint16_t order, version, entries;
+	uint16_t order, version;
 	(*of) += read_be_u16(c->buf + (*of), &order);
 
 	(*of) += read_u16(c->buf + (*of), &version);

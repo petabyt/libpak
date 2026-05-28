@@ -214,7 +214,6 @@ int pak_wifi_get_n_adapters(struct PakNet *ctx) {
 		const char *path = NULL;
 		dbus_message_iter_get_basic(&dict, &path);
 		if (path == NULL) abort();
-		DBusMessage *tempresp;
 		if (is_usable_adapter(ctx->conn, path)) count++;
 		dbus_message_iter_next(&dict);
 	}
@@ -341,7 +340,6 @@ int pak_wifi_get_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct P
 	dbus_message_iter_recurse(&subargs, &dict);
 	int len = dbus_message_iter_get_element_count(&subargs);
 
-	int current_type;
 	for (int i = 0; i < len; i++) {
 		if (dbus_message_iter_get_arg_type(&dict) != DBUS_TYPE_OBJECT_PATH) return -1;
 		const char *path = NULL;
@@ -401,8 +399,6 @@ int pak_wifi_is_enabled(struct PakNet *ctx) {
 }
 
 int pak_wifi_request_scan(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {
-	DBusConnection *conn = get_dbus_system();
-
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", adapter->priv->path, "org.freedesktop.NetworkManager.Device.Wireless", "RequestScan");
@@ -577,7 +573,6 @@ static int find_existing_connection(DBusConnection *conn, struct PakWiFiAdapter 
 	DBusMessageIter dict;
 	dbus_message_iter_recurse(&subargs, &dict);
 	int current_type;
-	int i = 0;
 	while ((current_type = dbus_message_iter_get_arg_type(&dict)) != DBUS_TYPE_INVALID) {
 		const char *path = NULL;
 		dbus_message_iter_get_basic(&dict, &path);

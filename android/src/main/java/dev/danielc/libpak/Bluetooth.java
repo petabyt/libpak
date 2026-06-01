@@ -104,17 +104,22 @@ public class Bluetooth {
         @NonNull public final BluetoothAdapter adapter;
         @NonNull public final BluetoothDevice dev;
         @NonNull public final String name;
+        public ScanResult scanResult = null;
         public ParcelUuid[] serviceUuids;
         public BluetoothGatt gatt = null;
         BroadcastReceiver receiver = null;
         MyBluetoothGattCallback callback = null;
 
         @SuppressLint("MissingPermission")
-        Device(@NonNull BluetoothAdapter adapter, BluetoothDevice dev) {
+        Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev) {
             this.adapter = adapter;
             this.dev = dev;
             this.name = dev.getName();
             this.serviceUuids = dev.getUuids();
+        }
+        Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev, @NonNull ScanResult scanResult) {
+            this(adapter, dev);
+            this.scanResult = scanResult;
         }
 
         public boolean isBonded() {
@@ -125,8 +130,23 @@ public class Bluetooth {
             }
         }
 
+        public byte[] getManufacturerData(int index) {
+            if (scanResult == null) return null;
+            try {
+                byte[] val = scanResult.getScanRecord().getManufacturerSpecificData().valueAt(index);
+                int mfgId = scanResult.getScanRecord().getManufacturerSpecificData().keyAt(index);
+                byte[] newBuf = new byte[val.length + 2];
+                newBuf[0] = (byte)((mfgId >> 8) & 0xff);
+                newBuf[1] = (byte)(mfgId & 0xff);
+                System.arraycopy(val, 0, newBuf, 2, val.length);
+                return newBuf;
+            } catch (NullPointerException e) {
+                return null;
+            }
+        }
+
         public boolean isConnected() {
-            // This method was added in 2014 so it should be okay to use.
+            // This method was added in 2014 (probably API 21+) so it should be okay to use.
             try {
                 Method m = dev.getClass().getMethod("isConnected");
                 return (boolean)m.invoke(dev);
@@ -350,6 +370,7 @@ public class Bluetooth {
         static final int EVENT_GATT_UUID_WRITTEN = 3;
         static final int EVENT_GATT_UUID_READ = 4;
         static final int EVENT_GATT_UUID_CHANGED = 5;
+        static final int EVENT_GATT_DESC_WRITTEN = 6;
         public abstract void onEvent(int code, BluetoothGattCharacteristic characteristic);
 
         @Override
@@ -533,7 +554,7 @@ public class Bluetooth {
                 }
                 ScanResult result = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
                 if (result != null) {
-                    scanCallback.onFound(new Bluetooth.Device(getDefaultAdapter(), result.getDevice()));
+                    scanCallback.onFound(new Bluetooth.Device(getDefaultAdapter(), result.getDevice(), result));
                 }
             }
         }

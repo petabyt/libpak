@@ -200,6 +200,14 @@ int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device) {
 	return 0;
 }
 
+int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device) {
+	JNIEnv *env = get_jni_env();
+	(*env)->PushLocalFrame(env, 10);
+	(*env)->CallVoidMethod(env, device->priv->device, (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "createBond", "()V"));
+	(*env)->PopLocalFrame(env, NULL);
+	return 0;
+}
+
 int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid, struct PakBtSocket **conn) {
 	JNIEnv *env = get_jni_env();
 	(*env)->PushLocalFrame(env, 10);
@@ -422,7 +430,16 @@ int pak_bt_set_watching_characteristic(struct PakBt *ctx, struct PakGattCharacte
 	JNIEnv *env = get_jni_env();
 	(*env)->PushLocalFrame(env, 10);
 	jmethodID read_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "setNotification", "(Landroid/bluetooth/BluetoothGattCharacteristic;Z)I");
-	jint rc = (*env)->CallIntMethod(env, characteristic->priv->device->priv->device, read_m, characteristic->priv->obj, (jint)v);
+	jint rc = (*env)->CallIntMethod(env, characteristic->priv->device->priv->device, read_m, characteristic->priv->obj, v);
+	(*env)->PopLocalFrame(env, NULL);
+	return rc;
+}
+
+int pak_bt_set_cccd(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v) {
+	JNIEnv *env = get_jni_env();
+	(*env)->PushLocalFrame(env, 10);
+	jmethodID read_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "setCccd", "(Landroid/bluetooth/BluetoothGattCharacteristic;I)I");
+	jint rc = (*env)->CallIntMethod(env, characteristic->priv->device->priv->device, read_m, characteristic->priv->obj, v);
 	(*env)->PopLocalFrame(env, NULL);
 	return rc;
 }

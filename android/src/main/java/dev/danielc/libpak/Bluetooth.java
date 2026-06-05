@@ -36,11 +36,13 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.ParcelUuid;
 import android.util.Log;
+import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
 
 public class Bluetooth {
     public static final String TAG = "bt";
+    public static final boolean verbose = true;
 
     public static abstract class Listener {
         public abstract void onUpdate(Boolean bluetoothEnabled);
@@ -104,6 +106,7 @@ public class Bluetooth {
         @NonNull public final BluetoothAdapter adapter;
         @NonNull public final BluetoothDevice dev;
         @NonNull public final String name;
+        public boolean isGattConnected = false;
         public ScanResult scanResult = null;
         public ParcelUuid[] serviceUuids;
         public BluetoothGatt gatt = null;
@@ -133,12 +136,15 @@ public class Bluetooth {
         public byte[] getManufacturerData(int index) {
             if (scanResult == null) return null;
             try {
-                byte[] val = scanResult.getScanRecord().getManufacturerSpecificData().valueAt(index);
-                int mfgId = scanResult.getScanRecord().getManufacturerSpecificData().keyAt(index);
+                SparseArray<byte[]> set = scanResult.getScanRecord().getManufacturerSpecificData();
+                if (set.size() == 0) return null;
+                byte[] val = set.valueAt(index);
+                int mfgId = set.keyAt(index);
                 byte[] newBuf = new byte[val.length + 2];
-                newBuf[0] = (byte)((mfgId >> 8) & 0xff);
-                newBuf[1] = (byte)(mfgId & 0xff);
+                newBuf[0] = (byte)(mfgId & 0xff);
+                newBuf[1] = (byte)((mfgId >> 8) & 0xff);
                 System.arraycopy(val, 0, newBuf, 2, val.length);
+                if (verbose) Log.d(TAG, "mfgdata: " + Arrays.toString(newBuf));
                 return newBuf;
             } catch (NullPointerException e) {
                 return null;
@@ -164,21 +170,28 @@ public class Bluetooth {
                 public void onReceive(Context context, Intent intent) {
                     String action = intent.getAction();
                     if (action.equals(BluetoothDevice.ACTION_UUID)) {
-                        //Parcelable[] uuids = intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID);
                         serviceUuids = dev.getUuids();
                         waitForUuid.release();
-                    } else {
-                        Log.d("bt-action", action);
                     }
+                    if (action.equals(BluetoothDevice.ACTION_BOND_STATE_CHANGED)) {
+                        Log.d(TAG, "Bond state: " + dev.getBondState());
+                    }
+                    Log.d("bt-action", action);
                 }
             };
             IntentFilter filter = new IntentFilter();
+            filter.addAction(BluetoothDevice.ACTION_PAIRING_REQUEST);
             filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
             filter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
             filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
             filter.addAction(BluetoothDevice.ACTION_UUID);
-            filter.addAction(BluetoothDevice.ACTION_FOUND);
-            Pak.getActivity().registerReceiver(receiver, filter);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                filter.addAction(BluetoothDevice.ACTION_KEY_MISSING);
+                filter.addAction(BluetoothDevice.ACTION_ENCRYPTION_CHANGE);
+                Pak.getActivity().registerReceiver(receiver, filter);
+            } else {
+                Pak.getActivity().registerReceiver(receiver, filter);
+            }
         }
 
         public void closeAll() {
@@ -229,7 +242,7 @@ public class Bluetooth {
             try {
                 return gatt.getServices().get(index);
             } catch (Exception e) {
-                Log.d(TAG, e.getMessage());
+                Log.d(TAG, "getServices fail: " + e.getMessage());
                 return null;
             }
         }
@@ -240,18 +253,42 @@ public class Bluetooth {
             return connectGatt(Pak.getActivity(), callback);
         }
 
+        public void createBond() {
+            try {
+                if (dev.getBondState() == BluetoothDevice.BOND_NONE) {
+                    if (!dev.createBond()) {
+                        Log.d(TAG, "createBond");
+                    }
+                    Log.d(TAG, "Waiting for bond callback");
+                    Thread.sleep(10000);
+                }
+            } catch (SecurityException | InterruptedException ignored) {
+
+            }
+        }
+
         public int connectGatt(Context ctx, MyBluetoothGattCallback callback) {
             try {
+                setupListener();
+                //createBond();
                 gatt = dev.connectGatt(ctx, false, callback);
                 this.callback = callback;
                 synchronized (callback.connectSignal) {
                     callback.connectSignal.wait(5000);
                 }
+                if (!isGattConnected) {
+                    Log.d(TAG, "connectGatt failed after timeout");
+                    return Pak.Error.NO_CONNECTION;
+                }
+                //gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+                //gatt.setPreferredPhy(BluetoothDevice.PHY_LE_1M_MASK, BluetoothDevice.PHY_LE_1M_MASK, BluetoothDevice.PHY_OPTION_NO_PREFERRED);
+                //gatt.requestMtu(185);
+                //Thread.sleep(6000);
+                //gatt.connect();
                 gatt.discoverServices();
                 synchronized (callback.gattServicesDiscovered) {
-                    callback.gattServicesDiscovered.wait(5000);
+                    callback.gattServicesDiscovered.wait(10000);
                 }
-                Log.d(TAG, "Discovered GATT services");
                 return 0;
             } catch (SecurityException e) {
                 Log.d(TAG, e.getMessage());
@@ -268,6 +305,23 @@ public class Bluetooth {
             Bluetooth.MyBluetoothGattCallback.CachedCharUpdates val = callback.checkCachedUpdate(characteristic, true);
             if (val != null) return val.value;
             return characteristic.getValue();
+        }
+        public int setCccd(BluetoothGattCharacteristic characteristic, int value) {
+            try {
+                BluetoothGattDescriptor desc = characteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"));
+                desc.setValue(new byte[]{(byte) value, 0});
+                if (gatt.writeDescriptor(desc)) {
+                    synchronized (callback.gattDescriptorWrote) {
+                        callback.gattDescriptorWrote.wait(1000);
+                    }
+                    return 0;
+                }
+                return -1;
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } catch (SecurityException e) {
+                return Pak.Error.PERMISSION;
+            }
         }
         public int setNotification(BluetoothGattCharacteristic characteristic, boolean v) {
             try {
@@ -296,10 +350,11 @@ public class Bluetooth {
             }
         }
         public int readAsync(BluetoothGattCharacteristic characteristic) {
+            if (verbose) Log.d(TAG, "Read " + characteristic.getUuid().toString());
             try {
                 if (gatt.readCharacteristic(characteristic)) {
                     synchronized (callback.gattCharacteristicRead) {
-                        callback.gattCharacteristicRead.wait(5000);
+                        callback.gattCharacteristicRead.wait(10000);
                     }
                     return 0;
                 }
@@ -311,8 +366,12 @@ public class Bluetooth {
             }
         }
         public int writeAsync(BluetoothGattCharacteristic characteristic, byte[] data) {
+            if (verbose) Log.d(TAG, "Write " + Arrays.toString(data) + " to " + characteristic.getUuid().toString());
             try {
-                characteristic.setValue(data);
+                if (!characteristic.setValue(data)) {
+                    Log.d(TAG, "setValue");
+                    return Pak.Error.UNDEFINED;
+                }
                 if (gatt.writeCharacteristic(characteristic)) {
                     synchronized (callback.gattCharacteristicWrote) {
                         callback.gattCharacteristicWrote.wait(5000);
@@ -343,6 +402,7 @@ public class Bluetooth {
         final Object gattCharacteristicWrote = new Object();
         final Object gattCharacteristicRead = new Object();
         final Object gattCharacteristicChanged = new Object();
+        final Object gattDescriptorWrote = new Object();
         public static class CachedCharUpdates {
             BluetoothGattCharacteristic chr;
             byte[] value;
@@ -375,10 +435,13 @@ public class Bluetooth {
 
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            if (verbose) Log.d(TAG, "Connection state change: " + status);
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 onEvent(EVENT_CONNECTED, null);
+                device.isGattConnected = true;
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 onEvent(EVENT_DISCONNECTED, null);
+                device.isGattConnected = false;
             }
             synchronized (connectSignal) {
                 connectSignal.notify();
@@ -387,6 +450,8 @@ public class Bluetooth {
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
             if (status != BluetoothGatt.GATT_SUCCESS) Log.d(TAG, "onServicesDiscovered reports failure");
+            if (verbose) Log.d(TAG, "Discovered GATT services");
+            //device.serviceUuids = device.dev.getUuids();
             synchronized (gattServicesDiscovered) {
                 gattServicesDiscovered.notify();
             }
@@ -409,6 +474,7 @@ public class Bluetooth {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
+            if (verbose) Log.d(TAG, "Characteristic changed: " + characteristic.getUuid().toString());
             cachedUpdates.add(new CachedCharUpdates(characteristic, characteristic.getValue()));
             synchronized (gattCharacteristicChanged) {
                 gattCharacteristicChanged.notify();
@@ -418,6 +484,9 @@ public class Bluetooth {
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
             super.onDescriptorRead(gatt, descriptor, status);
+            synchronized (gattDescriptorWrote) {
+                gattDescriptorWrote.notify();
+            }
         }
         @Override
         public void onDescriptorRead(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
@@ -470,7 +539,7 @@ public class Bluetooth {
             if (btFilter.manufacData != null) {
                 byte[] trimmed = Arrays.copyOfRange(btFilter.manufacData, 2, btFilter.manufacData.length);
                 int companyIdentifier = (btFilter.manufacData[0] & 0xff) | ((btFilter.manufacData[1] & 0xff) << 8);
-                Log.d(TAG, "str: " + companyIdentifier);
+                if (verbose) Log.d(TAG, "str: " + companyIdentifier);
                 try {
                     if (btFilter.manufacDataMask != null) {
                         scanfilter.setManufacturerData(0, btFilter.manufacData, btFilter.manufacDataMask);
@@ -550,7 +619,7 @@ public class Bluetooth {
                 Log.d(TAG, "found device");
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     AssociationInfo associationInfo = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
-                    Log.d(TAG, String.format("association: %d", associationInfo.hashCode()));
+                    if (associationInfo != null) Log.d(TAG, String.format("association: %d", associationInfo.hashCode()));
                 }
                 ScanResult result = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
                 if (result != null) {

@@ -152,6 +152,8 @@ int pak_bt_watch_characteristic(struct PakBt *ctx, struct PakGattCharacteristic 
 /// Set whether ctx is watching the characteristic
 int pak_bt_set_watching_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v);
 
+int pak_bt_set_cccd(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v);
+
 struct PakGattDescriptor {
 	struct PakGattDescriptorPriv *priv;
 	_pad_pointer pad_priv;

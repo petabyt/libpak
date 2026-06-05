@@ -1,13 +1,11 @@
 /// Small helper class to help with permissions and Android native things
 package dev.danielc.libpak;
 
-import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 
 import java.lang.ref.WeakReference;

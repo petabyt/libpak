@@ -14,7 +14,6 @@ import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
-import android.net.LinkProperties;
 import android.net.MacAddress;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -23,20 +22,15 @@ import android.net.NetworkRequest;
 import android.net.NetworkSpecifier;
 import android.net.Uri;
 import android.net.wifi.ScanResult;
-import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiNetworkSpecifier;
 import android.os.Build;
-import android.os.Handler;
 import android.os.PatternMatcher;
 import android.provider.Settings;
 import android.util.Log;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiInfo;
-
 import androidx.annotation.NonNull;
-
 import java.lang.reflect.Method;
-import java.util.concurrent.Executor;
 import java.util.regex.Pattern;
 
 public class WiFi {

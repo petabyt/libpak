@@ -116,6 +116,13 @@ struct PakUserSetting {
 	}u;
 };
 
+struct PakSavedConnection {
+	const char *unique_id;
+	const char *name;
+	const uint8_t *aux_data;
+	unsigned int aux_data_length;
+};
+
 enum PakTransport {
 	/// Bluetooth classic and low-energy
 	PAK_BLUETOOTH = 1,
@@ -190,7 +197,7 @@ struct Module {
 	int (*on_try_connect_wifi)(struct Module *, struct PakWiFiAdapter *handle, int job);
 	/// Try to initiate connection for a Bluetooth device
 	/// returns zero if device is supported and connetion established 
-	int (*on_try_connect_bluetooth)(struct Module *, struct PakBtDevice *handle, int job);
+	int (*on_try_connect_bluetooth)(struct Module *, struct PakBtDevice *handle, struct PakSavedConnection *saved, int job);
 	/// Runs immediately after successful connection. Runs at a constant interval, 1s by default.
 	int (*on_idle_tick)(struct Module *, unsigned int us_since_last_tick);
 	/// On user requested disconnect
@@ -248,7 +255,7 @@ int pak_rt_set_progress_bar(struct Module *mod, int job, int percent);
 int pak_rt_set_download_stats(struct Module *mod, int job, long time, unsigned int n_bytes);
 /// Set the unique ID of the current connected device. Will be stored for future use.
 /// If the string is already stored, it will be loaded to the current session.
-int pak_rt_set_device_unique_id(struct Module *mod, const char *string);
+int pak_rt_save_session_signature(struct Module *mod, struct PakSavedConnection *info);
 /// Report device information to the UI
 int pak_rt_set_session_property(struct Module *mod, const char *key, const char *value);
 int pak_rt_set_session_property_int(struct Module *mod, const char *key, int value);

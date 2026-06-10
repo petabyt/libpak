@@ -123,6 +123,11 @@ int pak_bt_device_from_jobject(JNIEnv *env, jobject dev_o, struct PakBtDevice *d
 	strlcpy(device->name, name_s, sizeof(device->name));
 	(*env)->ReleaseStringUTFChars(env, name_o, name_s);
 
+	jobject address_o = (*env)->GetObjectField(env, dev_o, (*env)->GetFieldID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "address", "Ljava/lang/String;"));
+	const char *address_s = (*env)->GetStringUTFChars(env, address_o, NULL);
+	strlcpy(device->mac_address, address_s, sizeof(device->mac_address));
+	(*env)->ReleaseStringUTFChars(env, address_o, address_s);
+
 	(*env)->PopLocalFrame(env, NULL);
 	return 0;
 }

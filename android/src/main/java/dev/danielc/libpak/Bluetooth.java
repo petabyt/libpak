@@ -102,10 +102,15 @@ public class Bluetooth {
         };
     }
 
+    public static Device fromAddress(String address) {
+        return new Device(getDefaultAdapter(), getDefaultAdapter().getRemoteDevice(address));
+    }
+
     public static class Device {
         @NonNull public final BluetoothAdapter adapter;
         @NonNull public final BluetoothDevice dev;
         @NonNull public final String name;
+        @NonNull public final String address;
         public boolean isGattConnected = false;
         public ScanResult scanResult = null;
         public ParcelUuid[] serviceUuids;
@@ -119,6 +124,7 @@ public class Bluetooth {
             this.dev = dev;
             this.name = dev.getName();
             this.serviceUuids = dev.getUuids();
+            this.address = dev.getAddress();
         }
         Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev, @NonNull ScanResult scanResult) {
             this(adapter, dev);

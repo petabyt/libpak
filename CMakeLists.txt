@@ -37,6 +37,7 @@ if(ANDROID)
 		src/android/bluetooth.c
 		src/android/android.c
 		src/android/wifi.c
+		src/gc.c
 	)
 	find_library(log-lib log)
 	find_library(android-lib android)
@@ -60,6 +61,7 @@ elseif(LINUX)
 		src/linux/bluez.c
 		src/linux/networkmanager.c
 		src/common.c
+		src/gc.c
 	)
 	target_link_libraries(pak PRIVATE PkgConfig::DBUS PkgConfig::BLUETOOTH)
 	if(PAK_QUICKJS)

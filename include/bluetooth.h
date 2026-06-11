@@ -50,10 +50,10 @@ int pak_bt_get_n_adapters(struct PakBt *ctx);
 int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int index);
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter);
 
-struct PakUuidList {
-	unsigned int length;
-	char (*uuids)[UUID_STR_LENGTH];
-};
+//struct PakUuidList {
+//	unsigned int length;
+//	char (*uuids)[UUID_STR_LENGTH];
+//};
 
 struct PakBtDevice {
 	struct PakBtDevicePriv *priv;
@@ -64,8 +64,8 @@ struct PakBtDevice {
 	char name[64];
 	char mac_address[64];
 	uint32_t btclass;
-	uint8_t mfg_data[0xff];
-	struct PakUuidList uuids;
+	//uint8_t mfg_data[0xff];
+	//struct PakUuidList uuids;
 };
 
 enum PakDeviceStateFilter {
@@ -178,8 +178,7 @@ int pak_bt_read(struct PakBtSocket *conn, void *data, unsigned int length);
 /// close()
 int pak_bt_close_socket(struct PakBtSocket *conn);
 
-typedef int pak_bt_listen_adv(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtDevice *adv, void *arg);
-typedef int pak_bt_listen_gatt(struct PakBt *ctx, enum PakBtEvent evtype, const char *uuid);
+typedef int pak_bt_listen_device(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtDevice *dev, struct PakGattCharacteristic *chr, void *arg);
+int pak_bt_set_device_callback(struct PakBt *ctx, struct PakBtDevice *device, pak_bt_listen_device *cb, void *cb_arg);
 
-int pak_bt_listen_advertisements(struct PakBt *ctx, struct PakBtAdapter *adapter, pak_bt_listen_adv *cb, void *cb_arg);
 #endif

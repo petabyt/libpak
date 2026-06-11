@@ -127,7 +127,7 @@ public class WiFi {
             }
             @Override
             public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
-                Log.e(TAG, "capabilities changed");
+                Log.e(TAG, "onCapabilitiesChanged");
             }
         };
         // Stock Android seems to cut off the dialog at 30s and never calls onUnavailable,

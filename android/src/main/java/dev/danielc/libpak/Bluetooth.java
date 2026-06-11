@@ -18,6 +18,9 @@ import android.companion.AssociationRequest;
 import android.companion.BluetoothDeviceFilter;
 import android.companion.BluetoothLeDeviceFilter;
 import android.companion.CompanionDeviceManager;
+import android.companion.CompanionDeviceService;
+import android.companion.DevicePresenceEvent;
+import android.companion.ObservingDevicePresenceRequest;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
 
@@ -39,6 +42,7 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 
 public class Bluetooth {
     public static final String TAG = "bt";
@@ -82,7 +86,25 @@ public class Bluetooth {
         return getDefaultAdapter().isEnabled();
     }
 
-    public static void setupListener(Listener listener) {
+    @RequiresApi(api = Build.VERSION_CODES.S)
+    static class MyCompanionDeviceService extends CompanionDeviceService {
+        @Override
+        public void onDeviceAppeared(@NonNull String address) {
+            super.onDeviceAppeared(address);
+            Log.d(TAG, "onDeviceAppeared");
+        }
+        @Override
+        public void onDeviceDisappeared(@NonNull String address) {
+            super.onDeviceDisappeared(address);
+            Log.d(TAG, "onDeviceDisappeared");
+        }
+        @Override
+        public void onDevicePresenceEvent(@NonNull DevicePresenceEvent event) {
+            super.onDevicePresenceEvent(event);
+        }
+    };
+
+    public static void setupListeners(Listener listener) {
         BroadcastReceiver receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -100,6 +122,15 @@ public class Bluetooth {
                 }
             }
         };
+    }
+
+    public static void senseNearbyDevice(String macAddress) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            if (Pak.getActivity().getPackageManager().hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
+                deviceManager.startObservingDevicePresence(macAddress);
+            }
+        }
     }
 
     public static Device fromAddress(String address) {
@@ -455,8 +486,8 @@ public class Bluetooth {
         }
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            if (status != BluetoothGatt.GATT_SUCCESS) Log.d(TAG, "onServicesDiscovered reports failure");
             if (verbose) Log.d(TAG, "Discovered GATT services");
+            if (status != BluetoothGatt.GATT_SUCCESS) Log.d(TAG, "onServicesDiscovered reports failure");
             //device.serviceUuids = device.dev.getUuids();
             synchronized (gattServicesDiscovered) {
                 gattServicesDiscovered.notify();
@@ -625,7 +656,10 @@ public class Bluetooth {
                 Log.d(TAG, "found device");
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     AssociationInfo associationInfo = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
-                    if (associationInfo != null) Log.d(TAG, String.format("association: %d", associationInfo.hashCode()));
+                    if (associationInfo != null) {
+                        // Don't care about keeping system associations right now
+                        deviceManager.disassociate(associationInfo.getId());
+                    }
                 }
                 ScanResult result = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
                 if (result != null) {

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:tools="http://schemas.android.com/tools"
+    xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
@@ -10,6 +11,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 
+    <!-- For using Bluetooth scanner APIs before Android 10 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <!-- Legacy permissions-->
@@ -19,9 +23,23 @@
     <!-- Allowed permissions for companion profiles -->
     <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_WATCH" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_GLASSES" />
-<!--  (doesn't work for some reason?) <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_MEDICAL" />-->
+    <!--  (doesn't work for some reason?) <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_MEDICAL" />-->
     <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_FITNESS_TRACKER" />
 
     <!-- https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing -->
     <uses-feature android:name="android.software.companion_device_setup"/>
+
+    <!--  https://developer.android.com/reference/android/companion/CompanionDeviceService  -->
+    <application>
+        <service
+            android:name=".Bluetooth$MyCompanionDeviceService"
+            android:exported="true"
+            android:foregroundServiceType="connectedDevice"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE"
+            tools:targetApi="31">
+            <intent-filter>
+                <action android:name="android.companion.CompanionDeviceService" />
+            </intent-filter>
+        </service>
+    </application>
 </manifest>

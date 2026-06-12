@@ -15,7 +15,7 @@ option(PAK_INCLUDE_EXIF "EXIF Parser" ON)
 option(PAK_QUICKJS "QuickJS bindings" ON)
 option(PAK_WASM "WAMR bindings" ON)
 
-set(LIBPAK_SOURCES)
+set(LIBPAK_SOURCES src/common.c src/gc.c)
 
 if(PAK_QUICKJS)
 	list(APPEND LIBPAK_SOURCES src/bindings/quickjs_wifi.c src/bindings/quickjs_socket.c src/bindings/quickjs_runtime.c)
@@ -37,7 +37,6 @@ if(ANDROID)
 		src/android/bluetooth.c
 		src/android/android.c
 		src/android/wifi.c
-		src/gc.c
 	)
 	find_library(log-lib log)
 	find_library(android-lib android)
@@ -52,6 +51,9 @@ if(ANDROID)
 		target_link_libraries(pak PRIVATE vmlib)
 	endif()
 elseif(LINUX)
+	if(PAK_INCLUDE_RT)
+		list(APPEND LIBPAK_SOURCES src/cli_runtime.c)
+	endif()
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(DBUS IMPORTED_TARGET GLOBAL dbus-1)
 	pkg_check_modules(BLUETOOTH IMPORTED_TARGET GLOBAL bluez)
@@ -60,13 +62,11 @@ elseif(LINUX)
 		src/linux/dbus.c
 		src/linux/bluez.c
 		src/linux/networkmanager.c
-		src/common.c
-		src/gc.c
 	)
 	target_link_libraries(pak PRIVATE PkgConfig::DBUS PkgConfig::BLUETOOTH)
 	if(PAK_QUICKJS)
 		find_library(QUICKJS_LIB
-			NAMES quickjs
+			NAMES quickjs qjs
 			PATH_SUFFIXES quickjs
 			REQUIRED
 		)
@@ -94,7 +94,6 @@ target_include_directories(pak
 if(PAK_INCLUDE_CLI AND NOT ANDROID)
 	add_executable(pakit
 		src/cli.c
-		src/cli_runtime.c
 		examples/dummy.c
 	)
 	target_link_libraries(pakit
@@ -104,6 +103,6 @@ if(PAK_INCLUDE_CLI AND NOT ANDROID)
 	)
 	install(TARGETS pakit)
 
-	add_executable(bt examples/bt.c)
+	add_executable(bt examples/bt.c src/cli_runtime.c)
 	target_link_libraries(bt PRIVATE pak m)
 endif()

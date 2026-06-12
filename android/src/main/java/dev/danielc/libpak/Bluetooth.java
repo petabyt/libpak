@@ -621,14 +621,14 @@ public class Bluetooth {
 
             @Override
             public void onFailure(CharSequence error) {
-                scanCallback.onFailure("association failure");
+                scanCallback.onFailure("Association failure");
                 returnCode = Pak.Error.NON_FATAL;
                 waitForCallback.release();
             }
             @Override
             public void onDeviceFound(@NonNull IntentSender intentSender) {
                 super.onDeviceFound(intentSender);
-                Log.d(TAG, "device found: " + intentSender);
+                if (verbose) Log.d(TAG, "device found: " + intentSender);
                 try {
                     Pak.startActivityForResult(intentSender);
                     waitForActivity = true;

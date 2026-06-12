@@ -76,8 +76,11 @@ struct FileMetadata {
 	int image_height;
 };
 
+/// A widget displayed on the dashboard that can show data or be manipulated by the user
 struct PakUserSetting {
+	/// Unique name (id) of the widget
 	const char *name;
+	/// Human readable title for the widget
 	const char *title;
 	enum SettingType {
 		PAK_BUTTON = 0,
@@ -117,8 +120,13 @@ struct PakUserSetting {
 };
 
 struct PakSavedConnection {
+	/// String unique to a device (such as mac address) that will be used to remember it
+	/// Must be the same once reconnected
 	const char *unique_id;
+	/// Human readable name of device
 	const char *name;
+	/// Optional auxillary data that can be used to store tokens or keys required to reconnect to a device.
+	/// Set to NULL if not used.
 	const uint8_t *aux_data;
 	unsigned int aux_data_length;
 };
@@ -274,9 +282,4 @@ struct FileMetadata *pak_rt_get_metadata(struct Module *mod, struct FileHandle *
 void pak_rt_release_metadata(struct Module *mod, struct FileMetadata *md);
 /// Get option name that was selected during setup, NULL if none selected
 const char *pak_rt_get_setup_option(struct Module *mod);
-
-// debug stuff
-struct Module *pak_create_mod(void);
-int pak_rt_test_module(struct Module *mod);
-struct Module *pak_rt_mod_from_native(int (*get)(struct Module *mod));
 #endif

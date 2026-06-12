@@ -4,7 +4,7 @@
 #include <quickjs.h>
 #include <quickjs-libc.h>
 #include <runtime.h>
-
+#include "../main.h"
 #include "buffer_js.h"
 #include "http_js.h"
 
@@ -31,7 +31,7 @@ struct ModulePriv {
 };
 
 static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[], int magic) {
-	struct Module *mod = (struct Module *)JS_GetOpaque(this_val, module_class_id);
+	//struct Module *mod = (struct Module *)JS_GetOpaque(this_val, module_class_id);
 	int32_t fd;
 	JS_ToInt32(ctx, &fd, argv[0]);
 	return JS_UNDEFINED;
@@ -57,11 +57,11 @@ static JSValue test_module(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 }
 
 static JSValue export_module(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
-	JSValue obj = argv[0];
-	struct Module *mod = JS_GetOpaque(obj, module_class_id);	
-
-	JS_SetContextOpaque(ctx, mod);
-
+	if (JS_GetContextOpaque(ctx) != NULL) {
+		JS_SetContextOpaque(ctx, NULL);
+	} else {
+		printf("Module already exported in this context\n");
+	}
 	return JS_UNDEFINED;
 }
 
@@ -83,34 +83,21 @@ static const JSCFunctionListEntry module_methods[] = {
 
 static int init(struct Module *mod) { return 0; }
 
-static void js_dump_obj(JSContext *ctx, FILE *f, JSValueConst val)
+static void js_print_value_write(void *opaque, const char *buf, size_t len)
 {
-    const char *str;
-
-    str = JS_ToCString(ctx, val);
-    if (str) {
-        fprintf(f, "%s\n", str);
-        JS_FreeCString(ctx, str);
-    } else {
-        fprintf(f, "[exception]\n");
-    }
+	uint8_t *out = opaque;
+	size_t l = strlen(opaque);
+	memcpy(out + l, buf, len);
+	out[l + len] = '\0';
 }
 
-static void dump_error(JSContext *ctx) {
-	JSValue exception_val = JS_GetException(ctx);
-    JSValue val;
-    int is_error;
-
-    is_error = JS_IsError(ctx, exception_val);
-    js_dump_obj(ctx, stderr, exception_val);
-    if (is_error) {
-        val = JS_GetPropertyStr(ctx, exception_val, "stack");
-    }
-    if (!JS_IsUndefined(val)) {
-        js_dump_obj(ctx, stderr, val);
-        JS_FreeValue(ctx, val);
-    }
-    JS_FreeValue(ctx, exception_val);
+static void dump_exception(JSContext *ctx) {
+	struct Module *mod = JS_GetContextOpaque(ctx);
+	JSValue val = JS_GetException(ctx);
+	char errorbuf[512] = {0};
+	JS_PrintValue(ctx, js_print_value_write, errorbuf, val, NULL);
+	if (mod != NULL) pak_debug_log(mod, errorbuf);
+    JS_FreeValue(ctx, val);
 }
 
 static int call_module_method(struct JSContext *ctx, JSValue obj, const char *name, int argc, JSValue *argv) {
@@ -119,7 +106,7 @@ static int call_module_method(struct JSContext *ctx, JSValue obj, const char *na
 	JSValue rv = JS_Call(ctx, fun, obj, argc, argv);
 	if (JS_IsException(rv)) {
 		JS_FreeValue(ctx, rv);
-		dump_error(ctx);
+		dump_exception(ctx);
 		rc = -1;
 	}
 	for (int i = 0; i < argc; i++) {
@@ -162,7 +149,7 @@ static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, in
 	JSValue obj = JS_NewObjectProtoClass(ctx, proto, module_class_id);
 	JS_FreeValue(ctx, proto);
 
-	struct Module *mod = calloc(1, sizeof(struct Module));
+	struct Module *mod = JS_GetContextOpaque(ctx);
 	mod->init = init;
 	mod->on_run_test = on_run_test;
 	mod->on_try_connect_wifi = on_try_connect_wifi;
@@ -264,11 +251,13 @@ static JSModuleDef *my_module_loader(JSContext *ctx, const char *module_name, vo
 	return m;
 }
 
-int setup_quickjs_module(struct Module **mod, const char *filename) {
+int setup_quickjs_module(struct Module *mod, char *file_contents, unsigned int length) {
 	JSRuntime *rt = JS_NewRuntime();
 
+	if (file_contents[length - 1] == '\0') length--;
+
 	JSContext *ctx = JS_NewContext(rt);
-	JS_SetContextOpaque(ctx, NULL);
+	JS_SetContextOpaque(ctx, mod);
 	js_std_add_helpers(ctx, 0, NULL);
 
 	JS_AddModuleExport(ctx, js_init_module_wifi(ctx, "pak:wifi"), "WiFi");
@@ -278,57 +267,34 @@ int setup_quickjs_module(struct Module **mod, const char *filename) {
 	JS_SetModuleLoaderFunc(rt, NULL, my_module_loader, NULL);
 	js_std_init_handlers(rt);
 
-	FILE *file = fopen(filename, "rb");
-	if (!file) {
-		printf("Failed to open '%s'\n", filename);
-		return -1;
-	}
-	
-	fseek(file, 0, SEEK_END);
-	long file_size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	char *buffer = (char *)malloc(file_size + 1);
-	if (!buffer) return -1;
-	
-	fread(buffer, 1, file_size, file);
-	buffer[file_size] = '\0';
-
-	fclose(file);
-
-	JSValue val = JS_Eval(ctx, buffer, file_size, filename, JS_EVAL_TYPE_MODULE);
+	JSValue val = JS_Eval(ctx, file_contents, length, "main.js", JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
 	if (JS_IsException(val)) {
-		js_std_dump_error(ctx);
-//		JSValue stack = JS_GetPropertyStr(ctx, val, "stack");
-//		if (!JS_IsUndefined(stack)) {
-//			const char *str = JS_ToCString(ctx, stack);
-//			if (str) {
-//				printf("%s\n", str);
-//				JS_FreeCString(ctx, str);
-//			}
-//			JS_FreeValue(ctx, stack);
-//		} else {
-//			js_std_cmd(/*ErrorBackTrace*/2, ctx, &val);
-//			printf("JS Exception\n");
-//		}
+		dump_exception(ctx);
 		return -1;
 	}
-
 	JS_FreeValue(ctx, val);
 
-	// If a module was exported, it was stored in the context opaque pointer.
-	struct Module *exported_module = JS_GetContextOpaque(ctx);
-	if (exported_module != NULL) {
-		exported_module->priv->rt = rt;
-		exported_module->free = free_module_and_runtime; // override free method so it closes down quickjs instance
-		(*mod) = exported_module;
+	val = JS_Eval(ctx, file_contents, length, "main.js", JS_EVAL_TYPE_MODULE);
+	if (JS_IsException(val)) {
+		dump_exception(ctx);
+		return -1;
+	}
+	JS_FreeValue(ctx, val);
+
+	int rc = 0;
+	if (JS_GetContextOpaque(ctx) != NULL) {
+		pak_debug_log(mod, "JS script didn't export a module");
+		rc = -1;
+	} else {
+		mod->priv->rt = rt;
+		mod->free = free_module_and_runtime;
+		JS_SetContextOpaque(ctx, mod);
 		return 0;
 	}
 
+	//if (mod->priv != NULL) JS_FreeValue(ctx, mod->priv->object);
 	js_std_free_handlers(rt);
 	JS_FreeContext(ctx);
 	JS_FreeRuntime(rt);
-
-	printf("JS didn't export module\n");
-	return -1;
+	return rc;
 }

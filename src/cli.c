@@ -1,21 +1,12 @@
 #include <stdio.h>
-//#include <stdlib.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <quickjs.h>
-#include <quickjs-libc.h>
 #include "wifi.h"
 #include "bluetooth.h"
 #include "runtime.h"
-
-int get_module_dummy(struct Module *mod);
-
-/// Execute JS file and get the exported module handle
-int setup_quickjs_module(struct Module **mod, const char *filename);
-
-int setup_wasm_module(struct Module **mod, const char *filename);
-
-int pak_rt_test_module(struct Module *mod);
+#include "runtime_ext.h"
+#include "main.h"
 
 int test_bluetooth(void) {
 	struct PakBt *ctx = pak_bt_get_context();
@@ -29,21 +20,12 @@ int test_bluetooth(void) {
 	int i = 0;
 	while (pak_bt_get_device(ctx, &adapter, &dev, i, PAK_FILTER_BONDED) == 0) {
 		printf("Paired device: %s\n", dev.name);
-
-//		int percent;
-//		if (!pak_bt_get_device_battery(ctx, &dev, &percent)) {
-//			printf("Battery: %d%%\n", percent);
-//		}
-
-		printf("Service UUIDs:\n");
-		for (int z = 0; z < dev.uuids.length; z++) {
-			char uuid[37];
-			printf("  %s\n", dev.uuids.uuids[z]);
-		}
 		if (!dev.is_classic) {
+			uint8_t buf[0xff];
+			unsigned int sz = pak_bt_get_manufacturer_data(ctx, &dev, 0, buf, sizeof(buf));
 			printf("Mfgdata: {");
-			for (int z = 0; z < 0x10; z++) {
-				printf("%02x,", dev.mfg_data[z]);
+			for (int z = 0; z < sz; z++) {
+				printf("%02x,", buf[z]);
 			}
 			printf("}\n");
 
@@ -128,11 +110,36 @@ int help(void) {
 	return 0;
 }
 
+static char *alloc_file(const char *filename, unsigned int *len) {
+	FILE *file = fopen(filename, "rb");
+	if (!file) {
+		printf("Failed to open '%s'\n", filename);
+		return NULL;
+	}
+	
+	fseek(file, 0, SEEK_END);
+	long file_size = ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	char *buffer = (char *)malloc(file_size + 1);
+	if (!buffer) return NULL;
+	
+	fread(buffer, 1, file_size, file);
+	buffer[file_size] = '\0';
+
+	fclose(file);
+	(*len) = file_size;
+	return buffer;
+}
+
 int main(int argc, char **argv) {
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--test-js")) {
-			struct Module *mod = NULL;
-			if (setup_quickjs_module(&mod, argv[i + 1])) return -1;
+			struct Module *mod = pak_create_mod();
+			unsigned int len = 0;
+			char *buf = alloc_file(argv[i + 1], &len);
+			if (buf == NULL) return -1;
+			if (setup_quickjs_module(mod, buf, len)) return -1;
 			return pak_rt_test_module(mod);
 		} else if (!strcmp(argv[i], "--test-wasm")) {
 			struct Module *mod = NULL;

@@ -13,8 +13,7 @@
 
 struct PakBt {
 	DBusConnection *conn;
-	pak_bt_listen_gatt *listen_gatt;
-	pak_bt_listen_adv *listen_adv;
+	pak_bt_listen_device *listen;
 };
 
 struct PakBtSocket {
@@ -23,6 +22,12 @@ struct PakBtSocket {
 
 struct PakBtDevicePriv {
 	int x;
+	uint8_t mfg_data[0xff];
+	unsigned int mfg_data_len;
+	struct UuidList {
+		unsigned int length;
+		char (*uuids)[UUID_STR_LENGTH];
+	}uuids;
 	char path[];
 };
 
@@ -284,6 +289,11 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
 	return 0;
 }
 
+unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max) {
+#define min(x, y) (((x) < (y)) ? (x) : (y))
+	memcpy(buffer, device->priv->mfg_data, min(device->priv->mfg_data_len, max));
+}
+
 static void parse_manufacturer_data(struct DBusMessageIter *dict, struct PakBtDevice *dev) {
 	// Example: "ManufacturerData" a{qv} 1 1520 ay 4 170 0 0 0
 	int of = 0;
@@ -300,8 +310,8 @@ static void parse_manufacturer_data(struct DBusMessageIter *dict, struct PakBtDe
 		uint16_t qword;
 		dbus_message_iter_get_basic(&dict4, &qword);
 
-		dev->mfg_data[of++] = qword & 0xff;
-		dev->mfg_data[of++] = (qword >> 8) & 0xff;
+		dev->priv->mfg_data[of++] = qword & 0xff;
+		dev->priv->mfg_data[of++] = (qword >> 8) & 0xff;
 
 		dbus_message_iter_next(&dict4);
 
@@ -314,12 +324,13 @@ static void parse_manufacturer_data(struct DBusMessageIter *dict, struct PakBtDe
 		while (dbus_message_iter_get_arg_type(&dict6) != DBUS_TYPE_INVALID) {
 			uint8_t byte;
 			dbus_message_iter_get_basic(&dict6, &byte);
-			dev->mfg_data[of++] = byte;
+			dev->priv->mfg_data[of++] = byte;
 			dbus_message_iter_next(&dict6);
 		}
 
 		dbus_message_iter_next(&dict3);
 	}
+	dev->priv->mfg_data_len = of;
 }
 
 // https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc/org.bluez.Device.rst
@@ -361,19 +372,17 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 			struct DBusMessageIter dict2;
 			dbus_message_iter_recurse(&dict, &dict2);
 
-			dev->uuids.length = (unsigned int)dbus_message_iter_get_element_count(&dict2);
-			dev->uuids.uuids = malloc(sizeof(struct PakUuidList) + UUID_STR_LENGTH * dev->uuids.length);
+			dev->priv->uuids.length = (unsigned int)dbus_message_iter_get_element_count(&dict2);
+			dev->priv->uuids.uuids = malloc(sizeof(struct UuidList) + UUID_STR_LENGTH * dev->priv->uuids.length);
 
 			struct DBusMessageIter dict3;
 			dbus_message_iter_recurse(&dict2, &dict3);
 
-			int y = 0;
-			while (dbus_message_iter_get_arg_type(&dict3) != DBUS_TYPE_INVALID) {
+			for (int y = 0; dbus_message_iter_get_arg_type(&dict3) != DBUS_TYPE_INVALID; y++) {
 				const char *uuid = NULL;
 				dbus_message_iter_get_basic(&dict3, &uuid);
-				strlcpy(dev->uuids.uuids[y], uuid, UUID_STR_LENGTH);
+				strlcpy(dev->priv->uuids.uuids[y], uuid, UUID_STR_LENGTH);
 				dbus_message_iter_next(&dict3);
-				y++;
 			}
 		} else if (!strcmp(name, "Class")) {
 			uint32_t v;
@@ -452,8 +461,8 @@ int pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct Pa
 }
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {
+	free(device->priv->uuids.uuids);
 	free(device->priv);
-	free(device->uuids.uuids);
 	return 0;
 }
 

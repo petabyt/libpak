@@ -1,13 +1,12 @@
 // Implements higher level functionality found on Android (companion APIs and such)
-//#include <stdio.h>
-//#include <stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 //#include <string.h>
 #include <regex.h>
 #include <stdarg.h>
-#include <quickjs/quickjs.h>
-#include <quickjs/quickjs-libc.h>
 #include "wifi.h"
+#include "runtime.h"
 
 __attribute__((weak))
 void pak_error(const char *fmt, ...) {

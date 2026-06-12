@@ -23,9 +23,11 @@ int main(void) {
 	}
 
 	if (!dev.is_classic) {
+		uint8_t buf[0xff];
+		unsigned int sz = pak_bt_get_manufacturer_data(ctx, &dev, 0, buf, sizeof(buf));
 		printf("Mfgdata: {");
-		for (int z = 0; z < 0x10; z++) {
-			printf("%02x,", dev.mfg_data[z]);
+		for (int z = 0; z < sz; z++) {
+			printf("%02x,", buf[z]);
 		}
 		printf("}\n");
 

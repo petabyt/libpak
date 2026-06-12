@@ -50,11 +50,6 @@ int pak_bt_get_n_adapters(struct PakBt *ctx);
 int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int index);
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter);
 
-//struct PakUuidList {
-//	unsigned int length;
-//	char (*uuids)[UUID_STR_LENGTH];
-//};
-
 struct PakBtDevice {
 	struct PakBtDevicePriv *priv;
 	_pad_pointer pad_priv;
@@ -64,8 +59,6 @@ struct PakBtDevice {
 	char name[64];
 	char mac_address[64];
 	uint32_t btclass;
-	//uint8_t mfg_data[0xff];
-	//struct PakUuidList uuids;
 };
 
 enum PakDeviceStateFilter {

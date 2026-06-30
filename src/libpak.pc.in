@@ -1,0 +1,10 @@
+prefix="@CMAKE_INSTALL_PREFIX@"
+exec_prefix="${prefix}"
+libdir="${prefix}/lib"
+includedir="${prefix}/include"
+
+Name: libpak
+Description: Bluetooth + WiFi library and connection runtime system
+Version: 0.1.0
+Cflags: -I${includedir}/libpak
+Libs: -ldbus-1 -lbluetooth -l@LIBPAK_LIB@

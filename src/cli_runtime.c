@@ -10,6 +10,51 @@ struct RuntimePriv {
 	int current_job;
 };
 
+int pak_rt_save_session_signature(struct Module *mod, struct PakSavedConnection *info) {
+	return -1;
+}
+int pak_rt_set_session_property(struct Module *mod, const char *key, const char *value) {
+	return -1;
+}
+int pak_rt_set_session_property_int(struct Module *mod, const char *key, int value) {
+	return -1;
+}
+int pak_rt_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length) {
+	return -1;
+}
+int pak_rt_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length, int is_partial) {
+	return -1;
+}
+int pak_rt_set_storage_info(struct Module *mod, const char *storage_name, unsigned int n_items, enum SortedBy sorted_by) {
+	return -1;
+}
+int pak_rt_set_progress_bar(struct Module *mod, int job, int percent) {
+	return -1;
+}
+int pak_rt_is_job_cancelled(struct Module *mod, int job) {
+	return -1;
+}
+int pak_rt_set_screen_supported(struct Module *mod, int screen, int v) {
+	return -1;
+}
+const char *pak_rt_get_client_name(void) {
+	return (const char *)"client";
+}
+int pak_rt_add_file_metadata(struct Module *mod, struct FileHandle *file, const struct FileMetadata *metadata) {
+	return -1;
+}
+void pak_rt_release_metadata(struct Module *mod, struct FileMetadata *md) {}
+struct FileMetadata *pak_rt_get_metadata(struct Module *mod, struct FileHandle *file) {
+	return NULL;
+}
+void pak_rt_fatal_error(struct Module *mod, const char *fmt, ...) {}
+const char *pak_rt_get_setup_option(struct Module *mod) {
+	return NULL;
+}
+int pak_rt_set_tick_interval(struct Module *mod, unsigned int us) {
+	return -1;
+}
+
 __attribute__((weak)) int setup_quickjs_module(struct Module *mod, char *file_contents, unsigned int length) {
 	pak_debug_log(mod, "quickjs support not compiled in");
 	return -1;

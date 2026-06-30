@@ -10,12 +10,14 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" android:minSdkVersion="37" />
 
     <!-- For using Bluetooth scanner APIs before Android 10 -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <!-- Legacy permissions-->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -32,8 +34,8 @@
     <!--  https://developer.android.com/reference/android/companion/CompanionDeviceService  -->
     <application>
         <service
-            android:name=".Bluetooth$MyCompanionDeviceService"
-            android:exported="true"
+            android:name="dev.danielc.libpak.Bluetooth$MyCompanionDeviceService"
+            android:exported="false"
             android:foregroundServiceType="connectedDevice"
             android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE"
             tools:targetApi="31">

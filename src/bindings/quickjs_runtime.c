@@ -292,7 +292,7 @@ int setup_quickjs_module(struct Module *mod, char *file_contents, unsigned int l
 		return 0;
 	}
 
-	//if (mod->priv != NULL) JS_FreeValue(ctx, mod->priv->object);
+	if (mod->priv != NULL) JS_FreeValue(ctx, mod->priv->object);
 	js_std_free_handlers(rt);
 	JS_FreeContext(ctx);
 	JS_FreeRuntime(rt);

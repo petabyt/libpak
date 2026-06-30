@@ -105,4 +105,24 @@ if(PAK_INCLUDE_CLI AND NOT ANDROID)
 
 	add_executable(bt examples/bt.c src/cli_runtime.c)
 	target_link_libraries(bt PRIVATE pak m)
+
+	set(LIBPAK_LIB pak)
+	configure_file(src/libpak.pc.in libpak.pc @ONLY)
+	include(GNUInstallDirs)
+	install(
+		TARGETS pak
+	)
+	install(
+		FILES
+		${PROJECT_SOURCE_DIR}/include/bluetooth.h
+		${PROJECT_SOURCE_DIR}/include/wifi.h
+		${PROJECT_SOURCE_DIR}/include/pak.h
+		${PROJECT_SOURCE_DIR}/include/runtime.h
+		${PROJECT_SOURCE_DIR}/include/runtime_ext.h
+		DESTINATION include/libpak
+	)
+	install(
+		FILES ${CMAKE_CURRENT_BINARY_DIR}/libpak.pc
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+	)
 endif()

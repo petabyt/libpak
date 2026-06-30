@@ -455,7 +455,7 @@ unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice 
 	return (unsigned int)len;
 }
 
-int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *data, unsigned int length, int blocking) {
+int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const uint8_t *data, unsigned int length, int blocking) {
 	JNIEnv *env = get_jni_env();
 	(*env)->PushLocalFrame(env, 10);
 

@@ -11,8 +11,11 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.companion.AssociationInfo;
 import android.companion.AssociationRequest;
 import android.companion.BluetoothDeviceFilter;
@@ -20,15 +23,17 @@ import android.companion.BluetoothLeDeviceFilter;
 import android.companion.CompanionDeviceManager;
 import android.companion.CompanionDeviceService;
 import android.companion.DevicePresenceEvent;
-import android.companion.ObservingDevicePresenceRequest;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 
@@ -87,7 +92,12 @@ public class Bluetooth {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.S)
-    static class MyCompanionDeviceService extends CompanionDeviceService {
+    public static class MyCompanionDeviceService extends CompanionDeviceService {
+        @Override
+        public void onCreate() {
+            super.onCreate();
+            Log.d(TAG, "onCreate");
+        }
         @Override
         public void onDeviceAppeared(@NonNull String address) {
             super.onDeviceAppeared(address);
@@ -101,6 +111,7 @@ public class Bluetooth {
         @Override
         public void onDevicePresenceEvent(@NonNull DevicePresenceEvent event) {
             super.onDevicePresenceEvent(event);
+            Log.d(TAG, "onDevicePresenceEvent");
         }
     };
 
@@ -124,16 +135,17 @@ public class Bluetooth {
         };
     }
 
-    public static void senseNearbyDevice(String macAddress) {
+    public static void senseNearbyDevice(@NonNull String macAddress) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
             if (Pak.getActivity().getPackageManager().hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
+                Log.d(TAG, "Start observing " + macAddress);
                 deviceManager.startObservingDevicePresence(macAddress);
             }
         }
     }
 
-    public static Device fromAddress(String address) {
+    public static Device fromAddress(@NonNull String address) {
         return new Device(getDefaultAdapter(), getDefaultAdapter().getRemoteDevice(address));
     }
 
@@ -153,8 +165,8 @@ public class Bluetooth {
         Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev) {
             this.adapter = adapter;
             this.dev = dev;
-            this.name = dev.getName();
-            this.serviceUuids = dev.getUuids();
+            this.name = Optional.ofNullable(dev.getName()).orElse("?");
+            this.serviceUuids = Optional.ofNullable(dev.getUuids()).orElse(new ParcelUuid[]{});
             this.address = dev.getAddress();
         }
         Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev, @NonNull ScanResult scanResult) {
@@ -468,6 +480,7 @@ public class Bluetooth {
         static final int EVENT_GATT_UUID_READ = 4;
         static final int EVENT_GATT_UUID_CHANGED = 5;
         static final int EVENT_GATT_DESC_WRITTEN = 6;
+        static final int EVENT_SERVICES_DISCOVERED = 7;
         public abstract void onEvent(int code, BluetoothGattCharacteristic characteristic);
 
         @Override
@@ -489,6 +502,7 @@ public class Bluetooth {
             if (verbose) Log.d(TAG, "Discovered GATT services");
             if (status != BluetoothGatt.GATT_SUCCESS) Log.d(TAG, "onServicesDiscovered reports failure");
             //device.serviceUuids = device.dev.getUuids();
+            onEvent(EVENT_SERVICES_DISCOVERED, null);
             synchronized (gattServicesDiscovered) {
                 gattServicesDiscovered.notify();
             }
@@ -674,5 +688,41 @@ public class Bluetooth {
     public static void openEnableBluetoothDialog() {
         Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
         Pak.startActivity(intent);
+    }
+
+    public static int leScanner() {
+        if (Pak.getActivity().checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+            return Pak.Error.PERMISSION;
+        }
+
+        BluetoothLeScanner scanner = getDefaultAdapter().getBluetoothLeScanner();
+
+        List<ScanFilter> filters = new ArrayList<>();
+
+        ScanFilter.Builder builder = new ScanFilter.Builder();
+        ScanFilter filter = builder.build();
+        filters.add(filter);
+
+        ScanSettings.Builder scanSettingsBuilder = new ScanSettings.Builder();
+        ScanSettings scanSettings = scanSettingsBuilder.build();
+
+        scanner.startScan(filters, scanSettings, new android.bluetooth.le.ScanCallback() {
+            @Override
+            public void onBatchScanResults(List<ScanResult> results) {
+                super.onBatchScanResults(results);
+            }
+
+            @Override
+            public void onScanFailed(int errorCode) {
+                super.onScanFailed(errorCode);
+            }
+
+            @Override
+            public void onScanResult(int callbackType, ScanResult result) {
+                super.onScanResult(callbackType, result);
+            }
+        });
+
+        return 0;
     }
 }

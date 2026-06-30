@@ -17,7 +17,7 @@ static int pak_global_log_wrapper(wasm_exec_env_t exec_env, char *format, char *
 	return 0;
 }
 
-int setup_wasm_module(struct Module **mod, const char *filename) {
+int setup_wasm_module(struct Module *mod, char *file_contents, unsigned int file_length) {
 	static char global_heap_buf[512 * 1024];
 	char error_buf[128];
 
@@ -27,7 +27,6 @@ int setup_wasm_module(struct Module **mod, const char *filename) {
 	uint32_t stack_size = 8092, heap_size = 8092;
 	wasm_function_inst_t func = NULL;
 	wasm_function_inst_t func2 = NULL;
-	char *native_buffer = NULL;
 	uint64_t wasm_buffer = 0;
 
 	RuntimeInitArgs init_args;
@@ -52,25 +51,7 @@ int setup_wasm_module(struct Module **mod, const char *filename) {
 	}
 	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
 
-	FILE *file = fopen(filename, "rb");
-	if (!file) {
-		printf("Failed to open '%s'\n", filename);
-		return -1;
-	}
-	
-	fseek(file, 0, SEEK_END);
-	long file_size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	uint8_t *buffer = malloc(file_size + 1);
-	if (!buffer) return -1;
-	
-	fread(buffer, 1, file_size, file);
-	buffer[file_size] = '\0';
-
-	fclose(file);
-
-	module = wasm_runtime_load(buffer, file_size, error_buf,
+	module = wasm_runtime_load((uint8_t *)file_contents, file_length, error_buf,
 							   sizeof(error_buf));
 	if (!module) {
 		printf("Load wasm module failed. error: %s\n", error_buf);
@@ -118,8 +99,6 @@ fail:
 	}
 	if (module)
 		wasm_runtime_unload(module);
-	if (buffer)
-		free(buffer);
 	wasm_runtime_destroy();
 	return 0;
 }

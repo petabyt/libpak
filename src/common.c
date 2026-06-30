@@ -2,11 +2,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 //#include <string.h>
 #include <regex.h>
 #include <stdarg.h>
 #include "wifi.h"
 #include "runtime.h"
+
+__attribute__((weak))
+void pak_global_log(const char *fmt, ...) {
+	
+}
 
 __attribute__((weak))
 void pak_error(const char *fmt, ...) {
@@ -92,4 +98,27 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 	pak_wifi_unref_adapter(ctx, &adapter);
 
 	return PAK_ERR_NO_CONNECTION;
+}
+
+int get_pak_timestamp(struct PakTimestamp *ts) {
+	struct timespec ts_spec;
+
+	if (clock_gettime(CLOCK_REALTIME, &ts_spec) != 0) {
+		return -1;
+	}
+
+	struct tm time_info;
+	if (localtime_r(&ts_spec.tv_sec, &time_info) == NULL) {
+		return -1;
+	}
+
+	ts->year        = (unsigned int)(time_info.tm_year + 1900);
+	ts->month       = (unsigned int)(time_info.tm_mon + 1);
+	ts->day         = (unsigned int)time_info.tm_mday;
+	ts->hour        = (unsigned int)time_info.tm_hour;
+	ts->minute      = (unsigned int)time_info.tm_min;
+	ts->second      = (unsigned int)time_info.tm_sec;
+	ts->centisecond = (unsigned int)(ts_spec.tv_nsec / 10000000);
+
+	return 0;
 }

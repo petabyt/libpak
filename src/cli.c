@@ -142,8 +142,11 @@ int main(int argc, char **argv) {
 			if (setup_quickjs_module(mod, buf, len)) return -1;
 			return pak_rt_test_module(mod);
 		} else if (!strcmp(argv[i], "--test-wasm")) {
-			struct Module *mod = NULL;
-			if (setup_wasm_module(&mod, argv[i + 1])) return -1;
+			struct Module *mod = pak_create_mod();
+			unsigned int len = 0;
+			char *buf = alloc_file(argv[i + 1], &len);
+			if (buf == NULL) return -1;
+			if (setup_wasm_module(mod, buf, len)) return -1;
 			return pak_rt_test_module(mod);
 		} else if (!strcmp(argv[i], "--test")) {
 			int rc = test_wifi();

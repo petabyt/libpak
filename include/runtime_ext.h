@@ -15,7 +15,8 @@ struct ExifParser {
 
 int exif_start_raw(struct ExifParser *c, uint8_t *buf, unsigned int length, get_additional_bytes *get_more, void *arg);
 
-/// Execute JS file and get the exported module handle
+/// Initialize QuickJS wrapper around Module 
 int setup_quickjs_module(struct Module *mod, char *file_contents, unsigned int length); 
 
-int setup_wasm_module(struct Module **mod, const char *filename);
+// Initialize WAMR wrapper around Module
+int setup_wasm_module(struct Module *mod, char *file_contents, unsigned int file_length);

@@ -54,6 +54,14 @@
 #define PAK_PROP_FW_VER "firmware-version"
 /// @}
 
+/// @addtogroup PakProperty
+/// @{
+#define PAK_CMD_SHUTTER_DOWN "shutter-down"
+#define PAK_CMD_SHUTTER_UP "shutter-up"
+#define PAK_CMD_FOCUS_DOWN "focus-down"
+#define PAK_CMD_FOCUS_UP "focus-up"
+/// @}
+
 enum SortedBy {
 	PAK_DEFAULT = 0,
 	PAK_NEWEST_FIRST = 1,
@@ -119,6 +127,7 @@ struct PakUserSetting {
 	}u;
 };
 
+/// Saved info about a connection that will be returned again for subsequent connections
 struct PakSavedConnection {
 	/// String unique to a device (such as mac address) that will be used to remember it
 	/// Must be the same once reconnected
@@ -181,6 +190,18 @@ enum Screen {
 	SCREEN_LIVEVIEW,
 	/// A feed of incoming files that are being created/captured/sent by the device.
 	SCREEN_LIVE_FEED,
+	/// Capture and control focus without liveview
+	SCREEN_INTERVALOMETER,
+};
+
+struct PakTimestamp {
+	unsigned int year;
+	unsigned int month;
+	unsigned int day;
+	unsigned int hour;
+	unsigned int minute;
+	unsigned int second;
+	unsigned int centisecond;
 };
 
 /// @brief A library that connects to and performs actions with an external device.
@@ -225,11 +246,11 @@ struct Module {
 	/// send liveview frame contents with pak_rt_add_file_contents
 	int (*on_request_liveview_frame)(struct Module *, int job, struct FileHandle *file);
 	/// Runs when a setting has been changed by 
-	int (*on_setting_changed)(struct Module *, int screen, int job, struct PakUserSetting *setting);
+	int (*on_setting_changed)(struct Module *, int job, struct PakUserSetting *setting);
 	/// On request to run self test, test suite, debug dumps, or other diagnostics
 	int (*on_run_test)(struct Module *, int screen, int job);
 	/// Process an arbritrary command
-	int (*on_custom_command)(struct Module *, int argc, char **argv);
+	int (*on_custom_command)(struct Module *, int job, int argc, const char * const *argv);
 };
 
 /// Set info for a storage device by the name of storage_name
@@ -280,6 +301,10 @@ void pak_debug_log(struct Module *mod, const char *fmt, ...);
 struct FileMetadata *pak_rt_get_metadata(struct Module *mod, struct FileHandle *file);
 /// Release metadata
 void pak_rt_release_metadata(struct Module *mod, struct FileMetadata *md);
-/// Get option name that was selected during setup, NULL if none selected
+/// Get option name that was selected during setup, NULL if none selected, do not free
 const char *pak_rt_get_setup_option(struct Module *mod);
+/// Return string of client name, do not free
+const char *pak_rt_get_client_name(void);
+/// Covers 'Bluetooth -> WiFi handover case common in some devices'
+int pak_rt_add_wifi_connection(struct Module *mod, struct PakWiFiApFilter *filter);
 #endif

@@ -24,6 +24,7 @@ enum PakBtEvent {
 	PAK_BT_EVENT_GATT_CHAR_READ = 4,
 	PAK_BT_EVENT_GATT_CHAR_CHANGED = 5,
 	PAK_BT_EVENT_GATT_DESC_WRITTEN = 6,
+	PAK_BT_EVENT_SERVICES_DISCOVERED = 7,
 };
 
 enum PakBtFeature {
@@ -76,10 +77,8 @@ int pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct Pa
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device);
 
+/// @brief Update all fields in device struct to current values
 int pak_bt_device_update(struct PakBt *ctx, struct PakBtDevice *dev);
-
-/// Use generic API to read battery level
-//int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int *percent);
 
 /// Establish connection with a bluetooth device for this context
 int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device);
@@ -103,7 +102,8 @@ int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service)
 
 static int pak_bt_get_gatt_service_uuid(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService *service, const char *uuid) {
 	for (int i = 0; pak_bt_get_gatt_service(ctx, device, service, i) == 0; i++) {
-		if (!strcmp(service->uuid, uuid)) return 0;
+		pak_global_log("%s", service->uuid);
+		if (!strcasecmp(service->uuid, uuid)) return 0;
 		pak_bt_unref_gatt_service(ctx, service);
 	}
 	return -1;
@@ -124,7 +124,7 @@ int pak_bt_unref_gatt_characteristic(struct PakBt *ctx, struct PakGattCharacteri
 
 static int pak_bt_get_gatt_characteristic_uuid(struct PakBt *ctx, struct PakGattService *service, struct PakGattCharacteristic *characteristic, const char *uuid) {
 	for (int i = 0; pak_bt_get_gatt_characteristic(ctx, service, characteristic, i) == 0; i++) {
-		if (!strcmp(characteristic->uuid, uuid)) return 0;
+		if (!strcasecmp(characteristic->uuid, uuid)) return 0;
 		pak_bt_unref_gatt_characteristic(ctx, characteristic);
 	}
 	return -1;
@@ -134,15 +134,16 @@ static int pak_bt_get_gatt_characteristic_uuid(struct PakBt *ctx, struct PakGatt
 int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int blocking);
 
 /// Request to write data to a characteristic. Write acknowledgement will be fired in the callback
-int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *data, unsigned int length, int blocking);
+int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const uint8_t *data, unsigned int length, int blocking);
 
-/// Read cached characteristic value
+/// @brief Read cached characteristic value
+/// @returns Number of bytes read, 0 if error
 unsigned int pak_bt_read_characteristic_cached_value(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *buffer, unsigned int max);
 
-/// Watch characteristic changes for x ms
+/// @brief Block thread and watch characteristic changes for x ms or until event occurs
 int pak_bt_watch_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, unsigned int ms);
 
-/// Set whether ctx is watching the characteristic
+/// @brief Set whether ctx is watching the characteristic
 int pak_bt_set_watching_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v);
 
 int pak_bt_set_cccd(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v);

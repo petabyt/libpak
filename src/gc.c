@@ -22,7 +22,7 @@ void pak_gc_add_ex(struct GcContext *ctx, enum ContainerType type, void *ptr, vo
 			};
 			return;
 		}
-		if ((i + 1) < ctx->list_length) {
+		if ((i + 1) >= ctx->list_length) {
 			unsigned int oldlen = ctx->list_length;
 			ctx->list_length += 100;
 			ctx->list = realloc(ctx->list, sizeof(struct Container) * ctx->list_length);

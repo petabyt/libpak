@@ -614,6 +614,14 @@ int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service)
 	return 0;
 }
 
+int pak_bt_set_watching_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v) {
+	return -1;
+}
+
+int pak_bt_watch_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, unsigned int ms) {
+	return -1;
+}
+
 int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int blocking) {
 	DBusMessage *call = dbus_message_new_method_call("org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "ReadValue");
 	DBusMessageIter iter;
@@ -633,7 +641,7 @@ int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *
 	return 0;
 }
 
-int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *data, unsigned int length, int blocking) {
+int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const uint8_t *data, unsigned int length, int blocking) {
 	DBusMessage *call = dbus_message_new_method_call("org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "WriteValue");
 	DBusMessageIter iter;
 	dbus_message_iter_init_append(call, &iter);
@@ -654,6 +662,14 @@ int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic 
 
 	dbus_message_unref(resp);
 	return 0;
+}
+
+unsigned int pak_bt_read_characteristic_cached_value(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *buffer, unsigned int max) {
+	return 0;
+}
+
+int pak_bt_set_cccd(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v) {
+	return -1;
 }
 
 static int get_service_channel(const char *mac_address, const char *uuid) {

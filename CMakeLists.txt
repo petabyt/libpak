@@ -37,6 +37,7 @@ if(ANDROID)
 		src/android/bluetooth.c
 		src/android/android.c
 		src/android/wifi.c
+		src/android/exif.c
 	)
 	find_library(log-lib log)
 	find_library(android-lib android)

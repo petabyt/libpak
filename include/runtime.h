@@ -204,6 +204,13 @@ struct PakTimestamp {
 	unsigned int centisecond;
 };
 
+struct PakLocation {
+    double latitude;
+    double longitude;
+    double altitude;
+    unsigned int satellites;
+};
+
 /// @brief A library that connects to and performs actions with an external device.
 /// @info Most "on_" methods are given a job number. This job number can be passed to other functions
 /// to check if the job is cancelled, set current progress, etc

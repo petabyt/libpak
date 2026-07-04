@@ -100,7 +100,7 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 	return PAK_ERR_NO_CONNECTION;
 }
 
-int get_pak_timestamp(struct PakTimestamp *ts) {
+int pak_get_timestamp(struct PakTimestamp *ts) {
 	struct timespec ts_spec;
 
 	if (clock_gettime(CLOCK_REALTIME, &ts_spec) != 0) {

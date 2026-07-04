@@ -36,6 +36,18 @@ int pak_wifi_adapter_from_jobject(JNIEnv *env, struct PakWiFiAdapter *adapter, j
 	return 0;
 }
 
+jobject pak_wifi_ap_filter_to_jobject(JNIEnv *env, struct PakWiFiApFilter *filter) {
+	jclass filter_c = (*env)->FindClass(env, "dev/danielc/libpak/WiFi$ApFilter");
+	jmethodID constructor = (*env)->GetMethodID(env, filter_c, "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IZ)V");
+	return (*env)->NewObject(env, filter_c, constructor,
+		filter->has_ssid ? (*env)->NewStringUTF(env, filter->ssid_pattern) : NULL,
+		filter->has_bssid ? (*env)->NewStringUTF(env, filter->bssid) : NULL,
+		filter->has_password ? (*env)->NewStringUTF(env, filter->password) : NULL,
+		filter->has_band ? filter->band : -1,
+		filter->is_hidden
+	);
+}
+
 int pak_wifi_get_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int index) {
 	if (index != 0 && index != -1) return -1;
 	JNIEnv *env = get_jni_env();

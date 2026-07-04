@@ -51,12 +51,15 @@ public class WiFi {
     }
 
     public static class ApFilter {
+        public ApFilter(String ssidPattern, String bssid, String password, int band, boolean hidden) {
+            this.ssidPattern = ssidPattern;
+            this.bssid = bssid;
+            this.password = password;
+            this.band = band;
+            this.hidden = hidden;
+        }
         public ApFilter() {
-            this.ssidPattern = null;
-            this.bssid = null;
-            this.password = null;
-            this.band = -1;
-            this.hidden = false;
+            this(null, null, null, -1, false);
         }
         public String ssidPattern;
         public String bssid;

@@ -220,17 +220,19 @@ int pak_wifi_get_n_adapters(struct PakNet *ctx) {
 	return count;
 }
 
-int pak_wifi_get_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int index) {
+struct PakWiFiAdapter *pak_wifi_get_adapter(struct PakNet *ctx, int index) {
 	if (ctx->adapter_list == NULL) {
-		if (pak_wifi_get_n_adapters(ctx) < 0) return -1;
+		if (pak_wifi_get_n_adapters(ctx) < 0) return NULL;
 	}
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
-	if (!dbus_message_iter_init(ctx->adapter_list, &args)) return -1;
+	if (!dbus_message_iter_init(ctx->adapter_list, &args)) return NULL;
 	dbus_message_iter_recurse(&args, &subargs);
 
-	if (dbus_message_iter_get_arg_type(&subargs) != DBUS_TYPE_ARRAY) return -1;
+	if (dbus_message_iter_get_arg_type(&subargs) != DBUS_TYPE_ARRAY) return NULL;
+
+	struct PakWiFiAdapter *adapter = malloc(sizeof(struct PakWiFiAdapter));
 
 	DBusMessageIter dict;
 	dbus_message_iter_recurse(&subargs, &dict);
@@ -257,7 +259,7 @@ int pak_wifi_get_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int
 //				get_networkmanager_basic_property(ctx->conn, path, "org.freedesktop.NetworkManager.Device", "Ip4Config", &ip4config);
 //				printf("%s\n", ip4config);
 
-				return 0;
+				return adapter;
 			} else {
 				count++;
 			}
@@ -265,7 +267,8 @@ int pak_wifi_get_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int
 		dbus_message_iter_next(&dict);
 	}
 
-	return -1;
+	free(adapter);
+	return NULL;
 }
 
 int pak_wifi_bind_socket_to_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int fd) {
@@ -277,6 +280,7 @@ int pak_wifi_bind_socket_to_adapter(struct PakNet *ctx, struct PakWiFiAdapter *a
 
 int pak_wifi_unref_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter_arg) {
 	free(adapter_arg->priv);
+	free(adapter_arg);
 	return 0;
 }
 
@@ -324,44 +328,46 @@ int pak_wifi_get_n_aps(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {
 	return len;
 }
 
-int pak_wifi_get_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, int index) {
+struct PakWiFiAp *pak_wifi_get_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int index) {
 	if (adapter->priv->current_ap_list == NULL) {
-		if (pak_wifi_get_n_aps(ctx, adapter) < 0) return -1;
+		if (pak_wifi_get_n_aps(ctx, adapter) < 0) return NULL;
 	}
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
-	if (!dbus_message_iter_init(adapter->priv->current_ap_list, &args)) return -1;
+	if (!dbus_message_iter_init(adapter->priv->current_ap_list, &args)) return NULL;
 	dbus_message_iter_recurse(&args, &subargs);
 
-	if (dbus_message_iter_get_arg_type(&subargs) != DBUS_TYPE_ARRAY) return -1;
+	if (dbus_message_iter_get_arg_type(&subargs) != DBUS_TYPE_ARRAY) return NULL;
 
 	DBusMessageIter dict;
 	dbus_message_iter_recurse(&subargs, &dict);
 	int len = dbus_message_iter_get_element_count(&subargs);
 
+	struct PakWiFiAp *ap = malloc(sizeof(struct PakWiFiAp));
 	for (int i = 0; i < len; i++) {
-		if (dbus_message_iter_get_arg_type(&dict) != DBUS_TYPE_OBJECT_PATH) return -1;
+		if (dbus_message_iter_get_arg_type(&dict) != DBUS_TYPE_OBJECT_PATH) return NULL; // leak
 		const char *path = NULL;
 		dbus_message_iter_get_basic(&dict, &path);
 
 		if (i == index) {
 			fill_ap(ctx->conn, path, ap);
-			return 0;
+			return ap;
 		}
 
 		dbus_message_iter_next(&dict);
 	}
 
-	return -1;
+	return NULL; // leak
 }
 
 int pak_wifi_unref_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
 	free(ap->priv);
+	free(ap);
 	return 0;
 }
 
-int pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
+struct PakWiFiAp *pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {
 	DBusError error;
 	dbus_error_init(&error);
 	DBusMessage *call = dbus_message_new_method_call("org.freedesktop.NetworkManager", adapter->priv->path, "org.freedesktop.DBus.Properties", "Get");
@@ -371,22 +377,23 @@ int pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter
 	dbus_message_append_args(call, DBUS_TYPE_STRING, &iface, DBUS_TYPE_STRING, &prop, DBUS_TYPE_INVALID);
 
 	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
-	if (resp == NULL) return -1;
+	if (resp == NULL) return NULL;
 
 	DBusMessageIter args;
 	DBusMessageIter subargs;
-	if (!dbus_message_iter_init(resp, &args)) return -1;
+	if (!dbus_message_iter_init(resp, &args)) return NULL;
 	dbus_message_iter_recurse(&args, &subargs);
 	const char *ap_path = NULL;
 	dbus_message_iter_get_basic(&subargs, &ap_path);
 
-	if (!strcmp(ap_path, "/")) return -1; // not connected
+	if (!strcmp(ap_path, "/")) return NULL; // not connected
 
+	struct PakWiFiAp *ap = malloc(sizeof(struct PakWiFiAp));
 	fill_ap(ctx->conn, ap_path, ap);
 
 	dbus_message_unref(resp);
 
-	return 0;
+	return ap;
 }
 
 int pak_wifi_is_enabled(struct PakNet *ctx) {

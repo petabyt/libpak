@@ -21,7 +21,7 @@ static JSClassID wifi_adapter_class_id = 0;
 
 struct Adapter {
 	struct PakNet *ctx;
-	struct PakWiFiAdapter adapter;
+	struct PakWiFiAdapter *adapter;
 };
 
 static JSValue create_adapter(JSContext *ctx, JSValue wifi, struct PakNet *wifi_ctx, struct PakWiFiAdapter *adapter) {
@@ -29,19 +29,18 @@ static JSValue create_adapter(JSContext *ctx, JSValue wifi, struct PakNet *wifi_
 
 	struct Adapter *adapter_priv = js_malloc_rt(JS_GetRuntime(ctx), sizeof(struct Adapter));
 	adapter_priv->ctx = wifi_ctx;
-	adapter_priv->adapter = *adapter;
+	adapter_priv->adapter = adapter;
 
 	JS_SetOpaque(adapter_obj, adapter_priv);
 
-	JS_SetPropertyStr(ctx, adapter_obj, "name", JS_NewString(ctx, adapter_priv->adapter.name));
-
+	JS_SetPropertyStr(ctx, adapter_obj, "name", JS_NewString(ctx, adapter_priv->adapter->name));
 	JS_SetPropertyStr(ctx, adapter_obj, "parent", JS_DupValue(ctx, wifi));
 	return adapter_obj;
 }
 
 static void adapter_finalizer(JSRuntime *rt, JSValue val) {
 	struct Adapter *adapter = JS_GetOpaque(val, wifi_adapter_class_id);
-	pak_wifi_unref_adapter(adapter->ctx, &adapter->adapter);
+	pak_wifi_unref_adapter(adapter->ctx, adapter->adapter);
 }
 
 static int module_wifi_adapter(JSContext* ctx, JSModuleDef *m) {
@@ -66,9 +65,8 @@ static int module_wifi_adapter(JSContext* ctx, JSModuleDef *m) {
 
 static JSValue get_default_adapter(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
 	struct PakNet *wifi_ctx = JS_GetOpaque(this_val, wifi_class_id);
-	struct PakWiFiAdapter pakadapter;
-	pak_wifi_get_adapter(wifi_ctx, &pakadapter, -1);
-	JSValue adapter = create_adapter(ctx, this_val, wifi_ctx, &pakadapter);
+	struct PakWiFiAdapter *pakadapter = pak_wifi_get_adapter(wifi_ctx, -1);
+	JSValue adapter = create_adapter(ctx, this_val, wifi_ctx, pakadapter);
 	return adapter;
 }
 
@@ -77,7 +75,7 @@ static JSValue wifi_bind_to_adapter(JSContext *ctx, JSValueConst this_val, int a
 	struct Adapter *adapter = JS_GetOpaque(argv[0], wifi_adapter_class_id);
 	int32_t fd;
 	JS_ToInt32(ctx, &fd, argv[1]);
-	if (pak_wifi_bind_socket_to_adapter(wifi_ctx, &adapter->adapter, fd)) {
+	if (pak_wifi_bind_socket_to_adapter(wifi_ctx, adapter->adapter, fd)) {
 		return JS_ThrowInternalError(ctx, "pak_wifi_bind_socket_to_adapter");
 	}
 	return JS_UNDEFINED;

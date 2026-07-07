@@ -8,10 +8,6 @@ void set_jni_env_ctx(JNIEnv *env, jobject ctx);
 JNIEnv *get_jni_env(void);
 jobject get_jni_ctx(void);
 
-enum AndroidPrefModes {
-	ANDROID_MODE_PRIVATE = 0x0,
-};
-
 /// @returns ctx.getPackageName()
 jstring jni_get_package_name(JNIEnv *env, jobject context);
 /// @returns ctx.getResources()
@@ -29,18 +25,5 @@ jobject jni_get_handler(JNIEnv *env);
 jobject jni_get_application_ctx(JNIEnv *env);
 
 void *jni_get_assets_file_contents(JNIEnv *env, jobject ctx, const char *filename, int *length);
-
-/// @memberof pref
-jint jni_get_pref_int(JNIEnv *env, const char *key, jint default_val);
-/// @note Returns strdup'd string
-char *jni_get_pref_str(JNIEnv *env, const char *key, const char *default_val);
-void jni_set_pref_str(JNIEnv *env, const char *key, const char *str);
-void jni_set_pref_int(JNIEnv *env, const char *key, int x);
-/// @returns 1 if preference exists
-jboolean jni_check_pref(JNIEnv *env, const char *key);
-/// @note Returns strdup'd string
-char *jni_get_string(JNIEnv *env, jobject ctx, const char *id);
-/// @brief Get string resource ID from R.strings.
-int jni_get_string_id(JNIEnv *env, jobject ctx, const char *id);
 
 #endif

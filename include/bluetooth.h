@@ -44,11 +44,10 @@ struct PakBtAdapter {
 	char address[64];
 	char name[64];
 	int powered;
-	int class_;
 };
 
 int pak_bt_get_n_adapters(struct PakBt *ctx);
-int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int index);
+struct PakBtAdapter *pak_bt_get_adapter(struct PakBt *ctx, int index);
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter);
 
 struct PakBtDevice {
@@ -73,7 +72,7 @@ int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int fi
 
 /// Get bluetooth devices through a filter
 /// @param filter See enum PakDeviceStateFilter
-int pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index, int filter);
+struct PakBtDevice *pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, int index, int filter);
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device);
 
@@ -97,16 +96,17 @@ struct PakGattService {
 };
 
 /// Get GATT services within a device
-int pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService *service, int index);
+struct PakGattService *pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDevice *device, int index);
 int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service);
 
-static int pak_bt_get_gatt_service_uuid(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService *service, const char *uuid) {
-	for (int i = 0; pak_bt_get_gatt_service(ctx, device, service, i) == 0; i++) {
-		pak_global_log("%s", service->uuid);
+__attribute__((unused))
+static struct PakGattService *pak_bt_get_gatt_service_uuid(struct PakBt *ctx, struct PakBtDevice *device, const char *uuid) {
+	struct PakGattService *service;
+	for (int i = 0; (service = pak_bt_get_gatt_service(ctx, device, i)) != NULL; i++) {
 		if (!strcasecmp(service->uuid, uuid)) return 0;
 		pak_bt_unref_gatt_service(ctx, service);
 	}
-	return -1;
+	return NULL;
 }
 
 struct PakGattCharacteristic {
@@ -119,15 +119,17 @@ struct PakGattCharacteristic {
 };
 
 /// Get GATT characteristics associated with a GATT service
-int pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *service, struct PakGattCharacteristic *characteristic, int index);
+struct PakGattCharacteristic *pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *service, int index);
 int pak_bt_unref_gatt_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *chr);
 
-static int pak_bt_get_gatt_characteristic_uuid(struct PakBt *ctx, struct PakGattService *service, struct PakGattCharacteristic *characteristic, const char *uuid) {
-	for (int i = 0; pak_bt_get_gatt_characteristic(ctx, service, characteristic, i) == 0; i++) {
+__attribute__((unused))
+static struct PakGattCharacteristic *pak_bt_get_gatt_characteristic_uuid(struct PakBt *ctx, struct PakGattService *service, const char *uuid) {
+	struct PakGattCharacteristic *characteristic;
+	for (int i = 0; (characteristic = pak_bt_get_gatt_characteristic(ctx, service, i)) == 0; i++) {
 		if (!strcasecmp(characteristic->uuid, uuid)) return 0;
 		pak_bt_unref_gatt_characteristic(ctx, characteristic);
 	}
-	return -1;
+	return NULL;
 }
 
 /// Request to read characteristic value. Result will be fired in the callback
@@ -146,6 +148,7 @@ int pak_bt_watch_characteristic(struct PakBt *ctx, struct PakGattCharacteristic 
 /// @brief Set whether ctx is watching the characteristic
 int pak_bt_set_watching_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v);
 
+/// @brief Helper function to set Client Characteristic Configuration Descriptor value
 int pak_bt_set_cccd(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v);
 
 struct PakGattDescriptor {
@@ -164,7 +167,7 @@ enum PakBtSocketOption {
 };
 
 /// Setup RFCOMM connection to a UUID via SDP lookup
-int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid, struct PakBtSocket **conn);
+struct PakBtSocket *pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid);
 /// write()
 int pak_bt_write(struct PakBtSocket *conn, const void *data, unsigned int length);
 /// read()
@@ -173,6 +176,8 @@ int pak_bt_read(struct PakBtSocket *conn, void *data, unsigned int length);
 int pak_bt_close_socket(struct PakBtSocket *conn);
 
 typedef int pak_bt_listen_device(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtDevice *dev, struct PakGattCharacteristic *chr, void *arg);
+
+/// @brief Set event callback for a device
 int pak_bt_set_device_callback(struct PakBt *ctx, struct PakBtDevice *device, pak_bt_listen_device *cb, void *cb_arg);
 
 #endif

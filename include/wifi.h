@@ -43,7 +43,7 @@ struct PakWiFiAdapter {
 };
 
 int pak_wifi_get_n_adapters(struct PakNet *ctx);
-int pak_wifi_get_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int index);
+struct PakWiFiAdapter *pak_wifi_get_adapter(struct PakNet *ctx, int index);
 int pak_wifi_unref_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter);
 
 /// Bind a socket file descriptor to a network adapter
@@ -61,11 +61,11 @@ struct PakWiFiAp {
 };
 
 int pak_wifi_get_n_aps(struct PakNet *ctx, struct PakWiFiAdapter *adapter);
-int pak_wifi_get_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, int index);
+struct PakWiFiAp *pak_wifi_get_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int index);
 int pak_wifi_unref_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap);
 
-/// @returns -1 if adapter is currently not connected to access point
-int pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap);
+/// @returns NULL if adapter is currently not connected to access point
+struct PakWiFiAp *pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter);
 
 /// Request to connect to access point
 int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *password);
@@ -88,14 +88,4 @@ struct PakWiFiApFilter {
 /// callback must call pak_wifi_unref_adapter when it doesn't need the adapter handle anymore
 int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec, int (*cb)(struct PakNet *ctx, struct PakWiFiAdapter *, void *arg), void *arg);
 
-//struct PakNetworkHandle {
-//	enum PakAdapterType type;
-//	union {
-//		struct PakNetworkHandleWiFi {
-//			struct PakWiFiAdapter *adapter;
-//			struct PakWiFiAp ap;
-//		}wifi;
-//	}u;
-//};
-//int pak_net_bind_handle_to_socket(struct PakNet *ctx, struct PakNetworkHandle *handle, int fd);
 #endif

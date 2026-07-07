@@ -106,12 +106,13 @@ int pak_bt_get_n_adapters(struct PakBt *ctx) {
 	return 1;
 }
 
-int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int index) {
+struct PakBtAdapter *pak_bt_get_adapter(struct PakBt *ctx, int index) {
 	JNIEnv *env = get_jni_env();
+	struct PakBtAdapter *adapter = malloc(sizeof(struct PakBtAdapter));
 	adapter->priv = malloc(sizeof(struct PakBtAdapterPriv));
 	adapter->priv->adapter = (*env)->NewGlobalRef(env, get_default_adapter(env));
 	pak_gc_add(&ctx->gc, BT_ADAPTER_PRIV, adapter->priv);
-	return 0;
+	return adapter;
 }
 
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
@@ -119,6 +120,7 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
 	(*env)->DeleteGlobalRef(env, adapter->priv->adapter);
 	pak_gc_remove(&ctx->gc, adapter->priv);
 	free(adapter->priv);
+	free(adapter);
 	return 0;
 }
 
@@ -209,8 +211,10 @@ int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int fi
 	return scan_devices(ctx, adapter, filter, NULL, 0);
 }
 
-int pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index, int filter) {
-	return scan_devices(ctx, adapter, filter, device, index);
+struct PakBtDevice *pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, int index, int filter) {
+	struct PakBtDevice *device = malloc(sizeof(struct PakBtDevice));
+	if (scan_devices(ctx, adapter, filter, device, index)) return NULL;
+	return device;
 }
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {
@@ -220,6 +224,7 @@ int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {
 	(*env)->DeleteGlobalRef(env, device->priv->device);
 	(*env)->DeleteGlobalRef(env, device->priv->bluetooth_device);
 	free(device->priv);
+	free(device);
 	return 0;
 }
 
@@ -244,7 +249,7 @@ int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device) {
 	return 0;
 }
 
-int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid, struct PakBtSocket **conn) {
+struct PakBtSocket *pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid) {
 	JNIEnv *env = get_jni_env();
 	(*env)->PushLocalFrame(env, 10);
 	jclass device = (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device");
@@ -255,11 +260,11 @@ int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev
 		(*env)->ExceptionClear(env);
 		(*env)->ExceptionDescribe(env);
 		(*env)->PopLocalFrame(env, NULL);
-		return -1;
+		return NULL;
 	}
 	if (socket == NULL) {
 		(*env)->PopLocalFrame(env, NULL);
-		return -1;
+		return NULL;
 	}
 
 	jmethodID socket_connect_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "android/bluetooth/BluetoothSocket"), "connect", "()V");
@@ -268,27 +273,28 @@ int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev
 		(*env)->ExceptionClear(env);
 		(*env)->PopLocalFrame(env, NULL);
 		pak_global_log("Failed to connect to socket");
-		return -1;
+		return NULL;
 	}
 
 	jmethodID get_output_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "android/bluetooth/BluetoothSocket"), "getOutputStream", "()Ljava/io/OutputStream;");
 	jobject output_pipe = (*env)->CallObjectMethod(env, socket, get_output_m);
 	if (output_pipe == NULL) {
 		pak_global_log("getOutputStream");
-		return -1;
+		return NULL;
 	}
 	jmethodID get_input_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "android/bluetooth/BluetoothSocket"), "getInputStream", "()Ljava/io/InputStream;");
 	jobject input_pipe = (*env)->CallObjectMethod(env, socket, get_input_m);
 	if (input_pipe == NULL) {
 		pak_global_log("getInputStream");
-		return -1;
+		return NULL;
 	}
 
-	(*conn) = malloc(sizeof(struct PakBtSocket));
-	pak_gc_add(&ctx->gc, BT_SOCKET, (*conn));
-	(*conn)->socket = (*env)->NewGlobalRef(env, socket);
-	(*conn)->output = (*env)->NewGlobalRef(env, output_pipe);
-	(*conn)->input = (*env)->NewGlobalRef(env, input_pipe);
+	struct PakBtSocket *conn = malloc(sizeof(struct PakBtSocket));
+
+	pak_gc_add(&ctx->gc, BT_SOCKET, conn);
+	conn->socket = (*env)->NewGlobalRef(env, socket);
+	conn->output = (*env)->NewGlobalRef(env, output_pipe);
+	conn->input = (*env)->NewGlobalRef(env, input_pipe);
 	(*env)->PopLocalFrame(env, NULL);
 	return 0;
 }
@@ -353,18 +359,20 @@ static int read_uuid(JNIEnv *env, jobject uuid_o, char uuid[UUID_STR_LENGTH]) {
 	return 0;
 }
 
-int pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService *service, int index) {
+struct PakGattService *pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDevice *device, int index) {
 	JNIEnv *env = get_jni_env();
 	int rc = setup_listener(device);
-	if (rc) return rc;
+	if (rc) return NULL;
 	(*env)->PushLocalFrame(env, 10);
 	jclass device_c = (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device");
 	jmethodID get_service_m = (*env)->GetMethodID(env, device_c, "getService", "(I)Landroid/bluetooth/BluetoothGattService;");
 	jobject service_o = (*env)->CallObjectMethod(env, device->priv->device, get_service_m, index);
 	if (service_o == NULL) {
 		(*env)->PopLocalFrame(env, NULL);
-		return PAK_ERR_NON_FATAL;
+		return NULL;
 	}
+
+	struct PakGattService *service = malloc(sizeof(struct PakGattService));
 
 	jobject uuid_o = (*env)->CallObjectMethod(env, service_o, (*env)->GetMethodID(env, (*env)->FindClass(env, "android/bluetooth/BluetoothGattService"), "getUuid", "()Ljava/util/UUID;"));
 	read_uuid(env, uuid_o, service->uuid);
@@ -376,7 +384,7 @@ int pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDevice *device, struc
 	service->priv->device = device;
 
 	(*env)->PopLocalFrame(env, NULL);
-	return 0;
+	return service;
 }
 
 int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service) {
@@ -384,10 +392,11 @@ int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service)
 	(*env)->DeleteGlobalRef(env, service->priv->obj);
 	pak_gc_remove(&ctx->gc, service->priv);
 	free(service->priv);
+	free(service);
 	return 0;
 }
 
-int pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *service, struct PakGattCharacteristic *characteristic, int index) {
+struct PakGattCharacteristic *pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *service, int index) {
 	JNIEnv *env = get_jni_env();
 	setup_listener(service->priv->device);
 	(*env)->PushLocalFrame(env, 10);
@@ -398,8 +407,10 @@ int pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *ser
 		(*env)->ExceptionClear(env);
 		(*env)->ExceptionDescribe(env);
 		(*env)->PopLocalFrame(env, NULL);
-		return PAK_ERR_NON_FATAL;
+		return NULL;
 	}
+
+	struct PakGattCharacteristic *characteristic = malloc(sizeof(struct PakGattCharacteristic));
 
 	jobject uuid_o = (*env)->CallObjectMethod(env, chr_o, (*env)->GetMethodID(env, (*env)->FindClass(env, "android/bluetooth/BluetoothGattCharacteristic"), "getUuid", "()Ljava/util/UUID;"));
 	read_uuid(env, uuid_o, characteristic->uuid);
@@ -411,7 +422,7 @@ int pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *ser
 	characteristic->priv->service = service;
 
 	(*env)->PopLocalFrame(env, NULL);
-	return 0;
+	return characteristic;
 }
 
 int pak_bt_unref_gatt_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *chr) {
@@ -419,6 +430,7 @@ int pak_bt_unref_gatt_characteristic(struct PakBt *ctx, struct PakGattCharacteri
 	(*env)->DeleteGlobalRef(env, chr->priv->obj);
 	pak_gc_remove(&ctx->gc, chr->priv);
 	free(chr->priv);
+	free(chr);
 	return 0;
 }
 

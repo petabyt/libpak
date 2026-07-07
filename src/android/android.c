@@ -232,26 +232,26 @@ int jni_get_string_id(JNIEnv *env, jobject ctx, const char *key) {
 }
 
 
-jbyteArray jni_struct_to_bytearray(void *data, int length) {
-	JNIEnv *env = get_jni_env();
-	jbyteArray arr = (*env)->NewByteArray(env, length);
-	(*env)->SetByteArrayRegion(env, arr, 0, length, (const jbyte *)data);
-	return arr;
-}
-
-jobject jni_string_to_jsonobject(JNIEnv *env, const char *str) {
-	jclass json_object_class;
-	jmethodID json_object_constructor;
-	jobject json_object;
-	jstring json_string;
-
-	json_object_class = (*env)->FindClass(env, "org/json/JSONObject");
-	json_object_constructor = (*env)->GetMethodID(env, json_object_class, "<init>", "(Ljava/lang/String;)V");
-
-	json_string = (*env)->NewStringUTF(env, str);
-	json_object = (*env)->NewObject(env, json_object_class, json_object_constructor, json_string);
-
-	(*env)->DeleteLocalRef(env, json_string);
-
-	return json_object;
-}
+//jbyteArray jni_struct_to_bytearray(void *data, int length) {
+//	JNIEnv *env = get_jni_env();
+//	jbyteArray arr = (*env)->NewByteArray(env, length);
+//	(*env)->SetByteArrayRegion(env, arr, 0, length, (const jbyte *)data);
+//	return arr;
+//}
+//
+//jobject jni_string_to_jsonobject(JNIEnv *env, const char *str) {
+//	jclass json_object_class;
+//	jmethodID json_object_constructor;
+//	jobject json_object;
+//	jstring json_string;
+//
+//	json_object_class = (*env)->FindClass(env, "org/json/JSONObject");
+//	json_object_constructor = (*env)->GetMethodID(env, json_object_class, "<init>", "(Ljava/lang/String;)V");
+//
+//	json_string = (*env)->NewStringUTF(env, str);
+//	json_object = (*env)->NewObject(env, json_object_class, json_object_constructor, json_string);
+//
+//	(*env)->DeleteLocalRef(env, json_string);
+//
+//	return json_object;
+//}

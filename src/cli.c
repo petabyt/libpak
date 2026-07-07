@@ -13,41 +13,41 @@ int test_bluetooth(void) {
 
 	int len = pak_bt_get_n_adapters(ctx);
 	if (len <= 0) return -1;
-	struct PakBtAdapter adapter;
-	if (pak_bt_get_adapter(ctx, &adapter, 0)) return -1;
+	struct PakBtAdapter *adapter = pak_bt_get_adapter(ctx, 0);
+	if (adapter == NULL) return -1;
 
-	struct PakBtDevice dev;
 	int i = 0;
-	while (pak_bt_get_device(ctx, &adapter, &dev, i, PAK_FILTER_BONDED) == 0) {
-		printf("Paired device: %s\n", dev.name);
-		if (!dev.is_classic) {
+	struct PakBtDevice *dev;
+	while ((dev = pak_bt_get_device(ctx, adapter, i, PAK_FILTER_BONDED)) != NULL) {
+		printf("Paired device: %s\n", dev->name);
+		if (!dev->is_classic) {
 			uint8_t buf[0xff];
-			unsigned int sz = pak_bt_get_manufacturer_data(ctx, &dev, 0, buf, sizeof(buf));
+			unsigned int sz = pak_bt_get_manufacturer_data(ctx, dev, 0, buf, sizeof(buf));
 			printf("Mfgdata: {");
 			for (int z = 0; z < sz; z++) {
 				printf("%02x,", buf[z]);
 			}
 			printf("}\n");
 
-			struct PakGattService service;
-			struct PakGattCharacteristic chr;
-			for (int x = 0; !pak_bt_get_gatt_service(ctx, &dev, &service, x); x++) {
-				printf("Service: %s\n", service.uuid);
-				for (int i = 0; !pak_bt_get_gatt_characteristic(ctx, &service, &chr, i); i++) {
-					printf("  Characteristic: %s\n", chr.uuid);
-					pak_bt_unref_gatt_characteristic(ctx, &chr);
+			struct PakGattService *service;
+			struct PakGattCharacteristic *chr;
+			for (int x = 0; !(service = pak_bt_get_gatt_service(ctx, dev, x)); x++) {
+				printf("Service: %s\n", service->uuid);
+				for (int i = 0; !(chr = pak_bt_get_gatt_characteristic(ctx, service, i)); i++) {
+					printf("  Characteristic: %s\n", chr->uuid);
+					pak_bt_unref_gatt_characteristic(ctx, chr);
 				}
-				pak_bt_unref_gatt_service(ctx, &service);
+				pak_bt_unref_gatt_service(ctx, service);
 			}
 		}
 
 		i++;
-		pak_bt_unref_device(ctx, &dev);
+		pak_bt_unref_device(ctx, dev);
 	}
 
 	//pak_main_loop();
 
-	pak_bt_unref_adapter(ctx, &adapter);
+	pak_bt_unref_adapter(ctx, adapter);
 
 	return 0;
 }
@@ -57,21 +57,21 @@ int test_wifi(void) {
 
 	int len = pak_wifi_get_n_adapters(ctx);
 	if (len <= 0) return -1;
-	struct PakWiFiAdapter adapter;
-	if (pak_wifi_get_adapter(ctx, &adapter, 0)) return -1;
-	printf("WiFi adapter: %s\n", adapter.name);
+	struct PakWiFiAdapter *adapter = pak_wifi_get_adapter(ctx, 0);
+	if (adapter == NULL) return -1;
+	printf("WiFi adapter: %s\n", adapter->name);
 
-	int n_aps = pak_wifi_get_n_aps(ctx, &adapter);
-	struct PakWiFiAp ap;
+	int n_aps = pak_wifi_get_n_aps(ctx, adapter);
 	for (int i = 0; i < n_aps; i++) {
-		if (pak_wifi_get_ap(ctx, &adapter, &ap, i)) return -1;
-		printf("ssid: %s\n", ap.ssid);
-		pak_wifi_unref_ap(ctx, &adapter, &ap);
+		struct PakWiFiAp *ap;
+		if ((ap = pak_wifi_get_ap(ctx, adapter, i))) return -1;
+		printf("ssid: %s\n", ap->ssid);
+		pak_wifi_unref_ap(ctx, adapter, ap);
 	}
 
 	pak_main_loop();
 
-	pak_wifi_unref_adapter(ctx, &adapter);
+	pak_wifi_unref_adapter(ctx, adapter);
 
 	return 0;
 }
@@ -81,25 +81,25 @@ int test_bluetooth_connect(void) {
 
 	int len = pak_bt_get_n_adapters(ctx);
 	if (len <= 0) return -1;
-	struct PakBtAdapter adapter;
-	if (pak_bt_get_adapter(ctx, &adapter, 0)) return -1;
+	struct PakBtAdapter *adapter = pak_bt_get_adapter(ctx, 0);
+	if (adapter == NULL) return -1;
 
-	struct PakBtDevice dev;
-	int rc = pak_bt_get_device(ctx, &adapter, &dev, 0, PAK_FILTER_CONNECTED);
-	printf("Saved device: %s\n", dev.name);
+	struct PakBtDevice *dev;
+	dev = pak_bt_get_device(ctx, adapter, 0, PAK_FILTER_CONNECTED);
+	printf("Saved device: %s\n", dev->name);
 
-	struct PakGattService service;
-	struct PakGattCharacteristic chr;
-	for (int x = 0; !pak_bt_get_gatt_service(ctx, &dev, &service, x); x++) {
-		printf("Service: %s\n", service.uuid);
-		for (int i = 0; !pak_bt_get_gatt_characteristic(ctx, &service, &chr, i); i++) {
-			printf("  Characteristic: %s\n", chr.uuid);
-			pak_bt_unref_gatt_characteristic(ctx, &chr);
+	struct PakGattService *service;
+	struct PakGattCharacteristic *chr;
+	for (int x = 0; !(service = pak_bt_get_gatt_service(ctx, dev, x)); x++) {
+		printf("Service: %s\n", service->uuid);
+		for (int i = 0; !pak_bt_get_gatt_characteristic(ctx, service, i); i++) {
+			printf("  Characteristic: %s\n", chr->uuid);
+			pak_bt_unref_gatt_characteristic(ctx, chr);
 		}
-		pak_bt_unref_gatt_service(ctx, &service);
+		pak_bt_unref_gatt_service(ctx, service);
 	}
 
-	pak_bt_unref_adapter(ctx, &adapter);
+	pak_bt_unref_adapter(ctx, adapter);
 
 	return 0;
 }

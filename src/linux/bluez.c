@@ -20,8 +20,8 @@ struct PakBtSocket {
 	int fd;
 };
 
-struct PakBtDevicePriv {
-	int x;
+struct PakBtDeviceWrapper {
+	struct PakBtDevice base;
 	uint8_t mfg_data[0xff];
 	unsigned int mfg_data_len;
 	struct UuidList {
@@ -31,20 +31,24 @@ struct PakBtDevicePriv {
 	char path[];
 };
 
-struct PakBtAdapterPriv {
-	int x;
+struct PakBtAdapterWrapper {
+	struct PakBtAdapter base;
 	char path[];
 };
 
-struct PakGattServicePriv {
-	int x;
+struct PakGattServiceWrapper {
+	struct PakGattService base;
 	char path[];
 };
 
-struct PakGattCharacteristicPriv {
-	int x;
+struct PakGattCharacteristicWrapper {
+	struct PakGattCharacteristic base;
 	char path[];
 };
+
+#define TO_WRAPPER(this) _Generic((this), \
+      struct PakBtDevice *: (struct PakBtDeviceWrapper *)this, \
+      )
 
 static int pak_str_to_uuid128(const char *str, uint8_t copy[16]) {
 	uint32_t v[16];
@@ -186,7 +190,7 @@ static int find_dict(struct DBusMessageIter *dict_iter, const char *name_arg, st
 }
 
 // https://github.com/bluez/bluez-sandbox/blob/209e2568c6970d174c45460d1e16c3e7e8571a5f/doc/adapter-api.txt
-static int fill_adapter_from_dict(struct DBusMessageIter *dict_iter, struct PakBtAdapter *adapter, const char *path) {
+static struct PakBtAdapterWrapper *fill_adapter_from_dict(struct DBusMessageIter *dict_iter, const char *path) {
 	int len = dbus_message_iter_get_element_count(dict_iter);
 	DBusMessageIter arr_iter;
 	dbus_message_iter_recurse(dict_iter, &arr_iter);
@@ -200,26 +204,25 @@ static int fill_adapter_from_dict(struct DBusMessageIter *dict_iter, struct PakB
 		struct DBusMessageIter dict_variant;
 		dbus_message_iter_recurse(&dict, &dict_variant);
 
+		struct PakBtAdapterWrapper *adapter = alloc_priv(sizeof(struct PakBtAdapterWrapper), path);
+
 		if (!strcmp(name, "Powered")) {
-			//printf("%c\n", dbus_message_iter_get_arg_type(&dict_variant));
 			dbus_bool_t v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			adapter->powered = v;
+			adapter->base.powered = v;
 		} else if (!strcmp(name, "Name")) {
 			const char *v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			strlcpy(adapter->name, v, sizeof(adapter->name));
+			strlcpy(adapter->base.name, v, sizeof(adapter->base.name));
 		} else if (!strcmp(name, "Address")) {
 			const char *v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			strlcpy(adapter->address, v, sizeof(adapter->address));
+			strlcpy(adapter->base.address, v, sizeof(adapter->base.address));
 		}
-
-		adapter->priv = (struct PakBtAdapterPriv *)alloc_priv(sizeof(struct PakBtAdapterPriv), path);
 
 		dbus_message_iter_next(&arr_iter);
 	}
-	return -1;
+	return NULL;
 }
 
 int pak_bt_get_n_adapters(struct PakBt *ctx) {
@@ -252,9 +255,9 @@ int pak_bt_get_n_adapters(struct PakBt *ctx) {
 	return n_valid_adapters;
 }
 
-int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int index) {
+struct PakBtAdapter *pak_bt_get_adapter(struct PakBt *ctx, int index) {
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
-	if (resp == NULL) return -1;
+	if (resp == NULL) return NULL;
 
 	DBusMessageIter iter;
 	dbus_message_iter_init(resp, &iter);
@@ -272,8 +275,12 @@ int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int inde
 		if (path == NULL) abort();
 		dbus_message_iter_next(&dict);
 		DBusMessageIter adapter_dict;
-		if (!find_dict(&dict, "org.bluez.Adapter1", &adapter_dict) && n_valid_adapters == index) {
-			fill_adapter_from_dict(&adapter_dict, adapter, path);
+		if (!find_dict(&dict, "org.bluez.Adapter1", &adapter_dict)) {
+			if (n_valid_adapters == index) {
+				struct PakBtAdapterWrapper *adapter = fill_adapter_from_dict(&adapter_dict, path);
+				dbus_message_unref(resp);
+				return (struct PakBtAdapter *)adapter;
+			}
 			n_valid_adapters++;
 		}
 
@@ -285,16 +292,19 @@ int pak_bt_get_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter, int inde
 }
 
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
-	free(adapter->priv);
+	free(adapter);
 	return 0;
 }
 
 unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max) {
+	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
 #define min(x, y) (((x) < (y)) ? (x) : (y))
-	memcpy(buffer, device->priv->mfg_data, min(device->priv->mfg_data_len, max));
+	memcpy(buffer, wrapper->mfg_data, min(wrapper->mfg_data_len, max));
+#undef min
+	return wrapper->mfg_data_len;
 }
 
-static void parse_manufacturer_data(struct DBusMessageIter *dict, struct PakBtDevice *dev) {
+static void parse_manufacturer_data(struct DBusMessageIter *dict, struct PakBtDeviceWrapper *dev) {
 	// Example: "ManufacturerData" a{qv} 1 1520 ay 4 170 0 0 0
 	int of = 0;
 	struct DBusMessageIter dict2;
@@ -310,8 +320,8 @@ static void parse_manufacturer_data(struct DBusMessageIter *dict, struct PakBtDe
 		uint16_t qword;
 		dbus_message_iter_get_basic(&dict4, &qword);
 
-		dev->priv->mfg_data[of++] = qword & 0xff;
-		dev->priv->mfg_data[of++] = (qword >> 8) & 0xff;
+		dev->mfg_data[of++] = qword & 0xff;
+		dev->mfg_data[of++] = (qword >> 8) & 0xff;
 
 		dbus_message_iter_next(&dict4);
 
@@ -324,21 +334,23 @@ static void parse_manufacturer_data(struct DBusMessageIter *dict, struct PakBtDe
 		while (dbus_message_iter_get_arg_type(&dict6) != DBUS_TYPE_INVALID) {
 			uint8_t byte;
 			dbus_message_iter_get_basic(&dict6, &byte);
-			dev->priv->mfg_data[of++] = byte;
+			dev->mfg_data[of++] = byte;
 			dbus_message_iter_next(&dict6);
 		}
 
 		dbus_message_iter_next(&dict3);
 	}
-	dev->priv->mfg_data_len = of;
+	dev->mfg_data_len = of;
 }
 
 // https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc/org.bluez.Device.rst
-static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevice *dev) {
+static struct PakBtDeviceWrapper *fill_from_device1(struct DBusMessageIter *dict_iter, const char *path) {
+	struct PakBtDeviceWrapper *dev = alloc_priv(sizeof(struct PakBtDeviceWrapper), path);
+
 	int len = dbus_message_iter_get_element_count(dict_iter);
 	DBusMessageIter arr_iter;
 	dbus_message_iter_recurse(dict_iter, &arr_iter);
-	dev->is_classic = 1;
+	dev->base.is_classic = 1;
 	for (int i = 0; i < len; i++) {
 		struct DBusMessageIter dict;
 		dbus_message_iter_recurse(&arr_iter, &dict);
@@ -352,28 +364,28 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 		if (!strcmp(name, "Connected")) {
 			dbus_bool_t v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			dev->is_connected = (int)v;
+			dev->base.is_connected = (int)v;
 		}if (!strcmp(name, "Paired")) {
 			dbus_bool_t v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			dev->is_paired = (int)v;
+			dev->base.is_paired = (int)v;
 		} else if (!strcmp(name, "Name")) {
 			const char *v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			strlcpy(dev->name, v, sizeof(dev->name));
+			strlcpy(dev->base.name, v, sizeof(dev->base.name));
 		} else if (!strcmp(name, "Address")) {
 			const char *v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			strlcpy(dev->mac_address, v, sizeof(dev->mac_address));
+			strlcpy(dev->base.mac_address, v, sizeof(dev->base.mac_address));
 		} else if (!strcmp(name, "ManufacturerData")) {
 			parse_manufacturer_data(&dict, dev);
-			dev->is_classic = 0; // not ideal way to tell classic/ble
+			dev->base.is_classic = 0; // not ideal way to tell classic/ble
 		} else if (!strcmp(name, "UUIDs")) {
 			struct DBusMessageIter dict2;
 			dbus_message_iter_recurse(&dict, &dict2);
 
-			dev->priv->uuids.length = (unsigned int)dbus_message_iter_get_element_count(&dict2);
-			dev->priv->uuids.uuids = malloc(sizeof(struct UuidList) + UUID_STR_LENGTH * dev->priv->uuids.length);
+			dev->uuids.length = (unsigned int)dbus_message_iter_get_element_count(&dict2);
+			dev->uuids.uuids = malloc(sizeof(struct UuidList) + UUID_STR_LENGTH * dev->uuids.length);
 
 			struct DBusMessageIter dict3;
 			dbus_message_iter_recurse(&dict2, &dict3);
@@ -381,13 +393,13 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 			for (int y = 0; dbus_message_iter_get_arg_type(&dict3) != DBUS_TYPE_INVALID; y++) {
 				const char *uuid = NULL;
 				dbus_message_iter_get_basic(&dict3, &uuid);
-				strlcpy(dev->priv->uuids.uuids[y], uuid, UUID_STR_LENGTH);
+				strlcpy(dev->uuids.uuids[y], uuid, UUID_STR_LENGTH);
 				dbus_message_iter_next(&dict3);
 			}
 		} else if (!strcmp(name, "Class")) {
 			uint32_t v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			dev->btclass = v;
+			dev->base.btclass = v;
 		}
 
 		dbus_message_iter_next(&arr_iter);
@@ -395,7 +407,7 @@ static int fill_from_device1(struct DBusMessageIter *dict_iter, struct PakBtDevi
 	return 0;
 }
 
-static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *dev, int index, int filter) {
+int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDeviceWrapper **wrapper, int index, int filter) {
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
 	if (resp == NULL) return -1;
 
@@ -433,9 +445,8 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 			int matches = is_connected && (filter & PAK_FILTER_CONNECTED);
 			matches |= is_bonded && (filter & PAK_FILTER_BONDED);
 			if (matches) {
-				if (found == index && dev != NULL) {
-					fill_from_device1(&adapter_dict, dev);
-					dev->priv = (struct PakBtDevicePriv *)alloc_priv(sizeof(struct PakBtDevicePriv), path);
+				if (found == index && wrapper != NULL) {
+					(*wrapper) = fill_from_device1(&adapter_dict, path);
 					dbus_message_unref(resp);
 					return 0;
 				}
@@ -448,7 +459,7 @@ static int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, st
 
 	dbus_message_unref(resp);
 
-	if (dev == NULL) return found;
+	if (wrapper == NULL) return found;
 	return -1;
 }
 
@@ -456,19 +467,24 @@ int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int fi
 	return pak_bt_get_object(ctx, adapter, NULL, 0, filter);
 }
 
-int pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDevice *device, int index, int filter) {
-	return pak_bt_get_object(ctx, adapter, device, index, filter);
+struct PakBtDevice *pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, int index, int filter) {
+	struct PakBtDeviceWrapper *wrapper;
+	int rc = pak_bt_get_object(ctx, adapter, &wrapper, index, filter);
+	if (rc) return NULL;
+	return (struct PakBtDevice *)wrapper;
 }
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {
-	free(device->priv->uuids.uuids);
-	free(device->priv);
+	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
+	free(wrapper->uuids.uuids);
+	free(device);
 	return 0;
 }
 
 int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int *percent) {
+	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
 	DBusMessage *resp;
-	int rc = get_dbus_property(ctx->conn, "org.bluez", device->priv->path, "org.bluez.Battery1", "Percentage", &resp);
+	int rc = get_dbus_property(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Battery1", "Percentage", &resp);
 	if (rc) return rc;
 	if (resp == NULL) return -1;
 
@@ -487,22 +503,25 @@ int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int
 }
 
 int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device) {
+	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
 	if (device->is_connected) return 0;
-	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", device->priv->path, "org.bluez.Device1", "Connect");
+	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Device1", "Connect");
 	if (resp == NULL) return -1;
     dbus_message_unref(resp);
 	return 0;
 }
 
 int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device) {
-	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", device->priv->path, "org.bluez.Device1", "Disconnect");
+	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
+	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Device1", "Disconnect");
 	if (resp == NULL) return -1;
     dbus_message_unref(resp);
 	return 0;
 }
 
 int pak_bt_device_pair(struct PakBt *ctx, struct PakBtDevice *device) {
-	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", device->priv->path, "org.bluez.Device1", "Pair");
+	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
+	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Device1", "Pair");
 	if (resp == NULL) return -1;
     dbus_message_unref(resp);
 	return 0;
@@ -513,7 +532,9 @@ int pak_bt_device_pair(struct PakBt *ctx, struct PakBtDevice *device) {
 #define FILTER_GATT_DESCRIPTOR (1 << 5)
 
 // Some parameters are allowed to be NULL for different filter flags
-static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService *service, struct PakGattCharacteristic *characteristic, int index, int filter) {
+static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService **service, struct PakGattCharacteristic **characteristic, int index, int filter) {
+	struct PakBtDeviceWrapper *device_wrapper = (struct PakBtDeviceWrapper *)device;
+	struct PakGattServiceWrapper *service_wrapper = (struct PakGattServiceWrapper *)service;
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
 	if (resp == NULL) return -1;
 
@@ -546,18 +567,19 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
 			dbus_message_iter_recurse(&val_dict, &val_dict2);
 			dbus_message_iter_get_basic(&val_dict2, &device_path);
 
-			if (found == index && !strcmp(device_path, device->priv->path)) {
-				service->priv = (struct PakGattServicePriv *)alloc_priv(sizeof(struct PakGattServicePriv), path);
+			if (found == index && !strcmp(device_path, device_wrapper->path)) {
+				struct PakGattServiceWrapper *wrapper = alloc_priv(sizeof(struct PakGattServiceWrapper), path);
 
 				const char *uuid;
 				if (find_dict(&adapter_dict, "UUID", &val_dict)) return -1;
 				dbus_message_iter_recurse(&val_dict, &val_dict2);
 				dbus_message_iter_get_basic(&val_dict2, &uuid);
-				strlcpy(service->uuid, uuid, sizeof(service->uuid));
+				strlcpy(wrapper->base.uuid, uuid, sizeof(wrapper->base.uuid));
 
 				if (find_dict(&adapter_dict, "Handle", &val_dict)) return -1;
 				dbus_message_iter_recurse(&val_dict, &val_dict2);
-				dbus_message_iter_get_basic(&val_dict2, &service->handle);
+				dbus_message_iter_get_basic(&val_dict2, &wrapper->base.handle);
+				(*service) = (struct PakGattService *)wrapper;
 				return 0;
 			}
 			found++;
@@ -571,18 +593,19 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
 			dbus_message_iter_recurse(&val_dict, &val_dict2);
 			dbus_message_iter_get_basic(&val_dict2, &service_path);
 
-			if (found == index && !strcmp(service_path, service->priv->path)) {
-				characteristic->priv = (struct PakGattCharacteristicPriv *)alloc_priv(sizeof(struct PakGattCharacteristicPriv), path);
+			if (found == index && !strcmp(service_path, service_wrapper->path)) {
+				struct PakGattCharacteristicWrapper *wrapper = alloc_priv(sizeof(struct PakGattCharacteristicWrapper), path);
 
 				const char *uuid;
 				if (find_dict(&adapter_dict, "UUID", &val_dict)) return -1;
 				dbus_message_iter_recurse(&val_dict, &val_dict2);
 				dbus_message_iter_get_basic(&val_dict2, &uuid);
-				strlcpy(characteristic->uuid, uuid, sizeof(characteristic->uuid));
+				strlcpy(wrapper->base.uuid, uuid, sizeof(wrapper->base.uuid));
 
 				if (find_dict(&adapter_dict, "Handle", &val_dict)) return -1;
 				dbus_message_iter_recurse(&val_dict, &val_dict2);
-				dbus_message_iter_get_basic(&val_dict2, &characteristic->handle);
+				dbus_message_iter_get_basic(&val_dict2, &wrapper->base.handle);
+				(*characteristic) = (struct PakGattCharacteristic *)wrapper;
 				return 0;
 			}
 			found++;
@@ -596,17 +619,21 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
 	return -1;
 }
 
-int pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *service, struct PakGattCharacteristic *characteristic, int index) {
-	return pak_bt_get_gatt_object(ctx, NULL, service, characteristic, index, FILTER_GATT_CHARACTERISTIC);
+struct PakGattCharacteristic *pak_bt_get_gatt_characteristic(struct PakBt *ctx, struct PakGattService *service, int index) {
+	struct PakGattCharacteristic *characteristic;
+	if (pak_bt_get_gatt_object(ctx, NULL, &service, &characteristic, index, FILTER_GATT_CHARACTERISTIC)) return NULL;
+	return characteristic;
 }
 
 int pak_bt_unref_gatt_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *chr) {
-	free(chr->priv);
+	free(chr);
 	return 0;
 }
 
-int pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService *service, int index) {
-	return pak_bt_get_gatt_object(ctx, device, service, NULL, index, FILTER_GATT_SERVICE);
+struct PakGattService *pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDevice *device, int index) {
+	struct PakGattService *service;
+	if (pak_bt_get_gatt_object(ctx, device, &service, NULL, index, FILTER_GATT_SERVICE)) return NULL;
+	return service;
 }
 
 int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service) {
@@ -623,7 +650,8 @@ int pak_bt_watch_characteristic(struct PakBt *ctx, struct PakGattCharacteristic 
 }
 
 int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int blocking) {
-	DBusMessage *call = dbus_message_new_method_call("org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "ReadValue");
+	struct PakGattCharacteristicWrapper *wrapper = (struct PakGattCharacteristicWrapper *)characteristic;
+	DBusMessage *call = dbus_message_new_method_call("org.bluez", wrapper->path, "org.bluez.GattCharacteristic1", "ReadValue");
 	DBusMessageIter iter;
 	dbus_message_iter_init_append(call, &iter);
 
@@ -642,7 +670,8 @@ int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *
 }
 
 int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const uint8_t *data, unsigned int length, int blocking) {
-	DBusMessage *call = dbus_message_new_method_call("org.bluez", characteristic->priv->path, "org.bluez.GattCharacteristic1", "WriteValue");
+	struct PakGattCharacteristicWrapper *wrapper = (struct PakGattCharacteristicWrapper *)characteristic;
+	DBusMessage *call = dbus_message_new_method_call("org.bluez", wrapper->path, "org.bluez.GattCharacteristic1", "WriteValue");
 	DBusMessageIter iter;
 	dbus_message_iter_init_append(call, &iter);
 
@@ -717,15 +746,15 @@ static int get_service_channel(const char *mac_address, const char *uuid) {
 }
 
 // https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1
-int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid, struct PakBtSocket **conn) {
+struct PakBtSocket *pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid) {
 	int channel = get_service_channel(dev->mac_address, uuid);
-	if (channel < 0) return -1;
+	if (channel < 0) return NULL;
 
 	int fd = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-	if (fd < 0) return -1;
+	if (fd < 0) return NULL;
 
-	(*conn) = malloc(sizeof(struct PakBtSocket));
-	(*conn)->fd = fd;
+	struct PakBtSocket *conn = malloc(sizeof(struct PakBtSocket));
+	conn->fd = fd;
 
 	uint32_t linkmode = RFCOMM_LM_AUTH | RFCOMM_LM_ENCRYPT;
 	setsockopt(fd, SOL_RFCOMM, RFCOMM_LM, &linkmode, sizeof(uint32_t));
@@ -738,10 +767,10 @@ int pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev
 	if (connect(fd, (const struct sockaddr *)&addr, sizeof(addr))) {
 		fprintf(stderr, "connect: %d\n", errno);
 		close(fd);
-		return -1;
+		return NULL;
 	}
 
-	return 0;
+	return conn;
 }
 
 int pak_bt_write(struct PakBtSocket *conn, const void *data, unsigned int length) {

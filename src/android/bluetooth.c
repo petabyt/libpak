@@ -111,14 +111,14 @@ struct PakBtAdapter *pak_bt_get_adapter(struct PakBt *ctx, int index) {
 	struct PakBtAdapter *adapter = malloc(sizeof(struct PakBtAdapter));
 	adapter->priv = malloc(sizeof(struct PakBtAdapterPriv));
 	adapter->priv->adapter = (*env)->NewGlobalRef(env, get_default_adapter(env));
-	pak_gc_add(&ctx->gc, BT_ADAPTER_PRIV, adapter->priv);
+	pak_gc_add(&ctx->gc, BT_ADAPTER, adapter);
 	return adapter;
 }
 
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
 	JNIEnv *env = get_jni_env();
 	(*env)->DeleteGlobalRef(env, adapter->priv->adapter);
-	pak_gc_remove(&ctx->gc, adapter->priv);
+	pak_gc_remove(&ctx->gc, adapter);
 	free(adapter->priv);
 	free(adapter);
 	return 0;
@@ -132,18 +132,15 @@ int pak_bt_device_update(struct PakBt *ctx, struct PakBtDevice *dev) {
 }
 
 static void free_dev(void *ptr, void *arg) {
-	struct PakBtDevice dev = {
-		.priv = ptr,
-	};
-	pak_bt_unref_device((struct PakBt *)arg, &dev);
+	pak_bt_unref_device((struct PakBt *)arg, (struct PakBtDevice *)ptr);
 }
 
-int pak_bt_device_from_jobject(JNIEnv *env, struct PakBt *ctx, jobject dev_o, struct PakBtDevice *device) {
+struct PakBtDevice *pak_bt_device_from_jobject(JNIEnv *env, struct PakBt *ctx, jobject dev_o) {
 	(*env)->PushLocalFrame(env, 10);
-	memset(device, 0, sizeof(*device));
 
+	struct PakBtDevice *device = calloc(sizeof(struct PakBtDevice), 1);
 	device->priv = calloc(1, sizeof(struct PakBtDevicePriv));
-	pak_gc_add_ex(&ctx->gc, BT_DEVICE_PRIV, device->priv, free_dev, ctx);
+	pak_gc_add_ex(&ctx->gc, BT_DEVICE, device, free_dev, ctx);
 	device->priv->device = (*env)->NewGlobalRef(env, dev_o);
 	jfieldID dev_f = (*env)->GetFieldID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "dev", "Landroid/bluetooth/BluetoothDevice;");
 	device->priv->bluetooth_device = (*env)->NewGlobalRef(env, (*env)->GetObjectField(env, dev_o, dev_f));
@@ -161,10 +158,10 @@ int pak_bt_device_from_jobject(JNIEnv *env, struct PakBt *ctx, jobject dev_o, st
 	(*env)->ReleaseStringUTFChars(env, address_o, address_s);
 
 	(*env)->PopLocalFrame(env, NULL);
-	return 0;
+	return device;
 }
 
-static int scan_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int filter, struct PakBtDevice *device, int index) {
+static int scan_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int filter, struct PakBtDevice **device, int index) {
 	JNIEnv *env = get_jni_env();
 
 	(*env)->PushLocalFrame(env, 10);
@@ -193,7 +190,7 @@ static int scan_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int fil
 		matches |= is_bonded && (filter & PAK_FILTER_BONDED);
 		if (matches) {
 			if (device != NULL && matching == index) {
-				pak_bt_device_from_jobject(env, ctx, dev_o, device);
+				(*device) = pak_bt_device_from_jobject(env, ctx, dev_o);
 				(*env)->PopLocalFrame(env, NULL);
 				return 0;
 			}
@@ -212,14 +209,14 @@ int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int fi
 }
 
 struct PakBtDevice *pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, int index, int filter) {
-	struct PakBtDevice *device = malloc(sizeof(struct PakBtDevice));
-	if (scan_devices(ctx, adapter, filter, device, index)) return NULL;
+	struct PakBtDevice *device;
+	if (scan_devices(ctx, adapter, filter, &device, index)) return NULL;
 	return device;
 }
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {
 	JNIEnv *env = get_jni_env();
-	pak_gc_remove(&ctx->gc, device->priv);
+	pak_gc_remove(&ctx->gc, device);
 	(*env)->CallVoidMethod(env, device->priv->device, (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "closeAll", "()V"));
 	(*env)->DeleteGlobalRef(env, device->priv->device);
 	(*env)->DeleteGlobalRef(env, device->priv->bluetooth_device);
@@ -378,7 +375,7 @@ struct PakGattService *pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDe
 	read_uuid(env, uuid_o, service->uuid);
 
 	service->priv = calloc(1, sizeof(struct PakGattServicePriv));
-	pak_gc_add(&ctx->gc, GATT_SVC_PRIV, service->priv);
+	pak_gc_add(&ctx->gc, GATT_SVC, service);
 	service->priv->obj = (*env)->NewGlobalRef(env, service_o);
 	service->handle = 0;
 	service->priv->device = device;
@@ -390,7 +387,7 @@ struct PakGattService *pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDe
 int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service) {
 	JNIEnv *env = get_jni_env();
 	(*env)->DeleteGlobalRef(env, service->priv->obj);
-	pak_gc_remove(&ctx->gc, service->priv);
+	pak_gc_remove(&ctx->gc, service);
 	free(service->priv);
 	free(service);
 	return 0;
@@ -416,7 +413,7 @@ struct PakGattCharacteristic *pak_bt_get_gatt_characteristic(struct PakBt *ctx, 
 	read_uuid(env, uuid_o, characteristic->uuid);
 
 	characteristic->priv = calloc(1, sizeof(struct PakGattCharacteristicPriv));
-	pak_gc_add(&ctx->gc, GATT_CHR_PRIV, characteristic->priv);
+	pak_gc_add(&ctx->gc, GATT_CHR, characteristic);
 	characteristic->priv->obj = (*env)->NewGlobalRef(env, chr_o);
 	characteristic->priv->device = service->priv->device;
 	characteristic->priv->service = service;
@@ -428,7 +425,7 @@ struct PakGattCharacteristic *pak_bt_get_gatt_characteristic(struct PakBt *ctx, 
 int pak_bt_unref_gatt_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *chr) {
 	JNIEnv *env = get_jni_env();
 	(*env)->DeleteGlobalRef(env, chr->priv->obj);
-	pak_gc_remove(&ctx->gc, chr->priv);
+	pak_gc_remove(&ctx->gc, chr);
 	free(chr->priv);
 	free(chr);
 	return 0;

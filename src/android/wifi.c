@@ -89,8 +89,8 @@ int pak_wifi_unref_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct
 	return -1;
 }
 
-int pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap) {
-	return -1;
+struct PakWiFiAp *pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {
+	return NULL;
 }
 
 int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *password) {

@@ -44,7 +44,7 @@ int pak_rt_add_file_metadata(struct Module *mod, struct FileHandle *file, const 
 	return -1;
 }
 void pak_rt_release_metadata(struct Module *mod, struct FileMetadata *md) {}
-struct FileMetadata *pak_rt_get_metadata(struct Module *mod, struct FileHandle *file) {
+struct PakFileMetadata *pak_rt_get_metadata(struct Module *mod, struct FileHandle *file) {
 	return NULL;
 }
 void pak_rt_fatal_error(struct Module *mod, const char *fmt, ...) {}
@@ -59,19 +59,19 @@ __attribute__((weak)) int setup_quickjs_module(struct Module *mod, char *file_co
 	pak_debug_log(mod, "quickjs support not compiled in");
 	return -1;
 }
-//__attribute__((weak)) int setup_wasm_module(struct Module **mod, const char *filename) {
+//__attribute__((weak)) int setup_wasm_module(struct PakModule **mod, const char *filename) {
 //	return -1;
 //}
 
-struct Module *pak_create_mod(void) {
-	struct Module *mod = calloc(1, sizeof(struct Module));
+struct PakModule *pak_create_mod(void) {
+	struct PakModule *mod = calloc(1, sizeof(struct PakModule));
 	mod->rt = malloc(sizeof(struct RuntimePriv));
 	mod->rt->current_job = 1;
 	return mod;
 }
 
-struct Module *pak_rt_mod_from_native(int (*get)(struct Module *mod)) {
-	struct Module *mod = pak_create_mod();
+struct PakModule *pak_rt_mod_from_native(int (*get)(struct PakModule *mod)) {
+	struct PakModule *mod = pak_create_mod();
 	get(mod);
 	return mod;
 }
@@ -80,7 +80,7 @@ static int new_job(struct RuntimePriv *r) {
 	return r->current_job++;
 }
 
-void pak_debug_log(struct Module *mod, const char *fmt, ...) {
+void pak_debug_log(struct PakModule *mod, const char *fmt, ...) {
 	printf("pak_debug_log: ");
 	fflush(stdout);
 	va_list args;
@@ -92,7 +92,7 @@ void pak_debug_log(struct Module *mod, const char *fmt, ...) {
 	abort();
 }
 
-int pak_rt_test_module(struct Module *mod) {
+int pak_rt_test_module(struct PakModule *mod) {
 	// runtime was not inited by pak_create_mod
 	mod->rt = malloc(sizeof(struct RuntimePriv));
 	mod->rt->current_job = 1;

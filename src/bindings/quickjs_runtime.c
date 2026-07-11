@@ -31,7 +31,7 @@ struct ModulePriv {
 };
 
 static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[], int magic) {
-	//struct Module *mod = (struct Module *)JS_GetOpaque(this_val, module_class_id);
+	//struct PakModule *mod = (struct PakModule *)JS_GetOpaque(this_val, module_class_id);
 	int32_t fd;
 	JS_ToInt32(ctx, &fd, argv[0]);
 	return JS_UNDEFINED;
@@ -47,7 +47,7 @@ enum Operations {
 
 static JSValue test_module(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
 	JSValue obj = argv[0];
-	struct Module *mod = JS_GetOpaque(obj, module_class_id);	
+	struct PakModule *mod = JS_GetOpaque(obj, module_class_id);
 
 	if (pak_rt_test_module(mod)) {
 		return JS_UNDEFINED;
@@ -60,7 +60,7 @@ static JSValue export_module(JSContext *ctx, JSValueConst this_val, int argc, JS
 	if (JS_GetContextOpaque(ctx) != NULL) {
 		JS_SetContextOpaque(ctx, NULL);
 	} else {
-		printf("Module already exported in this context\n");
+		printf("PakModule already exported in this context\n");
 	}
 	return JS_UNDEFINED;
 }
@@ -76,12 +76,12 @@ static const JSCFunctionListEntry module_methods[] = {
 	JS_CFUNC_MAGIC_DEF("enterCustomScreen", 3, generic_operation, M_ENTER_CUSTOM_SCREEN),
 
 #define JS_CONSTANT(x) JS_PROP_INT32_DEF(#x, x, JS_PROP_CONFIGURABLE)
-	JS_CONSTANT(SCREEN_CONNECT_WIFI),
-	JS_CONSTANT(SCREEN_CONNECT_USB),
+	JS_CONSTANT(PAK_SCREEN_CONNECT_WIFI),
+	JS_CONSTANT(PAK_SCREEN_CONNECT_USB),
 
 };
 
-static int init(struct Module *mod) { return 0; }
+static int init(struct PakModule *mod) { return 0; }
 
 static void js_print_value_write(void *opaque, const char *buf, size_t len)
 {
@@ -92,7 +92,7 @@ static void js_print_value_write(void *opaque, const char *buf, size_t len)
 }
 
 static void dump_exception(JSContext *ctx) {
-	struct Module *mod = JS_GetContextOpaque(ctx);
+	struct PakModule *mod = JS_GetContextOpaque(ctx);
 	JSValue val = JS_GetException(ctx);
 	char errorbuf[512] = {0};
 	JS_PrintValue(ctx, js_print_value_write, errorbuf, val, NULL);
@@ -116,23 +116,24 @@ static int call_module_method(struct JSContext *ctx, JSValue obj, const char *na
 	return rc;
 }
 
-static int on_try_connect_wifi(struct Module *mod, struct PakWiFiAdapter *handle, int job) {
+static int on_try_connect_wifi(struct PakModule *mod, struct PakWiFiAdapter *handle, struct PakSavedConnection *saved, int job) {
 	JSValue args[] = {
+		JS_UNDEFINED,
 		JS_UNDEFINED,
 		JS_UNDEFINED,
 		JS_NewInt32(mod->priv->ctx, job),
 	};
-	return call_module_method(mod->priv->ctx, mod->priv->object, "onTryConnectWiFi", 2, args);
+	return call_module_method(mod->priv->ctx, mod->priv->object, "onTryConnectWiFi", 3, args);
 }
 
-static int on_find_connection(struct Module *mod, int job) {
+static int on_find_connection(struct PakModule *mod, int job) {
 	JSValue args[1] = {
 		JS_NewInt32(mod->priv->ctx, job),
 	};
 	return call_module_method(mod->priv->ctx, mod->priv->object, "onFindConnection", 0, args);
 }
 
-static int on_run_test(struct Module *mod, int screen, int job) {
+static int on_run_test(struct PakModule *mod, int screen, int job) {
 	JSValue args[2] = {
 		JS_NewInt32(mod->priv->ctx, screen),
 		JS_NewInt32(mod->priv->ctx, job),
@@ -140,7 +141,7 @@ static int on_run_test(struct Module *mod, int screen, int job) {
 	return call_module_method(mod->priv->ctx, mod->priv->object, "onRunTest", 2, args);
 }
 
-static int on_disconnect(struct Module *mod) {
+static int on_disconnect(struct PakModule *mod) {
 	return call_module_method(mod->priv->ctx, mod->priv->object, "onDisconnect", 0, NULL);
 }
 
@@ -149,7 +150,7 @@ static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, in
 	JSValue obj = JS_NewObjectProtoClass(ctx, proto, module_class_id);
 	JS_FreeValue(ctx, proto);
 
-	struct Module *mod = JS_GetContextOpaque(ctx);
+	struct PakModule *mod = JS_GetContextOpaque(ctx);
 	mod->init = init;
 	mod->on_run_test = on_run_test;
 	mod->on_try_connect_wifi = on_try_connect_wifi;
@@ -169,7 +170,7 @@ static void js_module_finalizer(JSRuntime *rt, JSValue val) {
 }
 
 static int module_module(JSContext *ctx, JSModuleDef *m) {
-	const char *class_name = "Module";
+	const char *class_name = "PakModule";
 
 	const JSClassDef js_class = {
 		.class_name = class_name,
@@ -202,7 +203,7 @@ JSModuleDef *js_init_module_pak_runtime(JSContext *ctx, const char *module_name)
 	return m;
 }
 
-int free_module_and_runtime(struct Module *mod) {
+int free_module_and_runtime(struct PakModule *mod) {
 	JS_FreeValue(mod->priv->ctx, mod->priv->object);
 	js_std_free_handlers(mod->priv->rt);
 	JS_FreeContext(mod->priv->ctx);
@@ -251,7 +252,7 @@ static JSModuleDef *my_module_loader(JSContext *ctx, const char *module_name, vo
 	return m;
 }
 
-int setup_quickjs_module(struct Module *mod, char *file_contents, unsigned int length) {
+int setup_quickjs_module(struct PakModule *mod, char *file_contents, unsigned int length) {
 	JSRuntime *rt = JS_NewRuntime();
 
 	if (file_contents[length - 1] == '\0') length--;
@@ -261,7 +262,7 @@ int setup_quickjs_module(struct Module *mod, char *file_contents, unsigned int l
 	js_std_add_helpers(ctx, 0, NULL);
 
 	JS_AddModuleExport(ctx, js_init_module_wifi(ctx, "pak:wifi"), "WiFi");
-	JS_AddModuleExport(ctx, js_init_module_pak_runtime(ctx, "pak:runtime"), "Module");
+	JS_AddModuleExport(ctx, js_init_module_pak_runtime(ctx, "pak:runtime"), "PakModule");
 	js_init_module_socket(ctx, "c:socket");
 	js_init_module_std(ctx, "qjs:std");
 	JS_SetModuleLoaderFunc(rt, NULL, my_module_loader, NULL);

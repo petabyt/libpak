@@ -13,10 +13,11 @@ struct ExifParser {
 	unsigned int thumb_size;
 };
 
+/// Exif Parser
 int exif_start_raw(struct ExifParser *c, uint8_t *buf, unsigned int length, get_additional_bytes *get_more, void *arg);
 
-/// Initialize QuickJS wrapper around Module 
-int setup_quickjs_module(struct Module *mod, char *file_contents, unsigned int length); 
+/// Initialize QuickJS wrapper around PakModule
+int setup_quickjs_module(struct PakModule *mod, char *file_contents, unsigned int length);
 
-// Initialize WAMR wrapper around Module
-int setup_wasm_module(struct Module *mod, char *file_contents, unsigned int file_length);
+// Initialize WAMR wrapper around PakModule
+int setup_wasm_module(struct PakModule *mod, char *file_contents, unsigned int file_length);

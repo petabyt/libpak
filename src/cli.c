@@ -135,14 +135,14 @@ static char *alloc_file(const char *filename, unsigned int *len) {
 int main(int argc, char **argv) {
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--test-js")) {
-			struct Module *mod = pak_create_mod();
+			struct PakModule *mod = pak_create_mod();
 			unsigned int len = 0;
 			char *buf = alloc_file(argv[i + 1], &len);
 			if (buf == NULL) return -1;
 			if (setup_quickjs_module(mod, buf, len)) return -1;
 			return pak_rt_test_module(mod);
 		} else if (!strcmp(argv[i], "--test-wasm")) {
-			struct Module *mod = pak_create_mod();
+			struct PakModule *mod = pak_create_mod();
 			unsigned int len = 0;
 			char *buf = alloc_file(argv[i + 1], &len);
 			if (buf == NULL) return -1;

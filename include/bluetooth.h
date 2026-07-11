@@ -103,7 +103,7 @@ __attribute__((unused))
 static struct PakGattService *pak_bt_get_gatt_service_uuid(struct PakBt *ctx, struct PakBtDevice *device, const char *uuid) {
 	struct PakGattService *service;
 	for (int i = 0; (service = pak_bt_get_gatt_service(ctx, device, i)) != NULL; i++) {
-		if (!strcasecmp(service->uuid, uuid)) return 0;
+		if (!strcasecmp(service->uuid, uuid)) return service;
 		pak_bt_unref_gatt_service(ctx, service);
 	}
 	return NULL;
@@ -125,8 +125,8 @@ int pak_bt_unref_gatt_characteristic(struct PakBt *ctx, struct PakGattCharacteri
 __attribute__((unused))
 static struct PakGattCharacteristic *pak_bt_get_gatt_characteristic_uuid(struct PakBt *ctx, struct PakGattService *service, const char *uuid) {
 	struct PakGattCharacteristic *characteristic;
-	for (int i = 0; (characteristic = pak_bt_get_gatt_characteristic(ctx, service, i)) == 0; i++) {
-		if (!strcasecmp(characteristic->uuid, uuid)) return 0;
+	for (int i = 0; (characteristic = pak_bt_get_gatt_characteristic(ctx, service, i)) != NULL; i++) {
+		if (!strcasecmp(characteristic->uuid, uuid)) return characteristic;
 		pak_bt_unref_gatt_characteristic(ctx, characteristic);
 	}
 	return NULL;

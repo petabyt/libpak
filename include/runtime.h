@@ -70,12 +70,12 @@ enum SortedBy {
 	PAK_SMALLEST_FIRST = 4,
 };
 
-struct FileHandle {
+struct PakFileHandle {
 	int index_in_view;
 	const char *storage_name;
 };
 
-struct FileMetadata {
+struct PakFileMetadata {
 	const char *filename;
 	// Mime types are borrowed from IANA: https://www.iana.org/assignments/media-types/media-types.xhtml
 	const char *mime_type;
@@ -85,12 +85,12 @@ struct FileMetadata {
 };
 
 /// A widget displayed on the dashboard that can show data or be manipulated by the user
-struct PakUserSetting {
+struct PakWidget {
 	/// Unique name (id) of the widget
 	const char *name;
 	/// Human readable title for the widget
 	const char *title;
-	enum SettingType {
+	enum WidgetType {
 		PAK_BUTTON = 0,
 		PAK_BOOLEAN,
 		PAK_INT,
@@ -155,43 +155,43 @@ enum PakTransport {
 	PAK_INTERNET = 6,
 };
 
-enum Screen {
+enum PakScreen {
 	/// Dummy value for first screen change
-	SCREEN_NONE = 0,
+	PAK_SCREEN_NONE = 0,
 	/// A screen that has a list of WiFi access points to connect to
-	SCREEN_CONNECT_WIFI = 1,
+	PAK_SCREEN_CONNECT_WIFI = 1,
 	/// A screen that has a list of connected USB devices
-	SCREEN_CONNECT_USB,
+	PAK_SCREEN_CONNECT_USB,
 	/// Has a list of currently/previously paired devices and scans for new devices
-	SCREEN_CONNECT_BLUETOOTH,
-	/// Screen that advertises on BLE or uses SDP to find a device to pair with
-	SCREEN_ADVERTISE_BLUETOOTH,
+	PAK_SCREEN_CONNECT_BLUETOOTH,
+	/// PakScreen that advertises on BLE or uses SDP to find a device to pair with
+	PAK_SCREEN_ADVERTISE_BLUETOOTH,
 	/// Transmit packet over UDP/SSDP in order to find a connection
-	SCREEN_TRANSMIT_UDP,
+	PAK_SCREEN_TRANSMIT_UDP,
 	/// Receive packet over UDP/SSDP in order to find a connection
-	SCREEN_RECEIVE_UDP,
+	PAK_SCREEN_RECEIVE_UDP,
 
 	/// Prints lines of text into a terminal-like widget
-	SCREEN_CONSOLE = 100,
+	PAK_SCREEN_CONSOLE = 100,
 	// Allows user to disconnect, change settings, switch to other screens
-	SCREEN_DASHBOARD,
+	PAK_SCREEN_DASHBOARD,
 	/// A gallery of files, videos, or photos. Can include folders. Upon selecting a folder, on_switch_screen
-	/// will be called with SCREEN_FILE_GALLERY->SCREEN_FILE_GALLERY
+	/// will be called with PAK_SCREEN_FILE_GALLERY->PAK_SCREEN_FILE_GALLERY
 	/// Gallery may be a table of files with detailed info, or a thumbnail gallery of variable width.
 	/// In what order the files iterated through (LIFO/FIFO) can be controlled.
-	SCREEN_FILE_GALLERY,
+	PAK_SCREEN_FILE_GALLERY,
 	/// A zoomable image viewer or video player. User may swipe left or right to view next/previous file. When this happens,
-	/// on_switch_screen will be called with SCREEN_FILE_VIEWER->SCREEN_FILE_VIEWER
-	SCREEN_FILE_VIEWER,
+	/// on_switch_screen will be called with PAK_SCREEN_FILE_VIEWER->PAK_SCREEN_FILE_VIEWER
+	PAK_SCREEN_FILE_VIEWER,
 	/// Can be used to send location data to the camera or apply location metadata to a specific photo.
-	SCREEN_GEOTAGGING,
+	PAK_SCREEN_GEOTAGGING,
 	/// A constant live view of the camera's sensor. Allows setting various settings such as ISO, aperture, exposure settings, image settings, or video settings.
 	/// Allows recording video, taking photos, controlling focus, zoom, or SLR mirror.
-	SCREEN_LIVEVIEW,
+	PAK_SCREEN_LIVEVIEW,
 	/// A feed of incoming files that are being created/captured/sent by the device.
-	SCREEN_LIVE_FEED,
+	PAK_SCREEN_LIVE_FEED,
 	/// Capture and control focus without liveview
-	SCREEN_INTERVALOMETER,
+	PAK_SCREEN_INTERVALOMETER,
 };
 
 struct PakTimestamp {
@@ -215,7 +215,7 @@ struct PakLocation {
 /// @info Most "on_" methods are given a job number. This job number can be passed to other functions
 /// to check if the job is cancelled, set current progress, etc
 /// @info Each method is fully blocking and thread safe by default.
-struct Module {
+struct PakModule {
 	struct PakNet *net;
 	struct PakBt *bt;
 
@@ -224,94 +224,94 @@ struct Module {
 	/// Priv pointer that can be optionally used by module instance
 	struct ModulePriv *priv;
 	/// Initialize global variables or context data in priv field
-	int (*init)(struct Module *);
+	int (*init)(struct PakModule *);
 	/// Free or release all memory associated with this module instance
-	int (*free)(struct Module *);
+	int (*free)(struct PakModule *);
 	/// Use WiFi or Bluetooth APIs manually to find a device to connect to.
-	int (*on_find_connection)(struct Module *, int job);
+	int (*on_find_connection)(struct PakModule *, int job);
 	/// Try to initiate a connection over a network handle
-	int (*on_try_connect_wifi)(struct Module *, struct PakWiFiAdapter *handle, int job);
+	int (*on_try_connect_wifi)(struct PakModule *, struct PakWiFiAdapter *handle, struct PakSavedConnection *saved, int job);
 	/// Try to initiate connection for a Bluetooth device
 	/// returns zero if device is supported and connetion established 
-	int (*on_try_connect_bluetooth)(struct Module *, struct PakBtDevice *handle, struct PakSavedConnection *saved, int job);
+	int (*on_try_connect_bluetooth)(struct PakModule *, struct PakBtDevice *handle, struct PakSavedConnection *saved, int job);
 	/// Runs immediately after successful connection. Runs at a constant interval, 1s by default.
-	int (*on_idle_tick)(struct Module *, unsigned int us_since_last_tick);
+	int (*on_idle_tick)(struct PakModule *, unsigned int us_since_last_tick);
 	/// On user requested disconnect
-	int (*on_disconnect)(struct Module *);
+	int (*on_disconnect)(struct PakModule *);
 	// Runs when switching to a new screen, or switching back to an old screen.
-	int (*on_switch_screen)(struct Module *, int old_screen, int new_screen, int job);
+	int (*on_switch_screen)(struct PakModule *, int old_screen, int new_screen, int job);
 	/// Request entire contents of a file
 	/// send info back with pak_rt_add_file_contents
-	int (*on_request_file_contents)(struct Module *, int job, struct FileHandle *file);
+	int (*on_request_file_contents)(struct PakModule *, int job, struct PakFileHandle *file);
 	/// Request small thumbnail for a file
 	/// send info back with pak_rt_add_file_thumbnail
-	int (*on_request_file_thumbnail)(struct Module *, int job, struct FileHandle *file);
+	int (*on_request_file_thumbnail)(struct PakModule *, int job, struct PakFileHandle *file);
 	/// Request metadata for a file
 	/// send info back with pak_rt_add_file_metadata
-	int (*on_request_file_metadata)(struct Module *, int job, struct FileHandle *file);
+	int (*on_request_file_metadata)(struct PakModule *, int job, struct PakFileHandle *file);
 	/// Request liveview frame
 	/// send liveview frame contents with pak_rt_add_file_contents
-	int (*on_request_liveview_frame)(struct Module *, int job, struct FileHandle *file);
+	int (*on_request_liveview_frame)(struct PakModule *, int job, struct PakFileHandle *file);
 	/// Runs when a setting has been changed by 
-	int (*on_setting_changed)(struct Module *, int job, struct PakUserSetting *setting);
+	int (*on_setting_changed)(struct PakModule *, int job, struct PakWidget *setting);
 	/// On request to run self test, test suite, debug dumps, or other diagnostics
-	int (*on_run_test)(struct Module *, int screen, int job);
+	int (*on_run_test)(struct PakModule *, int screen, int job);
 	/// Process an arbritrary command
-	int (*on_custom_command)(struct Module *, int job, int argc, const char * const *argv);
+	int (*on_custom_command)(struct PakModule *, int job, int argc, const char * const *argv);
 };
 
 /// Set info for a storage device by the name of storage_name
 /// If storage device doesn't exist, it will be created. Otherwise it will be updated
 /// @n_items sorted_by How many files are in the root filesystem folder
 /// @param sorted_by How the file list data set is sorted by default
-int pak_rt_set_storage_info(struct Module *mod, const char *storage_name, unsigned int n_items, enum SortedBy sorted_by);
+int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum SortedBy sorted_by);
 /// Submit metadata for a file
 /// @info May be freed and requested again later
-int pak_rt_add_file_metadata(struct Module *mod, struct FileHandle *file, const struct FileMetadata *metadata);
+int pak_rt_add_file_metadata(struct PakModule *mod, struct PakFileHandle *file, const struct PakFileMetadata *metadata);
 /// Submit thumbnail contents for a file
 /// @info May be freed and requested again later
-int pak_rt_add_file_thumbnail(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length);
+int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length);
 /// Submit contents for a file for the user to view or download
-int pak_rt_add_file_contents(struct Module *mod, struct FileHandle *file, void *image_data, unsigned int length, int is_partial);
+int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, int is_partial);
 /// Registers a setting that is displayed in the UI and can be modified by the user
-int pak_rt_set_dashboard_pane(struct Module *mod, const struct PakUserSetting *s);
+int pak_rt_set_dashboard_pane(struct PakModule *mod, const struct PakWidget *s);
 /// Returns true if user requested to cancel the job.
-int pak_rt_is_job_cancelled(struct Module *mod, int job);
+int pak_rt_is_job_cancelled(struct PakModule *mod, int job);
 /// Fatal error, all no more jobs will be issued
-void pak_rt_fatal_error(struct Module *mod, const char *fmt, ...);
+void pak_rt_fatal_error(struct PakModule *mod, const char *fmt, ...);
 /// Submit error message for user to read for a non-fatal error on a job that's in progress
-void pak_rt_error_message(struct Module *mod, int job, const char *fmt, ...);
+void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);
 /// Enable or disable a screen
-int pak_rt_set_screen_supported(struct Module *mod, int screen, int v);
+int pak_rt_set_screen_supported(struct PakModule *mod, int screen, int v);
 /// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
-int pak_rt_enter_screen(struct Module *mod, int screen);
+int pak_rt_enter_screen(struct PakModule *mod, int screen);
 /// Set the percent of a job's progress bar from 0-100. Is 100 by default for each job.
-int pak_rt_set_progress_bar(struct Module *mod, int job, int percent);
+int pak_rt_set_progress_bar(struct PakModule *mod, int job, int percent);
 /// Report how many bytes are being downloaded for a job currently in X amount of microseconds.
-int pak_rt_set_download_stats(struct Module *mod, int job, long time, unsigned int n_bytes);
+int pak_rt_set_download_stats(struct PakModule *mod, int job, long time, unsigned int n_bytes);
 /// Set the unique ID of the current connected device. Will be stored for future use.
 /// If the string is already stored, it will be loaded to the current session.
-int pak_rt_save_session_signature(struct Module *mod, struct PakSavedConnection *info);
+int pak_rt_save_session_signature(struct PakModule *mod, struct PakSavedConnection *info);
 /// Report device information to the UI
-int pak_rt_set_session_property(struct Module *mod, const char *key, const char *value);
-int pak_rt_set_session_property_int(struct Module *mod, const char *key, int value);
+int pak_rt_set_session_property(struct PakModule *mod, const char *key, const char *value);
+int pak_rt_set_session_property_int(struct PakModule *mod, const char *key, int value);
 /// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
-int pak_rt_disconnect(struct Module *mod, const char *reason);
+int pak_rt_disconnect(struct PakModule *mod, const char *reason);
 /// Set the tick interval in microseconds
-int pak_rt_set_tick_interval(struct Module *mod, unsigned int us);
+int pak_rt_set_tick_interval(struct PakModule *mod, unsigned int us);
 /// Get path for downloading a file
-//const char *pak_rt_get_path(struct Module *mod, const char *filename);
+//const char *pak_rt_get_path(struct PakModule *mod, const char *filename);
 /// Logging function for data specfic to this session
-void pak_debug_log(struct Module *mod, const char *fmt, ...);
+void pak_debug_log(struct PakModule *mod, const char *fmt, ...);
 /// Get metadata
 /// free with pak_rt_release_metadata
-struct FileMetadata *pak_rt_get_metadata(struct Module *mod, struct FileHandle *file);
+struct PakFileMetadata *pak_rt_get_metadata(struct PakModule *mod, struct PakFileHandle *file);
 /// Release metadata
-void pak_rt_release_metadata(struct Module *mod, struct FileMetadata *md);
+void pak_rt_release_metadata(struct PakModule *mod, struct PakFileMetadata *md);
 /// Get option name that was selected during setup, NULL if none selected, do not free
-const char *pak_rt_get_setup_option(struct Module *mod);
+const char *pak_rt_get_setup_option(struct PakModule *mod);
 /// Return string of client name, do not free
 const char *pak_rt_get_client_name(void);
 /// Covers 'Bluetooth -> WiFi handover case common in some devices'
-int pak_rt_add_wifi_connection(struct Module *mod, struct PakWiFiApFilter *filter);
+int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter);
 #endif

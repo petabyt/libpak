@@ -17,7 +17,7 @@ static int pak_global_log_wrapper(wasm_exec_env_t exec_env, char *format, char *
 	return 0;
 }
 
-int setup_wasm_module(struct Module *mod, char *file_contents, unsigned int file_length) {
+int setup_wasm_module(struct PakModule *mod, char *file_contents, unsigned int file_length) {
 	static char global_heap_buf[512 * 1024];
 	char error_buf[128];
 
@@ -77,7 +77,7 @@ int setup_wasm_module(struct Module *mod, char *file_contents, unsigned int file
 		goto fail;
 	}
 
-	struct Module native_mod = {0};
+	struct PakModule native_mod = {0};
 
 	uint32_t args[] = {
 		wasm_runtime_module_malloc(module_inst, 1000, (void **)&native_mod)

@@ -93,16 +93,16 @@ target_include_directories(pak
 )
 
 if(PAK_INCLUDE_CLI AND NOT ANDROID)
-	add_executable(pakit
-		src/cli.c
-		examples/dummy.c
-	)
-	target_link_libraries(pakit
-		PRIVATE
-		pak
-		m
-	)
-	install(TARGETS pakit)
+#	add_executable(pakit
+#		src/cli.c
+#		examples/dummy.c
+#	)
+#	target_link_libraries(pakit
+#		PRIVATE
+#		pak
+#		m
+#	)
+#	install(TARGETS pakit)
 
 	add_executable(bt examples/bt.c src/cli_runtime.c)
 	target_link_libraries(bt PRIVATE pak m)

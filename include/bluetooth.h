@@ -5,6 +5,11 @@
 #include <string.h>
 #include "pak.h"
 
+enum PakBtOptions {
+	PAK_BT_BLOCK,
+	PAK_BT_NO_BLOCK,
+};
+
 // Max size of RFC compliant cstring UUID
 #define UUID_STR_LENGTH 37
 
@@ -84,7 +89,7 @@ int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device);
 
 int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device);
 
-int pak_bt_device_pair(struct PakBt *ctx, struct PakBtDevice *device);
+int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device);
 
 unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max);
 

@@ -5,6 +5,45 @@
 #include <wasm_export.h>
 #include "runtime.h"
 
+
+uint32_t
+get_libc_builtin_export_apis(NativeSymbol **p_libc_builtin_apis);
+
+// #if WASM_ENABLE_SPEC_TEST != 0
+uint32_t
+get_spectest_export_apis(NativeSymbol **p_libc_builtin_apis);
+// #endif
+
+// #if WASM_ENABLE_SHARED_HEAP != 0
+uint32_t
+get_lib_shared_heap_export_apis(NativeSymbol **p_shared_heap_apis);
+// #endif
+
+uint32_t
+get_libc_wasi_export_apis(NativeSymbol **p_libc_wasi_apis);
+
+uint32_t
+get_base_lib_export_apis(NativeSymbol **p_base_lib_apis);
+
+uint32_t
+get_ext_lib_export_apis(NativeSymbol **p_ext_lib_apis);
+
+// #if WASM_ENABLE_LIB_PTHREAD != 0
+uint32_t
+get_lib_pthread_export_apis(NativeSymbol **p_lib_pthread_apis);
+// #endif
+
+// #if WASM_ENABLE_LIB_WASI_THREADS != 0
+uint32_t
+get_lib_wasi_threads_export_apis(NativeSymbol **p_lib_wasi_threads_apis);
+// #endif
+
+uint32_t
+get_libc_emcc_export_apis(NativeSymbol **p_libc_emcc_apis);
+
+uint32_t
+get_lib_rats_export_apis(NativeSymbol **p_lib_rats_apis);
+
 static int pak_global_log_wrapper(wasm_exec_env_t exec_env, char *format, char *va_args) {
     wasm_module_inst_t module_inst = get_module_inst(exec_env);
 
@@ -33,7 +72,8 @@ int setup_wasm_module(struct PakModule *mod, char *file_contents, unsigned int f
 	memset(&init_args, 0, sizeof(RuntimeInitArgs));
 
 	static NativeSymbol native_symbols[] = {
-		{"pak_global_log", pak_global_log_wrapper, "($*)", NULL},
+		// Ignore pedantic warning - requires (void *) function pointer
+		{"pak_global_log", (void *)pak_global_log_wrapper, "($*)", NULL},
 	};
 
 	init_args.mem_alloc_type = Alloc_With_Pool;
@@ -50,6 +90,11 @@ int setup_wasm_module(struct PakModule *mod, char *file_contents, unsigned int f
 		return -1;
 	}
 	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
+
+	// Unregister pthread (TODO: Permission system)
+//	NativeSymbol *symbols_ptr = NULL;
+//	uint32_t symbol_count = get_lib_pthread_export_apis(&symbols_ptr);
+//    wasm_runtime_unregister_natives("env", symbols_ptr);
 
 	module = wasm_runtime_load((uint8_t *)file_contents, file_length, error_buf,
 							   sizeof(error_buf));

@@ -36,6 +36,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
+import java.util.stream.Collectors;
 
 import android.content.Context;
 import android.content.IntentFilter;
@@ -52,6 +53,12 @@ import androidx.annotation.RequiresApi;
 public class Bluetooth {
     public static final String TAG = "bt";
     public static final boolean verbose = true;
+    /// TODO: Hold one per bluetooth context
+    private static final Pak.CancellableRunnable cancellableRunnable = new Pak.CancellableRunnable();
+
+    public static void interruptAll() {
+        cancellableRunnable.cancel();
+    }
 
     public static abstract class Listener {
         public abstract void onUpdate(Boolean bluetoothEnabled);
@@ -71,16 +78,14 @@ public class Bluetooth {
         }
     }
 
-    public static Device[] getBondedDevices(BluetoothAdapter adapter) {
+    public static @NonNull Device[] getBondedDevices(BluetoothAdapter adapter) {
         if (Pak.getActivity().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            return null;
+            return new Device[]{};
         }
-        BluetoothDevice[] bondedDevices = adapter.getBondedDevices().toArray(new BluetoothDevice[0]);
-        Device[] devices = new Device[bondedDevices.length];
-        for (int i = 0; i < bondedDevices.length; i++) {
-            devices[i] = new Device(adapter, bondedDevices[i]);
-        }
-        return devices;
+
+        return adapter.getBondedDevices().stream().map(
+                d -> new Bluetooth.Device(adapter, d)
+        ).toArray(Device[]::new);
     }
 
     public static BluetoothAdapter getDefaultAdapter() {
@@ -150,13 +155,15 @@ public class Bluetooth {
     }
 
     public static class Device {
+        private final Object bondSignal = new Object();
+        private Boolean keyMissingFromBonding = false;
         @NonNull public final BluetoothAdapter adapter;
         @NonNull public final BluetoothDevice dev;
         @NonNull public final String name;
         @NonNull public final String address;
         public boolean isGattConnected = false;
         public ScanResult scanResult = null;
-        public ParcelUuid[] serviceUuids;
+        @NonNull private ParcelUuid[] serviceUuids;
         public BluetoothGatt gatt = null;
         BroadcastReceiver receiver = null;
         MyBluetoothGattCallback callback = null;
@@ -168,10 +175,15 @@ public class Bluetooth {
             this.name = Optional.ofNullable(dev.getName()).orElse("?");
             this.serviceUuids = Optional.ofNullable(dev.getUuids()).orElse(new ParcelUuid[]{});
             this.address = dev.getAddress();
+
         }
         Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev, @NonNull ScanResult scanResult) {
             this(adapter, dev);
             this.scanResult = scanResult;
+        }
+
+        public @NonNull List<String> getServiceUuids() {
+            return Arrays.stream(serviceUuids).map(ParcelUuid::toString).collect(Collectors.toList());
         }
 
         public boolean isBonded() {
@@ -218,14 +230,18 @@ public class Bluetooth {
                 @Override
                 public void onReceive(Context context, Intent intent) {
                     String action = intent.getAction();
+                    if (action == null) return;
                     if (action.equals(BluetoothDevice.ACTION_UUID)) {
-                        serviceUuids = dev.getUuids();
+                        serviceUuids = Optional.ofNullable(dev.getUuids()).orElse(new ParcelUuid[]{});
                         waitForUuid.release();
-                    }
-                    if (action.equals(BluetoothDevice.ACTION_BOND_STATE_CHANGED)) {
+                    } else if (action.equals(BluetoothDevice.ACTION_BOND_STATE_CHANGED)) {
+                        bondSignal.notify();
                         Log.d(TAG, "Bond state: " + dev.getBondState());
+                    } else if (action.equals(BluetoothDevice.ACTION_KEY_MISSING)) {
+                        keyMissingFromBonding = true;
+                        bondSignal.notify();
                     }
-                    Log.d("bt-action", action);
+                    Log.d(TAG, "bt-action: " + action);
                 }
             };
             IntentFilter filter = new IntentFilter();
@@ -244,9 +260,11 @@ public class Bluetooth {
         }
 
         public void closeAll() {
-            if (receiver != null) Pak.getActivity().unregisterReceiver(receiver);
             try {
+                if (receiver != null) Pak.getActivity().unregisterReceiver(receiver);
+                receiver = null;
                 if (gatt != null) gatt.close();
+                gatt = null;
             } catch (SecurityException ignored) {}
         }
 
@@ -259,20 +277,27 @@ public class Bluetooth {
         }
 
         private final Semaphore waitForUuid = new Semaphore(0, true);
-        public void refreshSdpUuids() throws Exception {
-            if (!Bluetooth.checkPermission()) throw new Exception("Perm");
-
-            setupListener();
-            dev.fetchUuidsWithSdp();
-            try {
-                waitForUuid.acquire();
-            } catch (InterruptedException e) {
-                Log.d(TAG, e.toString());
-                throw e;
-            }
+        public int refreshSdpUuids() {
+            return cancellableRunnable.run(() -> {
+                if (!Bluetooth.checkPermission()) return Pak.Error.PERMISSION;
+                setupListener();
+                if (!dev.fetchUuidsWithSdp()) return Pak.Error.NON_FATAL;
+                try {
+                    waitForUuid.acquire();
+                } catch (InterruptedException e) {
+                    return Pak.Error.CANCELLED;
+                }
+                return 0;
+            });
         }
 
         public BluetoothSocket connectToServiceChannel(String uuid) throws Exception {
+            int rc = refreshSdpUuids();
+            if (rc == Pak.Error.CANCELLED) {
+                throw new InterruptedException();
+            } else if (rc != 0) {
+                throw new Exception();
+            }
             UUID u = findServiceUuid(uuid);
             if (u == null) {
                 Log.d(TAG, "UUID not found");
@@ -302,49 +327,63 @@ public class Bluetooth {
             return connectGatt(Pak.getActivity(), callback);
         }
 
-        public void createBond() {
-            try {
-                if (dev.getBondState() == BluetoothDevice.BOND_NONE) {
-                    if (!dev.createBond()) {
-                        Log.d(TAG, "createBond");
+        public int createBond() {
+            return cancellableRunnable.run(() -> {
+                try {
+                    keyMissingFromBonding = false;
+                    setupListener();
+                    if (dev.getBondState() == BluetoothDevice.BOND_NONE) {
+                        if (!dev.createBond()) {
+                            Log.d(TAG, "createBond failed");
+                            return Pak.Error.IO;
+                        }
+                        if (verbose) Log.d(TAG, "Waiting for bond callback");
+                        synchronized (bondSignal) {
+                            bondSignal.wait(20000);
+                        }
+                        if (keyMissingFromBonding) {
+                            return Pak.Error.UNDEFINED;
+                        } else if (dev.getBondState() != BluetoothDevice.BOND_BONDED) {
+                            return Pak.Error.NON_FATAL;
+                        }
                     }
-                    Log.d(TAG, "Waiting for bond callback");
-                    Thread.sleep(10000);
+                    return 0;
+                } catch (SecurityException ignored) {
+                    return Pak.Error.PERMISSION;
+                } catch (InterruptedException ignored) {
+                    return Pak.Error.CANCELLED;
                 }
-            } catch (SecurityException | InterruptedException ignored) {
-
-            }
+            });
         }
 
         public int connectGatt(Context ctx, MyBluetoothGattCallback callback) {
-            try {
-                setupListener();
-                //createBond();
-                gatt = dev.connectGatt(ctx, false, callback);
-                this.callback = callback;
-                synchronized (callback.connectSignal) {
-                    callback.connectSignal.wait(5000);
+            return cancellableRunnable.run(() -> {
+                try {
+                    setupListener();
+                    gatt = dev.connectGatt(ctx, false, callback);
+                    this.callback = callback;
+                    synchronized (callback.connectSignal) {
+                        callback.connectSignal.wait(5000);
+                    }
+                    if (!isGattConnected) {
+                        Log.d(TAG, "connectGatt failed after timeout");
+                        return Pak.Error.NO_CONNECTION;
+                    }
+                    //gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+                    //gatt.setPreferredPhy(BluetoothDevice.PHY_LE_1M_MASK, BluetoothDevice.PHY_LE_1M_MASK, BluetoothDevice.PHY_OPTION_NO_PREFERRED);
+                    //gatt.requestMtu(185);
+                    //Thread.sleep(6000);
+                    gatt.discoverServices();
+                    synchronized (callback.gattServicesDiscovered) {
+                        callback.gattServicesDiscovered.wait(10000);
+                    }
+                    return 0;
+                } catch (SecurityException ignored) {
+                    return Pak.Error.PERMISSION;
+                } catch (InterruptedException ignored) {
+                    return Pak.Error.CANCELLED;
                 }
-                if (!isGattConnected) {
-                    Log.d(TAG, "connectGatt failed after timeout");
-                    return Pak.Error.NO_CONNECTION;
-                }
-                //gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
-                //gatt.setPreferredPhy(BluetoothDevice.PHY_LE_1M_MASK, BluetoothDevice.PHY_LE_1M_MASK, BluetoothDevice.PHY_OPTION_NO_PREFERRED);
-                //gatt.requestMtu(185);
-                //Thread.sleep(6000);
-                //gatt.connect();
-                gatt.discoverServices();
-                synchronized (callback.gattServicesDiscovered) {
-                    callback.gattServicesDiscovered.wait(10000);
-                }
-                return 0;
-            } catch (SecurityException e) {
-                Log.d(TAG, e.getMessage());
-                return Pak.Error.PERMISSION;
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            });
         }
 
         public BluetoothGattDescriptor getDescriptor(BluetoothGattCharacteristic characteristic, int index) {
@@ -547,7 +586,6 @@ public class Bluetooth {
 
     public static class BtFilter {
         public String namePattern;
-        public String deviceType;
         public boolean isClassic;
         public String[] serviceUuids;
         public byte[] manufacData;
@@ -561,7 +599,7 @@ public class Bluetooth {
 
     /// Opens a dialog to save an access point as a companion device
     @SuppressLint("WrongConstant")
-    public static int pairWithDeviceCompanion(BtFilter btFilter, String companionName, ScanCallback scanCallback) {
+    public static int pairWithDeviceCompanion(@NonNull List<BtFilter> filters, String companionName, String deviceType, @NonNull ScanCallback scanCallback) {
         Context ctx = Pak.getActivity();
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return Pak.Error.UNSUPPORTED;
@@ -570,39 +608,47 @@ public class Bluetooth {
         CompanionDeviceManager deviceManager = (CompanionDeviceManager)ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);
 
         AssociationRequest.Builder associationBuilder = new AssociationRequest.Builder();
-
-        if (btFilter.isClassic) {
-            BluetoothDeviceFilter.Builder builder = new BluetoothDeviceFilter.Builder();
-            if (btFilter.serviceUuids != null) {
-                for (String uuid : btFilter.serviceUuids) {
-                    builder.addServiceUuid(ParcelUuid.fromString(uuid), null);
-                }
-            }
-            associationBuilder.addDeviceFilter(builder.build());
-        } else {
-            BluetoothLeDeviceFilter.Builder builder = new BluetoothLeDeviceFilter.Builder();
-            ScanFilter.Builder scanfilter = new ScanFilter.Builder();
-
-            if (btFilter.serviceUuids.length != 0) {
-                scanfilter.setServiceUuid(ParcelUuid.fromString(btFilter.serviceUuids[0]));
-            }
-
-            if (btFilter.manufacData != null) {
-                byte[] trimmed = Arrays.copyOfRange(btFilter.manufacData, 2, btFilter.manufacData.length);
-                int companyIdentifier = (btFilter.manufacData[0] & 0xff) | ((btFilter.manufacData[1] & 0xff) << 8);
-                if (verbose) Log.d(TAG, "str: " + companyIdentifier);
-                try {
-                    if (btFilter.manufacDataMask != null) {
-                        scanfilter.setManufacturerData(0, btFilter.manufacData, btFilter.manufacDataMask);
-                    } else {
-                        scanfilter.setManufacturerData(companyIdentifier, trimmed);
+        for (BtFilter filter: filters) {
+            if (filter.isClassic) {
+                BluetoothDeviceFilter.Builder builder = new BluetoothDeviceFilter.Builder();
+                if (filter.serviceUuids != null) {
+                    for (String uuid : filter.serviceUuids) {
+                        builder.addServiceUuid(ParcelUuid.fromString(uuid), null);
                     }
-                } catch (Exception e) {
-                    return Pak.Error.UNDEFINED;
                 }
+                associationBuilder.addDeviceFilter(builder.build());
+            } else {
+                BluetoothLeDeviceFilter.Builder builder = new BluetoothLeDeviceFilter.Builder();
+                ScanFilter.Builder scanFilter = new ScanFilter.Builder();
+
+                if (filter.manufacData != null) {
+                    byte[] trimmed = Arrays.copyOfRange(filter.manufacData, 2, filter.manufacData.length);
+                    int companyIdentifier = (filter.manufacData[0] & 0xff) | ((filter.manufacData[1] & 0xff) << 8);
+                    if (verbose) Log.d(TAG, "str: " + companyIdentifier);
+                    try {
+                        if (filter.manufacDataMask != null) {
+                            byte[] maskTrimmed = Arrays.copyOfRange(filter.manufacDataMask, 2, filter.manufacDataMask.length);
+                            if (maskTrimmed.length < trimmed.length) {
+                                trimmed = Arrays.copyOfRange(trimmed, 0, maskTrimmed.length);
+                            }
+                            scanFilter.setManufacturerData(companyIdentifier, trimmed, maskTrimmed);
+                        } else {
+                            scanFilter.setManufacturerData(companyIdentifier, trimmed);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, e.getMessage());
+                        return Pak.Error.UNDEFINED;
+                    }
+                }
+
+                for (String uuid: filter.serviceUuids) {
+                    scanFilter.setServiceUuid(ParcelUuid.fromString(uuid));
+                    Log.d(TAG, uuid);
+                }
+
+                builder.setScanFilter(scanFilter.build());
+                associationBuilder.addDeviceFilter(builder.build());
             }
-            builder.setScanFilter(scanfilter.build());
-            associationBuilder.addDeviceFilter(builder.build());
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -612,15 +658,15 @@ public class Bluetooth {
         // Automatically exits prompt when device is found
         //associationBuilder.setSingleDevice(true);
 
-        if (Objects.equals(btFilter.deviceType, "smartwatch")) {
+        if (Objects.equals(deviceType, "smartwatch")) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 associationBuilder.setDeviceProfile(AssociationRequest.DEVICE_PROFILE_WATCH);
             }
-        } else if (Objects.equals(btFilter.deviceType, "smart-glasses")) {
+        } else if (Objects.equals(deviceType, "smart-glasses")) {
             if (Build.VERSION.SDK_INT >= 34) {
                 associationBuilder.setDeviceProfile(AssociationRequest.DEVICE_PROFILE_GLASSES);
             }
-        } else if (Objects.equals(btFilter.deviceType, "generic-medical-wearable")) {
+        } else if (Objects.equals(deviceType, "generic-medical-wearable")) {
             if (Build.VERSION.SDK_INT >= 36) {
                 associationBuilder.setDeviceProfile("android.app.role.COMPANION_DEVICE_MEDICAL");
             }

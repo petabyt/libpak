@@ -44,7 +44,7 @@ static int setup_listener(struct PakBtDevice *dev) {
 		(*env)->PushLocalFrame(env, 10);
 
 		jbyteArray struct_o = (*env)->NewByteArray(env, (jsize) sizeof(*dev));
-		(*env)->SetByteArrayRegion(env, struct_o, 0, (jsize) sizeof(*dev), (const jbyte *) dev);
+		(*env)->SetByteArrayRegion(env, struct_o, 0, (jsize) sizeof(*dev), (const jbyte *)dev);
 
 		jclass device_c = (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device");
 		jmethodID connect_m = (*env)->GetMethodID(env, device_c, "connectGattNative", "([B)I");
@@ -241,9 +241,9 @@ int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device) {
 int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device) {
 	JNIEnv *env = get_jni_env();
 	(*env)->PushLocalFrame(env, 10);
-	(*env)->CallVoidMethod(env, device->priv->device, (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "createBond", "()V"));
+	int rc = (*env)->CallIntMethod(env, device->priv->device, (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "createBond", "()I"));
 	(*env)->PopLocalFrame(env, NULL);
-	return 0;
+	return rc;
 }
 
 struct PakBtSocket *pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid) {
@@ -289,11 +289,12 @@ struct PakBtSocket *pak_bt_connect_to_service_channel(struct PakBt *ctx, struct 
 	struct PakBtSocket *conn = malloc(sizeof(struct PakBtSocket));
 
 	pak_gc_add(&ctx->gc, BT_SOCKET, conn);
+	conn->ctx = ctx;
 	conn->socket = (*env)->NewGlobalRef(env, socket);
 	conn->output = (*env)->NewGlobalRef(env, output_pipe);
 	conn->input = (*env)->NewGlobalRef(env, input_pipe);
 	(*env)->PopLocalFrame(env, NULL);
-	return 0;
+	return conn;
 }
 
 int pak_bt_write(struct PakBtSocket *conn, const void *data, unsigned int length) {

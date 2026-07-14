@@ -10,6 +10,8 @@ import android.util.Log;
 
 import java.lang.ref.WeakReference;
 import java.util.concurrent.Semaphore;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class Pak {
     static final String TAG = "pak";
@@ -18,17 +20,34 @@ public class Pak {
     public static void setupAndroidContext(Activity ctx) {
         weakCtx = new WeakReference<>(ctx);
     }
-    public static PermissionRequester requester = null;
-    private static Semaphore perm = new Semaphore(0, true);
+    private static final Semaphore perm = new Semaphore(0, true);
     private static int permissionResult = 0;
     static Intent lastIntent = null;
 
-    public static class PermissionRequester {
-        void permissionRequested(String permission) {
+    /// For cancelling blocking routines
+    public static class CancellableRunnable {
+        Thread thread;
+        int rc;
+        int run(Supplier<Integer> block) {
+            synchronized (this) {
+                thread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        rc = block.get();
+                    }
+                });
+                thread.start();
+                try {
+                    thread.join();
+                } catch (InterruptedException e) {
+                    // This thread shouldn't be interrupted
+                }
+            }
+            thread = null;
+            return rc;
         }
-
-        void instructionsGoToSettings(String permission) {
-
+        void cancel() {
+            if (thread != null) thread.interrupt();
         }
     }
 

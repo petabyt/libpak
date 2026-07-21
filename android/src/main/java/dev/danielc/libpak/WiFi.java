@@ -4,14 +4,12 @@ package dev.danielc.libpak;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.companion.AssociatedDevice;
 import android.companion.AssociationInfo;
 import android.companion.AssociationRequest;
 import android.companion.CompanionDeviceManager;
 import android.companion.WifiDeviceFilter;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.MacAddress;
@@ -31,6 +29,7 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiInfo;
 import androidx.annotation.NonNull;
 import java.lang.reflect.Method;
+import java.util.concurrent.CancellationException;
 import java.util.regex.Pattern;
 
 public class WiFi {
@@ -41,6 +40,8 @@ public class WiFi {
             this.net = net;
             this.handle = net.getNetworkHandle();
         }
+        ScanResult apScanResult;
+        AssociationInfo apAssociation;
         Network net;
         long handle;
     }
@@ -82,14 +83,16 @@ public class WiFi {
     static Network lastFoundWiFiDevice = null;
 
     public static abstract class WiFiDiscoveryCallback {
-        public abstract void found(@NonNull Adapter net);
+        public abstract void onConnected(@NonNull Adapter net);
         public abstract void failed(@NonNull String reason, int code);
+        public void onUserCancelled() {}
+        public void onConnecting(String ssid) {}
     }
 
     public static class NativeWiFiDiscoveryCallback extends WiFiDiscoveryCallback {
         byte[] struct;
         @Override
-        public native void found(@NonNull Adapter net);
+        public native void onConnected(@NonNull Adapter net);
         @Override
         public native void failed(@NonNull String reason, int code);
     }
@@ -104,9 +107,18 @@ public class WiFi {
         ConnectivityManager connectivityManager = (ConnectivityManager)ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
 
         WifiNetworkSpecifier.Builder builder = new WifiNetworkSpecifier.Builder();
-        builder.setSsidPattern(new PatternMatcher(filter.ssidPattern, PatternMatcher.PATTERN_ADVANCED_GLOB));
+        if (filter.hidden) {
+            builder.setSsid(filter.ssidPattern);
+        } else {
+            Log.d(TAG, filter.ssidPattern);
+            builder.setSsidPattern(new PatternMatcher(filter.ssidPattern, PatternMatcher.PATTERN_ADVANCED_GLOB));
+        }
+        if (filter.bssid != null) {
+            builder.setBssid(MacAddress.fromString(filter.bssid));
+        }
         if (filter.password != null) {
             builder.setWpa2Passphrase(filter.password);
+            //builder.setWpa3Passphrase(filter.password);
         }
         builder.setIsHiddenSsid(filter.hidden);
         NetworkSpecifier specifier = builder.build();
@@ -121,8 +133,8 @@ public class WiFi {
             @Override
             public void onAvailable(@NonNull Network network) {
                 lastFoundWiFiDevice = network;
-                callback.found(new Adapter(network));
-                connectivityManager.unregisterNetworkCallback(this);
+                Log.d(TAG, "Network available");
+                callback.onConnected(new Adapter(network));
             }
             @Override
             public void onUnavailable() {
@@ -140,67 +152,73 @@ public class WiFi {
     }
 
     /// Opens a dialog to save an access point as a companion device
-    public static int connectToAccessPointCompanion(Context ctx, ApFilter apFilter, String companionName, WiFiDiscoveryCallback callback) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return Pak.Error.UNSUPPORTED;
-        }
+    /// Then uses NetworkRequest to connect to the access point
+    public static int connectToAccessPointCompanion(ApFilter apFilter, String companionName, WiFiDiscoveryCallback wifiCallback) {
+        Context ctx = Pak.getActivity();
+        AssociationInfo associationInfo = null;
+        ScanResult scanResult = null;
+        Log.d(TAG, "" + apFilter.hidden);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !apFilter.hidden) {
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager) ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);
 
-        CompanionDeviceManager deviceManager = (CompanionDeviceManager)ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);
-
-        WifiDeviceFilter.Builder builder = new WifiDeviceFilter.Builder();
-        if (apFilter.ssidPattern != null) {
-            builder.setNamePattern(Pattern.compile(apFilter.ssidPattern));
-        }
-        if (apFilter.bssid != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                builder.setBssid(MacAddress.fromString(apFilter.bssid));
+            WifiDeviceFilter.Builder builder = new WifiDeviceFilter.Builder();
+            if (apFilter.ssidPattern != null) {
+                builder.setNamePattern(Pattern.compile(apFilter.ssidPattern));
             }
-        }
-        WifiDeviceFilter filter = builder.build();
-
-        AssociationRequest.Builder associationBuilder = new AssociationRequest.Builder();
-        associationBuilder.addDeviceFilter(filter);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            associationBuilder.setDisplayName(companionName);
-        }
-        AssociationRequest request = associationBuilder.build();
-
-        CompanionDeviceManager.Callback companionCallback = new CompanionDeviceManager.Callback() {
-            // Called when a device is found. Launch the IntentSender so the user can
-            // select the device they want to pair with.
-            @Override
-            public void onDeviceFound(@NonNull IntentSender chooserLauncher) {
-                Log.d(TAG, "Device found");
-                try {
-                    ((Activity)ctx).startIntentSenderForResult(chooserLauncher, 1001, null, 0, 0, 0);
-                } catch (IntentSender.SendIntentException e) {
-                    throw new RuntimeException(e);
+            if (apFilter.bssid != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    builder.setBssid(MacAddress.fromString(apFilter.bssid));
                 }
             }
+            WifiDeviceFilter filter = builder.build();
 
-            @Override
-            public void onFailure(CharSequence error) {
-                Log.d(TAG, "Association failure");
-                callback.failed(error.toString(), -1);
+            AssociationRequest.Builder associationBuilder = new AssociationRequest.Builder();
+            associationBuilder.addDeviceFilter(filter);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                associationBuilder.setDisplayName(companionName);
             }
+            AssociationRequest request = associationBuilder.build();
+            try {
+                Intent intent = Pak.companionAssociateGetResultBlocking(deviceManager, request);
+                Log.d(TAG, "intent: " + intent);
+                if (intent == null) return Pak.Error.NON_FATAL; // User did not select a device
 
-            @Override
-            public void onAssociationCreated(@NonNull AssociationInfo associationInfo) {
-                Log.d(TAG, "Association created");
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    int uniqueId = associationInfo.getId();
-
-                    AssociatedDevice device = associationInfo.getAssociatedDevice();
-                    if (device == null) return;
-
-                    ScanResult scan = device.getWifiDevice();
-                    Log.d(TAG, scan.toString());
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    associationInfo = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
                 }
+                scanResult = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
+                // According to https://medium.com/@mike_21858/wifinetworkspecifier-prompts-and-localonlyhotspot-f596c7b84968
+                // if the WiFi AP is saved as a companion device (via the BSSID) then NetworkRequest will not show
+                // any system dialog and will automatically connect.
+                if (scanResult != null) {
+                    apFilter.ssidPattern = scanResult.SSID;
+                    apFilter.bssid = scanResult.BSSID;
+                }
+            } catch (Pak.CancelException e) {
+                wifiCallback.onUserCancelled();
+                return Pak.Error.CANCELLED;
+            } catch (SecurityException e) {
+                return Pak.Error.PERMISSION;
             }
-        };
+        }
 
-        deviceManager.associate(request, companionCallback, null);
-        return 0;
+        ScanResult finalScanResult = scanResult;
+        AssociationInfo finalAssociationInfo = associationInfo;
+        wifiCallback.onConnecting(scanResult == null ? null : scanResult.SSID);
+        return connectToAccessPoint(apFilter, new WiFiDiscoveryCallback() {
+            @Override
+            public void onConnected(@NonNull Adapter net) {
+                Log.d(TAG, "Connected to network");
+                net.apAssociation = finalAssociationInfo;
+                net.apScanResult = finalScanResult;
+                wifiCallback.onConnected(net);
+            }
+
+            @Override
+            public void failed(@NonNull String reason, int code) {
+                wifiCallback.failed(reason, code);
+            }
+        });
     }
 
     /// Start listener to obtain primary network (internet access) handle

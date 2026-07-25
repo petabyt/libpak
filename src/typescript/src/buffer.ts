@@ -76,7 +76,7 @@ export class BufferWriter {
 
 	private chk(o: number, n: number) {
 		if (o + n > this.buffer.length) {
-			setSize(o + n);
+			this.setSize(o + n);
 		}
 	}
 

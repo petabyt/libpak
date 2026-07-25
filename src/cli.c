@@ -156,8 +156,6 @@ int main(int argc, char **argv) {
 			return test_bluetooth();
 		} else if (!strcmp(argv[i], "--bt-con")) {
 			return test_bluetooth_connect();
-		} else if (!strcmp(argv[i], "--test-dummy-mod")) {
-			return pak_rt_test_module(pak_rt_mod_from_native(get_module_dummy));
 		} else {
 			printf("Invalid argument '%s'\n", argv[i]);
 		}

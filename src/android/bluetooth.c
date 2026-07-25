@@ -124,15 +124,19 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
 	return 0;
 }
 
+static void free_dev(void *ptr, void *arg) {
+	pak_bt_unref_device((struct PakBt *)arg, (struct PakBtDevice *)ptr);
+}
+
 int pak_bt_device_update(struct PakBt *ctx, struct PakBtDevice *dev) {
 	JNIEnv *env = get_jni_env();
 	jmethodID is_connected_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "isConnected", "()Z");
-	dev->is_connected = (*env)->CallBooleanMethod(env, dev->priv->device, is_connected_m);
-	return 0;
-}
+	dev->is_connected = (int)(*env)->CallBooleanMethod(env, dev->priv->device, is_connected_m);
 
-static void free_dev(void *ptr, void *arg) {
-	pak_bt_unref_device((struct PakBt *)arg, (struct PakBtDevice *)ptr);
+	jmethodID is_bonded_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "isBonded", "()Z");
+	dev->is_bonded = (int)(*env)->CallBooleanMethod(env, dev->priv->device, is_bonded_m);
+
+	return 0;
 }
 
 struct PakBtDevice *pak_bt_device_from_jobject(JNIEnv *env, struct PakBt *ctx, jobject dev_o) {
@@ -156,6 +160,8 @@ struct PakBtDevice *pak_bt_device_from_jobject(JNIEnv *env, struct PakBt *ctx, j
 	const char *address_s = (*env)->GetStringUTFChars(env, address_o, NULL);
 	strlcpy(device->mac_address, address_s, sizeof(device->mac_address));
 	(*env)->ReleaseStringUTFChars(env, address_o, address_s);
+
+	pak_bt_device_update(ctx, device);
 
 	(*env)->PopLocalFrame(env, NULL);
 	return device;

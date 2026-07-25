@@ -1,4 +1,4 @@
-// dbus bluez impl
+// Wrapper over BlueZ on dbus, with libbluetooth calls where necessary (rfcomm stuff)
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -45,10 +45,6 @@ struct PakGattCharacteristicWrapper {
 	struct PakGattCharacteristic base;
 	char path[];
 };
-
-#define TO_WRAPPER(this) _Generic((this), \
-      struct PakBtDevice *: (struct PakBtDeviceWrapper *)this, \
-      )
 
 static int pak_str_to_uuid128(const char *str, uint8_t copy[16]) {
 	uint32_t v[16];
@@ -365,10 +361,10 @@ static struct PakBtDeviceWrapper *fill_from_device1(struct DBusMessageIter *dict
 			dbus_bool_t v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
 			dev->base.is_connected = (int)v;
-		}if (!strcmp(name, "Paired")) {
+		}if (!strcmp(name, "Bonded")) {
 			dbus_bool_t v;
 			dbus_message_iter_get_basic(&dict_variant, &v);
-			dev->base.is_paired = (int)v;
+			dev->base.is_bonded = (int)v;
 		} else if (!strcmp(name, "Name")) {
 			const char *v;
 			dbus_message_iter_get_basic(&dict_variant, &v);

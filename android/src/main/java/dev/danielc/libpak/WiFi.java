@@ -29,7 +29,6 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiInfo;
 import androidx.annotation.NonNull;
 import java.lang.reflect.Method;
-import java.util.concurrent.CancellationException;
 import java.util.regex.Pattern;
 
 public class WiFi {
@@ -44,6 +43,28 @@ public class WiFi {
         AssociationInfo apAssociation;
         Network net;
         long handle;
+    }
+
+    public static boolean checkPermission() {
+        // New Android 17 permissions:
+        // https://developer.android.com/privacy-and-security/local-network-permission
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN) {
+            if (Pak.getActivity().checkSelfPermission(Manifest.permission.ACCESS_LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED) return false;
+        }
+        // https://developer.android.com/develop/connectivity/wifi/wifi-permissions
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            if (Pak.getActivity().checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) return false;
+        }
+        return true;
+    }
+
+    public static void requestConnectPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN) {
+            Pak.requirePermissionBlocking(Manifest.permission.ACCESS_LOCAL_NETWORK);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Pak.requirePermissionBlocking(Manifest.permission.NEARBY_WIFI_DEVICES);
+        }
     }
 
     public static Adapter getPrimaryAdapter() {
@@ -106,6 +127,8 @@ public class WiFi {
 
         ConnectivityManager connectivityManager = (ConnectivityManager)ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
 
+        Log.d(TAG, String.format("%s %s %s", filter.ssidPattern, filter.password, filter.bssid));
+
         WifiNetworkSpecifier.Builder builder = new WifiNetworkSpecifier.Builder();
         if (filter.hidden) {
             builder.setSsid(filter.ssidPattern);
@@ -157,7 +180,6 @@ public class WiFi {
         Context ctx = Pak.getActivity();
         AssociationInfo associationInfo = null;
         ScanResult scanResult = null;
-        Log.d(TAG, "" + apFilter.hidden);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !apFilter.hidden) {
             CompanionDeviceManager deviceManager = (CompanionDeviceManager) ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);
 
@@ -230,7 +252,7 @@ public class WiFi {
         ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
             @Override
             public void onAvailable(Network network) {
-                Log.d(TAG, "Wifi network is available: " + network.getNetworkHandle());
+                Log.d(TAG, "Wifi network is available: " + network.toString());
                 primaryNetworkDevice = network;
             }
             @Override

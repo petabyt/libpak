@@ -1,9 +1,15 @@
 /// Small helper class to help with permissions and Android native things
 package dev.danielc.libpak;
 
+import android.Manifest;
 import android.app.Activity;
+import android.companion.AssociationInfo;
 import android.companion.AssociationRequest;
 import android.companion.CompanionDeviceManager;
+import android.companion.CompanionDeviceService;
+import android.companion.DevicePresenceEvent;
+import android.companion.ObservingDevicePresenceRequest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
@@ -11,7 +17,10 @@ import android.os.Build;
 import android.os.Handler;
 import android.util.Log;
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+
 import java.lang.ref.WeakReference;
+import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.function.Supplier;
 
@@ -21,14 +30,24 @@ public class Pak {
     public static WeakReference<Activity> weakCtx = null;
     public static void setupAndroidContext(Activity ctx) {
         weakCtx = new WeakReference<>(ctx);
+
+        if (Build.VERSION.SDK_INT >= 36) {
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager)getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            List<AssociationInfo> associations = deviceManager.getMyAssociations();
+            for (AssociationInfo m: associations) {
+                Log.d(TAG, "Observing: " + m.getDisplayName() + " " + m.getDeviceMacAddress());
+                deviceManager.startObservingDevicePresence(new ObservingDevicePresenceRequest.Builder().setAssociationId(m.getId()).build());
+            }
+        }
     }
     private static final Semaphore perm = new Semaphore(0, true);
     private static int permissionResult = 0;
     static Intent lastIntent = null;
 
-    public static class CancelException extends Exception { };
+    public static class CancelException extends Exception { }
 
     /// For cancelling blocking routines
+    /// Can be used like new CancellableRunnable().run(() => {return 0;})
     public static class CancellableRunnable {
         Thread thread;
         int rc;
@@ -52,6 +71,30 @@ public class Pak {
         }
         void cancel() {
             if (thread != null) thread.interrupt();
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.S)
+    public static class MyCompanionDeviceService extends CompanionDeviceService {
+        @Override
+        public void onCreate() {
+            super.onCreate();
+            Log.d(TAG, "Companion Device Service Created");
+        }
+        @Override
+        public void onDeviceAppeared(@NonNull String address) {
+            super.onDeviceAppeared(address);
+            Log.d(TAG, "onDeviceAppeared: " + address);
+        }
+        @Override
+        public void onDeviceDisappeared(@NonNull String address) {
+            super.onDeviceDisappeared(address);
+            Log.d(TAG, "onDeviceDisappeared");
+        }
+        @Override
+        public void onDevicePresenceEvent(@NonNull DevicePresenceEvent event) {
+            super.onDevicePresenceEvent(event);
+            Log.d(TAG, "onDevicePresenceEvent");
         }
     }
 
@@ -123,6 +166,15 @@ public class Pak {
                 returnCode = Error.CANCELLED;
                 waitForCallback.release();
             }
+
+            @Override
+            public void onAssociationCreated(@NonNull AssociationInfo associationInfo) {
+                super.onAssociationCreated(associationInfo);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                    manager.startObservingDevicePresence(new ObservingDevicePresenceRequest.Builder().setAssociationId(associationInfo.getId()).build());
+                }
+            }
+
             @Override
             public void onDeviceFound(@NonNull IntentSender intentSender) {
                 super.onDeviceFound(intentSender);

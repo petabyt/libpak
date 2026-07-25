@@ -47,7 +47,6 @@
 /// @addtogroup PakProperty
 /// @{
 #define PAK_PROP_NAME "name"
-#define PAK_PROP_UNIQUE_IDENTIFIER "unique-identifier"
 #define PAK_PROP_BATTERY_MAIN "battery-main"
 #define PAK_PROP_BATTERY_LEFT "battery-left"
 #define PAK_PROP_BATTERY_RIGHT "battery-right"
@@ -62,7 +61,7 @@
 #define PAK_CMD_FOCUS_UP "focus-up"
 /// @}
 
-enum SortedBy {
+enum PakSortedBy {
 	PAK_DEFAULT = 0,
 	PAK_NEWEST_FIRST = 1,
 	PAK_OLDEST_FIRST = 2,
@@ -77,7 +76,7 @@ struct PakFileHandle {
 
 struct PakFileMetadata {
 	const char *filename;
-	// Mime types are borrowed from IANA: https://www.iana.org/assignments/media-types/media-types.xhtml
+	// Mime types are compatible with IANA: https://www.iana.org/assignments/media-types/media-types.xhtml
 	const char *mime_type;
 	int file_size;
 	int image_width;
@@ -134,7 +133,7 @@ struct PakSavedConnection {
 	const char *unique_id;
 	/// Human readable name of device
 	const char *name;
-	/// Optional auxillary data that can be used to store tokens or keys required to reconnect to a device.
+	/// Optional auxiliary data that can be used to store tokens or keys required to reconnect to a device.
 	/// Set to NULL if not used.
 	const uint8_t *aux_data;
 	unsigned int aux_data_length;
@@ -264,7 +263,7 @@ struct PakModule {
 /// If storage device doesn't exist, it will be created. Otherwise it will be updated
 /// @n_items sorted_by How many files are in the root filesystem folder
 /// @param sorted_by How the file list data set is sorted by default
-int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum SortedBy sorted_by);
+int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum PakSortedBy sorted_by);
 /// Submit metadata for a file
 /// @info May be freed and requested again later
 int pak_rt_add_file_metadata(struct PakModule *mod, struct PakFileHandle *file, const struct PakFileMetadata *metadata);
@@ -272,7 +271,10 @@ int pak_rt_add_file_metadata(struct PakModule *mod, struct PakFileHandle *file, 
 /// @info May be freed and requested again later
 int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length);
 /// Submit contents for a file for the user to view or download
-int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, int is_partial);
+/// Can be submitted in partial, when offset + length < total_size.
+/// total_size can also be zero if you don't know the length beforehand,
+/// but a terminating call must be made with length = 0
+int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, unsigned int offset, unsigned int total_size);
 /// Registers a setting that is displayed in the UI and can be modified by the user
 int pak_rt_set_dashboard_pane(struct PakModule *mod, const struct PakWidget *s);
 /// Returns true if user requested to cancel the job.
@@ -313,5 +315,5 @@ const char *pak_rt_get_setup_option(struct PakModule *mod);
 /// Return string of client name, do not free
 const char *pak_rt_get_client_name(void);
 /// Covers 'Bluetooth -> WiFi handover case common in some devices'
-int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter);
+int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter, const char *setup_option);
 #endif

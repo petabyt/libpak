@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <jni.h>
 #include <wifi.h>
+#include <android/log.h>
 #include "ndk.h"
 
 int android_setsocknetwork(jlong handle, int fd);
@@ -45,7 +46,7 @@ jobject pak_wifi_ap_filter_to_jobject(JNIEnv *env, struct PakWiFiApFilter *filte
 		filter->has_bssid ? (*env)->NewStringUTF(env, filter->bssid) : NULL,
 		filter->has_password ? (*env)->NewStringUTF(env, filter->password) : NULL,
 		filter->has_band ? filter->band : -1,
-		filter->is_hidden
+		(jboolean)filter->is_hidden
 	);
 }
 
@@ -71,6 +72,7 @@ int pak_wifi_unref_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter) {
 
 /// Bind a socket file descriptor to a network adapter
 int pak_wifi_bind_socket_to_adapter(struct PakNet *ctx, struct PakWiFiAdapter *adapter, int fd) {
+	__android_log_print(ANDROID_LOG_DEBUG, "wifi", "Binding %d to %ld", fd, adapter->priv->network_handle);
 	return android_setsocknetwork(adapter->priv->network_handle, fd);
 }
 
@@ -102,7 +104,7 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 }
 
 JNIEXPORT void JNICALL
-Java_dev_danielc_libpak_WiFi_00024NativeWiFiDiscoveryCallback_found(JNIEnv *env, jobject thiz,
+Java_dev_danielc_libpak_WiFi_00024NativeWiFiDiscoveryCallback_onConnected(JNIEnv *env, jobject thiz,
 																	jobject net) {
 	// TODO: implement found()
 }

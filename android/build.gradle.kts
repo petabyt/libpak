@@ -4,10 +4,11 @@ plugins {
 
 android {
     namespace = "dev.danielc.libpak"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 24
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -34,6 +35,8 @@ android {
 
 dependencies {
     implementation(libs.androidx.annotation.jvm)
-    testImplementation(libs.junit)
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    testImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.junit.v115)
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

@@ -60,7 +60,7 @@ struct PakBtDevice {
 	_pad_pointer pad_priv;
 	int is_classic;
 	int is_connected;
-	int is_paired;
+	int is_bonded;
 	char name[64];
 	char mac_address[64];
 	uint32_t btclass;

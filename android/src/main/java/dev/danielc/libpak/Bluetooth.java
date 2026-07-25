@@ -23,6 +23,7 @@ import android.companion.BluetoothLeDeviceFilter;
 import android.companion.CompanionDeviceManager;
 import android.companion.CompanionDeviceService;
 import android.companion.DevicePresenceEvent;
+import android.companion.ObservingDevicePresenceRequest;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
 
@@ -96,30 +97,6 @@ public class Bluetooth {
         return getDefaultAdapter().isEnabled();
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.S)
-    public static class MyCompanionDeviceService extends CompanionDeviceService {
-        @Override
-        public void onCreate() {
-            super.onCreate();
-            Log.d(TAG, "onCreate");
-        }
-        @Override
-        public void onDeviceAppeared(@NonNull String address) {
-            super.onDeviceAppeared(address);
-            Log.d(TAG, "onDeviceAppeared");
-        }
-        @Override
-        public void onDeviceDisappeared(@NonNull String address) {
-            super.onDeviceDisappeared(address);
-            Log.d(TAG, "onDeviceDisappeared");
-        }
-        @Override
-        public void onDevicePresenceEvent(@NonNull DevicePresenceEvent event) {
-            super.onDevicePresenceEvent(event);
-            Log.d(TAG, "onDevicePresenceEvent");
-        }
-    };
-
     public static void setupListeners(Listener listener) {
         BroadcastReceiver receiver = new BroadcastReceiver() {
             @Override
@@ -150,6 +127,16 @@ public class Bluetooth {
         }
     }
 
+    public static void senseNearbyDevice(int associationId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            if (Pak.getActivity().getPackageManager().hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
+                Log.d(TAG, "Start observing " + associationId);
+                deviceManager.startObservingDevicePresence(new ObservingDevicePresenceRequest.Builder().setAssociationId(associationId).build());
+            }
+        }
+    }
+
     public static Device fromAddress(@NonNull String address) {
         return new Device(getDefaultAdapter(), getDefaultAdapter().getRemoteDevice(address));
     }
@@ -162,7 +149,8 @@ public class Bluetooth {
         @NonNull public final String name;
         @NonNull public final String address;
         public boolean isGattConnected = false;
-        public ScanResult scanResult = null;
+        private ScanResult scanResult = null;
+        private AssociationInfo associationInfo = null;
         @NonNull private ParcelUuid[] serviceUuids;
         public BluetoothGatt gatt = null;
         BroadcastReceiver receiver = null;
@@ -177,13 +165,26 @@ public class Bluetooth {
             this.address = dev.getAddress();
 
         }
-        Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev, @NonNull ScanResult scanResult) {
+        Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev, ScanResult scanResult) {
             this(adapter, dev);
             this.scanResult = scanResult;
+        }
+        Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev, @NonNull ScanResult scanResult, AssociationInfo info) {
+            this(adapter, dev, scanResult);
+            this.associationInfo = info;
         }
 
         public @NonNull List<String> getServiceUuids() {
             return Arrays.stream(serviceUuids).map(ParcelUuid::toString).collect(Collectors.toList());
+        }
+
+        public Integer getAssociationId() {
+            if (associationInfo == null) return null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                return associationInfo.getId();
+            } else {
+                return null;
+            }
         }
 
         public boolean isBonded() {
@@ -233,13 +234,21 @@ public class Bluetooth {
                     if (action == null) return;
                     if (action.equals(BluetoothDevice.ACTION_UUID)) {
                         serviceUuids = Optional.ofNullable(dev.getUuids()).orElse(new ParcelUuid[]{});
-                        waitForUuid.release();
+                        synchronized (waitForUuid) {
+                            waitForUuid.release();
+                        }
                     } else if (action.equals(BluetoothDevice.ACTION_BOND_STATE_CHANGED)) {
-                        bondSignal.notify();
+                        if (dev.getBondState() == BluetoothDevice.BOND_BONDED || dev.getBondState() == BluetoothDevice.BOND_NONE) {
+                            synchronized (bondSignal) {
+                                bondSignal.notify();
+                            }
+                        }
                         Log.d(TAG, "Bond state: " + dev.getBondState());
                     } else if (action.equals(BluetoothDevice.ACTION_KEY_MISSING)) {
                         keyMissingFromBonding = true;
-                        bondSignal.notify();
+                        synchronized (bondSignal) {
+                            bondSignal.notify();
+                        }
                     }
                     Log.d(TAG, "bt-action: " + action);
                 }
@@ -275,7 +284,6 @@ public class Bluetooth {
             }
             return null;
         }
-
         private final Semaphore waitForUuid = new Semaphore(0, true);
         public int refreshSdpUuids() {
             return cancellableRunnable.run(() -> {
@@ -328,10 +336,28 @@ public class Bluetooth {
         }
 
         public int createBond() {
+            setupListener();
             return cancellableRunnable.run(() -> {
                 try {
+                    // Remove existing bond from system (requires association)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                        if (associationInfo != null && dev.getBondState() != BluetoothDevice.BOND_NONE) {
+                            CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+                            try {
+                                Log.d(TAG, "Removing bond...");
+                                deviceManager.removeBond(associationInfo.getId());
+                                synchronized (bondSignal) {
+                                    bondSignal.wait(10000);
+                                }
+                            } catch (SecurityException ignored) {
+
+                            } catch (InterruptedException ignored) {
+
+                            }
+                        }
+                    }
+
                     keyMissingFromBonding = false;
-                    setupListener();
                     if (dev.getBondState() == BluetoothDevice.BOND_NONE) {
                         if (!dev.createBond()) {
                             Log.d(TAG, "createBond failed");
@@ -713,17 +739,14 @@ public class Bluetooth {
         if (callback.waitForActivity) {
             Pak.waitForActivityResult();
             if (Pak.lastIntent != null) {
-                Log.d(TAG, "found device");
+                Log.d(TAG, "Association result");
+                AssociationInfo associationInfo = null;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    AssociationInfo associationInfo = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
-                    if (associationInfo != null) {
-                        // Don't care about keeping system associations right now
-                        deviceManager.disassociate(associationInfo.getId());
-                    }
+                    associationInfo = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
                 }
                 ScanResult result = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
                 if (result != null) {
-                    scanCallback.onFound(new Bluetooth.Device(getDefaultAdapter(), result.getDevice(), result));
+                    scanCallback.onFound(new Bluetooth.Device(getDefaultAdapter(), result.getDevice(), result, associationInfo));
                 }
             }
         }

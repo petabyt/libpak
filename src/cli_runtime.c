@@ -10,6 +10,11 @@ struct RuntimePriv {
 	int current_job;
 };
 
+
+int pak_rt_set_dashboard_pane(struct PakModule *mod, const struct PakWidget *s) {
+	return 0;
+}
+
 int pak_rt_save_session_signature(struct PakModule *mod, struct PakSavedConnection *info) {
 	return -1;
 }
@@ -22,10 +27,10 @@ int pak_rt_set_session_property_int(struct PakModule *mod, const char *key, int 
 int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length) {
 	return -1;
 }
-int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, int is_partial) {
+int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, unsigned int offset, unsigned int total_size) {
 	return -1;
 }
-int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum SortedBy sorted_by) {
+int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum PakSortedBy sorted_by) {
 	return -1;
 }
 int pak_rt_set_progress_bar(struct PakModule *mod, int job, int percent) {
@@ -82,14 +87,12 @@ static int new_job(struct RuntimePriv *r) {
 
 void pak_debug_log(struct PakModule *mod, const char *fmt, ...) {
 	printf("pak_debug_log: ");
-	fflush(stdout);
 	va_list args;
 	va_start(args, fmt);
 	vprintf(fmt, args);
 	va_end(args);
 	putchar('\n');
 	fflush(stdout);
-	abort();
 }
 
 int pak_rt_test_module(struct PakModule *mod) {
@@ -99,23 +102,22 @@ int pak_rt_test_module(struct PakModule *mod) {
 
 	struct RuntimePriv *r = mod->rt;
 	if (mod->init) mod->init(mod);
-	if (mod->on_find_connection) {
-		if (mod->on_find_connection(mod, new_job(r))) {
-			printf("Failed to find connection\n");
-			return -1;
-		}
-	}
+	// if (mod->on_find_connection) {
+	// 	if (mod->on_find_connection(mod, new_job(r))) {
+	// 		printf("Failed to find connection\n");
+	// 	}
+	// }
 	if (mod->on_run_test) {
 		if (mod->on_run_test(mod, PAK_SCREEN_CONSOLE, new_job(r))) {
 			printf("on_run_test\n");
 			return -1;
 		}
 	}
-	if (mod->on_disconnect) {
-		if (mod->on_disconnect(mod)) {
-			printf("on_disconnect\n");
-			return -1;
-		}
-	}
+//	if (mod->on_disconnect) {
+//		if (mod->on_disconnect(mod)) {
+//			printf("on_disconnect\n");
+//			return -1;
+//		}
+//	}
 	return 0;
 }

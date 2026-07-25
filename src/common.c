@@ -9,15 +9,21 @@
 #include "wifi.h"
 #include "runtime.h"
 
-__attribute__((weak))
-void pak_global_log(const char *fmt, ...) {
-	
-}
+//__attribute__((weak))
+//void pak_global_log(const char *fmt, ...) {
+//	printf("LOG: ");
+//	fflush(stdout);
+//	va_list args;
+//	va_start(args, fmt);
+//	vfprintf(stdout, fmt, args);
+//	va_end(args);
+//	putchar('\n');
+//}
 
 __attribute__((weak))
 void pak_error(const char *fmt, ...) {
 	printf("ERR: ");
-	fflush(stdout);
+	fflush(stderr);
 	va_list args;
 	va_start(args, fmt);
 	vfprintf(stderr, fmt, args);
@@ -26,7 +32,7 @@ void pak_error(const char *fmt, ...) {
 
 __attribute__((weak))
 void pak_abort(const char *fmt, ...) {
-	printf("ERR: ");
+	printf("ABORT: ");
 	fflush(stdout);
 	va_list args;
 	va_start(args, fmt);

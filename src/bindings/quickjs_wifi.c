@@ -24,11 +24,11 @@ struct Adapter {
 	struct PakWiFiAdapter *adapter;
 };
 
-static JSValue create_adapter(JSContext *ctx, JSValue wifi, struct PakNet *wifi_ctx, struct PakWiFiAdapter *adapter) {
+JSValue pak_js_create_adapter(JSContext *ctx, JSValue wifi, struct PakWiFiAdapter *adapter) {
 	JSValue adapter_obj = JS_NewObjectClass(ctx, wifi_adapter_class_id);
 
 	struct Adapter *adapter_priv = js_malloc_rt(JS_GetRuntime(ctx), sizeof(struct Adapter));
-	adapter_priv->ctx = wifi_ctx;
+	adapter_priv->ctx = (struct PakNet *)JS_GetOpaque(wifi, wifi_class_id);
 	adapter_priv->adapter = adapter;
 
 	JS_SetOpaque(adapter_obj, adapter_priv);
@@ -66,7 +66,7 @@ static int module_wifi_adapter(JSContext* ctx, JSModuleDef *m) {
 static JSValue get_default_adapter(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
 	struct PakNet *wifi_ctx = JS_GetOpaque(this_val, wifi_class_id);
 	struct PakWiFiAdapter *pakadapter = pak_wifi_get_adapter(wifi_ctx, -1);
-	JSValue adapter = create_adapter(ctx, this_val, wifi_ctx, pakadapter);
+	JSValue adapter = pak_js_create_adapter(ctx, this_val, pakadapter);
 	return adapter;
 }
 
@@ -91,7 +91,7 @@ struct RequestConnectionPriv {
 static int connected(struct PakNet *ctx, struct PakWiFiAdapter *adapter, void *arg) {
 	struct RequestConnectionPriv *temp_priv = arg;
 	JSValue args[1] = {
-		create_adapter(temp_priv->ctx, temp_priv->this_val, temp_priv->wifi_ctx, adapter),
+		pak_js_create_adapter(temp_priv->ctx, temp_priv->this_val, adapter),
 	};
 	JSValue rv = JS_Call(temp_priv->ctx, temp_priv->fun_val, JS_UNDEFINED, 1, args);
 	if (JS_IsException(rv)) {
@@ -188,6 +188,12 @@ static int module_wifi(JSContext *ctx, JSModuleDef *m) {
 
 	JS_SetModuleExport(ctx, m, class_name, class);
 	return 0;
+}
+
+JSValue pak_js_create_wifi_context(JSContext *ctx, struct PakNet *wifi_ctx) {
+	JSValue ctx_obj = JS_NewObjectClass(ctx, wifi_class_id);
+	JS_SetOpaque(ctx_obj, wifi_ctx);
+	return ctx_obj;
 }
 
 static int module_wifi_all(JSContext *ctx, JSModuleDef *m) {

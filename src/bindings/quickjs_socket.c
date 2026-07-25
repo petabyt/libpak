@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
+#include <runtime.h>
 #ifdef WIN32
 	#include <winsock2.h>
 	#include <ws2tcpip.h>
@@ -35,7 +36,7 @@ enum Operations {
 static fd_set *parse_fd_set(JSContext *ctx, fd_set *set, JSValue arr) {
 	if (JS_IsArray(ctx, arr)) {
 		FD_ZERO(set);
-		for (int i = 0; 1; i++) {
+		while (1) {
 			uint32_t n;
 			JSValue p = JS_GetPropertyUint32(ctx, arr, 0);
 			if (!JS_IsNumber(p)) break;
@@ -56,7 +57,13 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 		JS_ToInt32(ctx, &domain, argv[0]);
 		JS_ToInt32(ctx, &type, argv[1]);
 		JS_ToInt32(ctx, &protocol, argv[2]);
-		return JS_NewInt32(ctx, socket(domain, type, protocol));
+		int fd = socket(domain, type, protocol);
+
+//		int flags = fcntl(fd, F_GETFL, 0);
+//		if (flags < 0) abort();
+//		fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+		return JS_NewInt32(ctx, fd);
 		}
 	case M_SETSOCKOPT: {
 		int32_t fd, level, optname;
@@ -93,7 +100,40 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 		size_t len;
 		JS_ToInt32(ctx, &fd, argv[0]);
 		struct sockaddr *sa = (void *)JS_GetArrayBuffer(ctx, &len, argv[1]);
-		return JS_NewInt32(ctx, connect(fd, sa, len));
+
+		// Set to nonblocking if not
+		int flags = fcntl(fd, F_GETFL, 0);
+		if (flags < 0) abort();
+		fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+		int rc = connect(fd, sa, len);
+
+		if (rc < 0 && errno == EINPROGRESS) {
+			fd_set wfds;
+			FD_ZERO(&wfds);
+			FD_SET(fd, &wfds);
+
+			struct timeval tv = { .tv_sec = 1, .tv_usec = 0 };
+			rc = select(fd + 1, NULL, &wfds, NULL, &tv);
+
+			if (rc > 0) {
+				int err = 0;
+				socklen_t lenerr = sizeof(err);
+				if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &lenerr) < 0 || err != 0) {
+					errno = (err != 0) ? err : ECONNREFUSED;
+					rc = -1;
+				} else {
+					rc = 0;
+				}
+			} else if (rc == 0) {
+				errno = ETIMEDOUT;
+				rc = -1;
+			}
+		}
+
+		// Set back to old flags
+		fcntl(fd, F_SETFL, flags);
+		return JS_NewInt32(ctx, rc);
 		}
 	case M_CLOSE: {
 		int32_t fd;
@@ -108,18 +148,26 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 		JS_ToUint32(ctx, &size, argv[2]);
 		void *src = JS_GetArrayBuffer(ctx, &len, argv[1]);
 		if (src == NULL) JS_ThrowInternalError(ctx, "arg");
-		return JS_NewInt32(ctx, write(fd, src, size));
+		return JS_NewInt32(ctx, (int)write(fd, src, size));
 		}
 	case M_READ: {
 		int32_t fd;
 		uint32_t size;
 		size_t len;
+		int timeout_ms;
 		JS_ToInt32(ctx, &fd, argv[0]);
 		void *src = JS_GetArrayBuffer(ctx, &len, argv[1]);
 		if (src == NULL) JS_ThrowInternalError(ctx, "arg");
 		JS_ToUint32(ctx, &size, argv[2]);
+		JS_ToInt32(ctx, &timeout_ms, argv[3]);
 		if (size > len) return JS_NewInt32(ctx, EPIPE);
-		return JS_NewInt32(ctx, read(fd, src, size));
+		struct timeval tv_rcv;
+		tv_rcv.tv_sec = timeout_ms / 1000;
+		tv_rcv.tv_usec = (1000 * timeout_ms) % 1000000;
+		setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const void *)&tv_rcv, sizeof(tv_rcv));
+		int rc = (int)read(fd, src, size);
+		if (rc == -1 && errno == EAGAIN) rc = 0;
+		return JS_NewInt32(ctx, rc);
 		}
 	case M_SELECT: {
 		int32_t nfds;
@@ -152,8 +200,8 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 		JS_ToInt32(ctx, &n, argv[0]);
 		return JS_NewArrayBufferCopy(ctx, (void *)&n, sizeof(n));
 		}
+		default: return JS_UNDEFINED;
 	}
-	return JS_UNDEFINED;
 }
 
 static JSValue get_yes(JSContext *ctx, JSValueConst this_val) {
@@ -178,7 +226,7 @@ static const JSCFunctionListEntry socket_methods[] = {
 	JS_CFUNC_MAGIC_DEF("connect", 3, generic_operation, M_CONNECT),
 	JS_CFUNC_MAGIC_DEF("close", 1, generic_operation, M_CLOSE),
 	JS_CFUNC_MAGIC_DEF("select", 5, generic_operation, M_SELECT),
-	JS_CFUNC_MAGIC_DEF("read", 3, generic_operation, M_READ),
+	JS_CFUNC_MAGIC_DEF("read", 4, generic_operation, M_READ),
 	JS_CFUNC_MAGIC_DEF("write", 3, generic_operation, M_WRITE),
 	JS_CFUNC_MAGIC_DEF("createSockAddrIn", 2, generic_operation, M_CREATESOCKADDRIN),
 	JS_CFUNC_MAGIC_DEF("createInt", 2, generic_operation, M_CREATEINT),

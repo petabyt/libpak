@@ -113,9 +113,10 @@ export class HttpSocket {
           let bytesLeft = contentLength - (buffer.length - i);
           buffer = new Uint8Array(maxSize);
           while (contentLength != 0) {
-               rc = net.read(this.fd, buffer.buffer, Math.min(contentLength, buffer.length), 10);
+               rc = net.read(this.fd, buffer.buffer, Math.min(bytesLeft, buffer.length), 100);
                if (rc <= 0) break;
                handleContent(buffer.subarray(0, rc), contentLength);
+               bytesLeft -= rc;
           }
 
           return head;

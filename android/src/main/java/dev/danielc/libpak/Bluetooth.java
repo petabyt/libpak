@@ -12,7 +12,6 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
 import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
@@ -21,8 +20,6 @@ import android.companion.AssociationRequest;
 import android.companion.BluetoothDeviceFilter;
 import android.companion.BluetoothLeDeviceFilter;
 import android.companion.CompanionDeviceManager;
-import android.companion.CompanionDeviceService;
-import android.companion.DevicePresenceEvent;
 import android.companion.ObservingDevicePresenceRequest;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
@@ -49,7 +46,6 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
 
 public class Bluetooth {
     public static final String TAG = "bt";
@@ -339,7 +335,7 @@ public class Bluetooth {
             setupListener();
             return cancellableRunnable.run(() -> {
                 try {
-                    // Remove existing bond from system (requires association)
+                    // Remove existing bond from system (requires association) and Android 15+
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
                         if (associationInfo != null && dev.getBondState() != BluetoothDevice.BOND_NONE) {
                             CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);

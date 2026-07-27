@@ -29,6 +29,7 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiInfo;
 import androidx.annotation.NonNull;
 import java.lang.reflect.Method;
+import java.util.concurrent.Semaphore;
 import java.util.regex.Pattern;
 
 public class WiFi {
@@ -86,6 +87,8 @@ public class WiFi {
         public String ssidPattern;
         public String bssid;
         public String password;
+        /// wpa2 by default
+        public String securityType;
         public int band;
         public boolean hidden;
     }
@@ -118,7 +121,9 @@ public class WiFi {
         public native void failed(@NonNull String reason, int code);
     }
 
-    /** Opens an Android 10+ popup to prompt the user to select a WiFi network */
+    /** Opens an Android 10+ popup to prompt the user to select a WiFi network
+     * When bssid is provided in the filter, there will be no prompt at all.
+     * */
     public static int connectToAccessPoint(ApFilter filter, WiFiDiscoveryCallback callback) {
         Context ctx = Pak.getActivity();
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
@@ -140,8 +145,11 @@ public class WiFi {
             builder.setBssid(MacAddress.fromString(filter.bssid));
         }
         if (filter.password != null) {
-            builder.setWpa2Passphrase(filter.password);
-            //builder.setWpa3Passphrase(filter.password);
+            if (filter.securityType == null || filter.securityType.startsWith("wpa2")) {
+                builder.setWpa2Passphrase(filter.password);
+            } else {
+                builder.setWpa3Passphrase(filter.password);
+            }
         }
         builder.setIsHiddenSsid(filter.hidden);
         NetworkSpecifier specifier = builder.build();
@@ -152,22 +160,35 @@ public class WiFi {
                 .setNetworkSpecifier(specifier)
                 .build();
 
-        ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
+        int maxAttempts = 2;
+
+        class MyCallback extends ConnectivityManager.NetworkCallback {
+            final Semaphore waitForCallback = new Semaphore(0, true);
+            int attempts = 0;
             @Override
             public void onAvailable(@NonNull Network network) {
                 lastFoundWiFiDevice = network;
                 Log.d(TAG, "Network available");
                 callback.onConnected(new Adapter(network));
+                //waitForCallback.release();
             }
             @Override
             public void onUnavailable() {
-                callback.failed("Access point not selected by user", -1);
+                if (++attempts > maxAttempts) {
+                    callback.failed("Network is not available", -1);
+                    //waitForCallback.release();
+                } else {
+                    connectivityManager.requestNetwork(request, this, 25000);
+                }
             }
             @Override
             public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
                 Log.e(TAG, "onCapabilitiesChanged");
             }
-        };
+        }
+
+        MyCallback networkCallback = new MyCallback();
+
         // Stock Android seems to cut off the dialog at 30s and never calls onUnavailable,
         // so set the time limit a bit short of that to try and make sure onUnavailable gets called
         connectivityManager.requestNetwork(request, networkCallback, 25000);
@@ -314,8 +335,8 @@ public class WiFi {
     public static boolean isWiFiModuleCapableOfHandlingTwoConnections(Context ctx) {
         WifiManager wm = (WifiManager)ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // 'Query whether or not the device supports concurrent station (STA) connections
-            // for local-only connections using WifiNetworkSpecifier.'
+            // Query whether the device supports concurrent station (STA) connections
+            // for local-only connections using WifiNetworkSpecifier.
             return wm.isStaConcurrencyForLocalOnlyConnectionsSupported();
         }
         // If below 31, then Android supposedly doesn't support concurrent connections at all
@@ -330,7 +351,7 @@ public class WiFi {
             if ((boolean)m.invoke(wm) == false) {
                 return false;
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
             return false;
         }
 
@@ -342,6 +363,7 @@ public class WiFi {
         WifiManager wm = (WifiManager)ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         if (ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             wm.getScanResults();
+            // ...
         } else {
             throw new Exception("bad permission");
         }

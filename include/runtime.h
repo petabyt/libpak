@@ -150,8 +150,10 @@ enum PakTransport {
 	PAK_USB_DEVICE_MODE = 4,
 	/// Host an access point (hotspot) for something to connect to
 	PAK_HOST_WIFI_AP = 5,
-	/// Listen to/broadcast on local network, or connect over internet
-	PAK_INTERNET = 6,
+	/// Listen to/broadcast datagram packets on local network
+	PAK_LOCAL_NETWORK_UDP = 6,
+	/// Connect to internet service
+	PAK_INTERNET = 7,
 };
 
 enum PakScreen {

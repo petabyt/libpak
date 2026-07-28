@@ -53,7 +53,7 @@
 #define PAK_PROP_FW_VER "firmware-version"
 /// @}
 
-/// @addtogroup PakProperty
+/// @addtogroup PakCommand
 /// @{
 #define PAK_CMD_SHUTTER_DOWN "shutter-down"
 #define PAK_CMD_SHUTTER_UP "shutter-up"
@@ -89,6 +89,8 @@ struct PakWidget {
 	const char *name;
 	/// Human readable title for the widget
 	const char *title;
+	/// TODO: null = dashboard, "secondary" is for "more" settings page
+	const char *group;
 	enum WidgetType {
 		PAK_BUTTON = 0,
 		PAK_BOOLEAN,
@@ -157,42 +159,29 @@ enum PakTransport {
 };
 
 enum PakScreen {
-	/// Dummy value for first screen change
 	PAK_SCREEN_NONE = 0,
-	/// A screen that has a list of WiFi access points to connect to
-	PAK_SCREEN_CONNECT_WIFI = 1,
-	/// A screen that has a list of connected USB devices
-	PAK_SCREEN_CONNECT_USB,
-	/// Has a list of currently/previously paired devices and scans for new devices
-	PAK_SCREEN_CONNECT_BLUETOOTH,
-	/// PakScreen that advertises on BLE or uses SDP to find a device to pair with
-	PAK_SCREEN_ADVERTISE_BLUETOOTH,
-	/// Transmit packet over UDP/SSDP in order to find a connection
-	PAK_SCREEN_TRANSMIT_UDP,
-	/// Receive packet over UDP/SSDP in order to find a connection
-	PAK_SCREEN_RECEIVE_UDP,
+	/// Primary connection page
+	PAK_SCREEN_CONNECT = 1,
 
-	/// Prints lines of text into a terminal-like widget
-	PAK_SCREEN_CONSOLE = 100,
-	// Allows user to disconnect, change settings, switch to other screens
-	PAK_SCREEN_DASHBOARD,
+	// Allows user to disconnect, change settings, switch to most other screens
+	PAK_SCREEN_DASHBOARD = 101,
 	/// A gallery of files, videos, or photos. Can include folders. Upon selecting a folder, on_switch_screen
 	/// will be called with PAK_SCREEN_FILE_GALLERY->PAK_SCREEN_FILE_GALLERY
 	/// Gallery may be a table of files with detailed info, or a thumbnail gallery of variable width.
 	/// In what order the files iterated through (LIFO/FIFO) can be controlled.
-	PAK_SCREEN_FILE_GALLERY,
+	PAK_SCREEN_FILE_GALLERY = 102,
 	/// A zoomable image viewer or video player. User may swipe left or right to view next/previous file. When this happens,
 	/// on_switch_screen will be called with PAK_SCREEN_FILE_VIEWER->PAK_SCREEN_FILE_VIEWER
-	PAK_SCREEN_FILE_VIEWER,
+	PAK_SCREEN_FILE_VIEWER = 103,
 	/// Can be used to send location data to the camera or apply location metadata to a specific photo.
-	PAK_SCREEN_GEOTAGGING,
+	PAK_SCREEN_GEOTAGGING = 104,
 	/// A constant live view of the camera's sensor. Allows setting various settings such as ISO, aperture, exposure settings, image settings, or video settings.
 	/// Allows recording video, taking photos, controlling focus, zoom, or SLR mirror.
-	PAK_SCREEN_LIVEVIEW,
+	PAK_SCREEN_LIVEVIEW = 105,
 	/// A feed of incoming files that are being created/captured/sent by the device.
-	PAK_SCREEN_LIVE_FEED,
+	PAK_SCREEN_LIVE_FEED = 106,
 	/// Capture and control focus without liveview
-	PAK_SCREEN_INTERVALOMETER,
+	PAK_SCREEN_INTERVALOMETER = 107,
 };
 
 struct PakTimestamp {
@@ -307,15 +296,19 @@ int pak_rt_set_tick_interval(struct PakModule *mod, unsigned int us);
 //const char *pak_rt_get_path(struct PakModule *mod, const char *filename);
 /// Logging function for data specfic to this session
 void pak_debug_log(struct PakModule *mod, const char *fmt, ...);
-/// Get metadata
+/// Get metadata from file handle
 /// free with pak_rt_release_metadata
 struct PakFileMetadata *pak_rt_get_metadata(struct PakModule *mod, struct PakFileHandle *file);
-/// Release metadata
+/// Release returned metadata handle
 void pak_rt_release_metadata(struct PakModule *mod, struct PakFileMetadata *md);
 /// Get option name that was selected during setup, NULL if none selected, do not free
 const char *pak_rt_get_setup_option(struct PakModule *mod);
 /// Return string of client name, do not free
 const char *pak_rt_get_client_name(void);
 /// Covers 'Bluetooth -> WiFi handover case common in some devices'
+/// onTryConnectWiFi will be called
 int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter, const char *setup_option);
+/// Adds a RTSP livestream source that will be independently managed by the runtime.
+/// on_request_liveview_frame won't be called 
+int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *adapter, const char *url);
 #endif

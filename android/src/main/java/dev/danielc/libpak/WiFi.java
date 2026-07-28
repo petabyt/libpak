@@ -202,7 +202,7 @@ public class WiFi {
         AssociationInfo associationInfo = null;
         ScanResult scanResult = null;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !apFilter.hidden) {
-            CompanionDeviceManager deviceManager = (CompanionDeviceManager) ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager)ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);
 
             WifiDeviceFilter.Builder builder = new WifiDeviceFilter.Builder();
             if (apFilter.ssidPattern != null) {

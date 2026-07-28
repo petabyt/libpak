@@ -151,6 +151,18 @@ public class Pak {
         return permissionResult == PackageManager.PERMISSION_GRANTED;
     }
 
+    public static void deleteDuplicateAssociations(AssociationInfo info) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager)getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            List<AssociationInfo> list = deviceManager.getMyAssociations();
+            for (AssociationInfo i: list) {
+                if (i.getDeviceMacAddress().toString() == info.getDeviceMacAddress().toString() && i.getId() != info.getId()) {
+                    deviceManager.disassociate(i.getId());
+                }
+            }
+        }
+    }
+
     public static Intent companionAssociateGetResultBlocking(CompanionDeviceManager manager, AssociationRequest request) throws SecurityException, CancelException {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             throw new SecurityException("Unsupported");
@@ -171,6 +183,7 @@ public class Pak {
             public void onAssociationCreated(@NonNull AssociationInfo associationInfo) {
                 super.onAssociationCreated(associationInfo);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                    deleteDuplicateAssociations(associationInfo);
                     manager.startObservingDevicePresence(new ObservingDevicePresenceRequest.Builder().setAssociationId(associationInfo.getId()).build());
                 }
             }

@@ -165,16 +165,20 @@ public class WiFi {
         class MyCallback extends ConnectivityManager.NetworkCallback {
             final Semaphore waitForCallback = new Semaphore(0, true);
             int attempts = 0;
+            boolean onAvailableCalled = false;
             @Override
             public void onAvailable(@NonNull Network network) {
                 lastFoundWiFiDevice = network;
                 Log.d(TAG, "Network available");
-                callback.onConnected(new Adapter(network));
+                if (!onAvailableCalled) {
+                    onAvailableCalled = true;
+                    callback.onConnected(new Adapter(network));
+                }
                 //waitForCallback.release();
             }
             @Override
             public void onUnavailable() {
-                if (++attempts > maxAttempts) {
+                if (++attempts > maxAttempts || onAvailableCalled) {
                     callback.failed("Network is not available", -1);
                     //waitForCallback.release();
                 } else {

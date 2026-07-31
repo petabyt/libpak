@@ -102,22 +102,11 @@ int pak_rt_test_module(struct PakModule *mod) {
 
 	struct RuntimePriv *r = mod->rt;
 	if (mod->init) mod->init(mod);
-	// if (mod->on_find_connection) {
-	// 	if (mod->on_find_connection(mod, new_job(r))) {
-	// 		printf("Failed to find connection\n");
-	// 	}
-	// }
 	if (mod->on_run_test) {
-		if (mod->on_run_test(mod, PAK_SCREEN_CONSOLE, new_job(r))) {
+		if (mod->on_run_test(mod, new_job(r))) {
 			printf("on_run_test\n");
 			return -1;
 		}
 	}
-//	if (mod->on_disconnect) {
-//		if (mod->on_disconnect(mod)) {
-//			printf("on_disconnect\n");
-//			return -1;
-//		}
-//	}
 	return 0;
 }

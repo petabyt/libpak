@@ -1,3 +1,4 @@
+// Extras, not runtime stuff
 #include <stdint.h>
 
 typedef uint8_t *get_additional_bytes(void *arg, uint8_t *buffer, unsigned int old_len, unsigned int last_len);

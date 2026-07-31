@@ -70,8 +70,12 @@ enum PakSortedBy {
 };
 
 struct PakFileHandle {
+	/// zero based index in the current folder
 	int index_in_view;
+	/// name of storage device
 	const char *storage_name;
+	/// empty string by default. will be changed if folders are entered like 'DCIM/FUJI001'
+	const char *path;
 };
 
 struct PakFileMetadata {
@@ -160,9 +164,8 @@ enum PakTransport {
 
 enum PakScreen {
 	PAK_SCREEN_NONE = 0,
-	/// Primary connection page
+	/// Primary connection page for all transports
 	PAK_SCREEN_CONNECT = 1,
-
 	// Allows user to disconnect, change settings, switch to most other screens
 	PAK_SCREEN_DASHBOARD = 101,
 	/// A gallery of files, videos, or photos. Can include folders. Upon selecting a folder, on_switch_screen
@@ -217,18 +220,20 @@ struct PakModule {
 	int (*init)(struct PakModule *);
 	/// Free or release all memory associated with this module instance
 	int (*free)(struct PakModule *);
-	/// Use WiFi or Bluetooth APIs manually to find a device to connect to.
+	/// Fallback method to manually find a device to connect to if on_try_* methods didn't work
 	int (*on_find_connection)(struct PakModule *, int job);
-	/// Try to initiate a connection over a network handle
+	/// Request to try to initiate a connection over a network handle
 	int (*on_try_connect_wifi)(struct PakModule *, struct PakWiFiAdapter *handle, struct PakSavedConnection *saved, int job);
-	/// Try to initiate connection for a Bluetooth device
+	/// Request to try to initiate connection for a Bluetooth device
 	/// returns zero if device is supported and connetion established 
 	int (*on_try_connect_bluetooth)(struct PakModule *, struct PakBtDevice *handle, struct PakSavedConnection *saved, int job);
+	/// Request to try to initiate a connection for a USB device
+	int (*on_try_connect_usb)(struct PakModule *, int port, struct PakSavedConnection *saved, int job);
 	/// Runs immediately after successful connection. Runs at a constant interval, 1s by default.
 	int (*on_idle_tick)(struct PakModule *, unsigned int us_since_last_tick);
 	/// On user requested disconnect
 	int (*on_disconnect)(struct PakModule *);
-	// Runs when switching to a new screen, or switching back to an old screen.
+	// Runs when switching to a new screen, or switching back to an previous screen.
 	int (*on_switch_screen)(struct PakModule *, int old_screen, int new_screen, int job);
 	/// Request entire contents of a file
 	/// send info back with pak_rt_add_file_contents
@@ -245,7 +250,7 @@ struct PakModule {
 	/// Runs when a setting has been changed by 
 	int (*on_setting_changed)(struct PakModule *, int job, struct PakWidget *setting);
 	/// On request to run self test, test suite, debug dumps, or other diagnostics
-	int (*on_run_test)(struct PakModule *, int screen, int job);
+	int (*on_run_test)(struct PakModule *, int job);
 	/// Process an arbritrary command
 	int (*on_custom_command)(struct PakModule *, int job, int argc, const char * const *argv);
 };
@@ -255,6 +260,9 @@ struct PakModule {
 /// @n_items sorted_by How many files are in the root filesystem folder
 /// @param sorted_by How the file list data set is sorted by default
 int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum PakSortedBy sorted_by);
+/// If on_request_file_metadata is called on a folder, call this to specify the number of files in it instead of pak_rt_add_file_metadata
+/// @param folder_path Folder names separated by '/'.
+int pak_rt_add_folder_info(struct PakModule *mod, const char *storage_name, const char *folder_path, unsigned int n_items, enum PakSortedBy sorted_by);
 /// Submit metadata for a file
 /// @info May be freed and requested again later
 int pak_rt_add_file_metadata(struct PakModule *mod, struct PakFileHandle *file, const struct PakFileMetadata *metadata);

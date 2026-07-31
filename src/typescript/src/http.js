@@ -66,7 +66,7 @@ export class HttpSocket {
           let writer = new BufferWriter();
           writer.addString("GET " + path + " HTTP/1.1\r\n");
           writer.addString("Accept-Encoding: gzip\r\n");
-          writer.addString("Connection: close\r\n");
+          //writer.addString("Connection: close\r\n");
           writer.addString("User-Agent: " + this.userAgent + "\r\n");
           writer.addString("Host: " + this.ip + "\r\n");
           writer.addString("\r\n");
@@ -80,7 +80,7 @@ export class HttpSocket {
           let reads = 0;
           while (buffer.length < 4096) {
                let temp1 = new Uint8Array(4096);
-               rc = net.read(this.fd, temp1.buffer, temp1.length, reads > 1 ? 10 : 2000);
+               rc = net.read(this.fd, temp1.buffer, temp1.length, reads > 1 ? 1 : 2000);
                reads++;
                if (rc < 0) throw `read(): ${rc}`;
                if (rc == 0) break;
@@ -113,7 +113,7 @@ export class HttpSocket {
           let bytesLeft = contentLength - (buffer.length - i);
           buffer = new Uint8Array(maxSize);
           while (contentLength != 0) {
-               rc = net.read(this.fd, buffer.buffer, Math.min(bytesLeft, buffer.length), 100);
+               rc = net.read(this.fd, buffer.buffer, Math.min(bytesLeft, buffer.length), 2000);
                if (rc <= 0) break;
                handleContent(buffer.subarray(0, rc), contentLength);
                bytesLeft -= rc;

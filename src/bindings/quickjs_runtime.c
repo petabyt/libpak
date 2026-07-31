@@ -128,6 +128,12 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 			int v = JS_ToBool(ctx, argv[1]);
 			rc = pak_rt_set_screen_supported(mod, screen, v);
 		} break;
+		case M_SET_PROGRESS_BAR: {
+			int percent, job;
+			JS_ToInt32(ctx, &job, argv[0]);
+			JS_ToInt32(ctx, &percent, argv[1]);
+			rc = pak_rt_set_progress_bar(mod, job, percent);
+		} break;
 		case M_FATAL_ERROR: {
 			const char *reason = JS_ToCString(ctx, argv[0]);
 			pak_rt_fatal_error(mod, reason);
@@ -136,8 +142,8 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 			uint32_t offset, full_length;
 			JS_ToUint32(ctx, &offset, argv[2]);
 			JS_ToUint32(ctx, &full_length, argv[3]);
-			size_t len;
-			void *buf = JS_GetArrayBuffer(ctx, &len, argv[1]);
+			size_t len = 0;
+			void *buf = JS_IsNull(argv[1]) ? NULL : JS_GetArrayBuffer(ctx, &len, argv[1]);
 			struct PakFileHandleWrapper handle = to_file_handle(ctx, argv[0]);
 			rc = pak_rt_add_file_contents(mod, &handle.handle, buf, len, offset, full_length);
 			JS_FreeValue(ctx, handle.x);
@@ -215,10 +221,11 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 static const JSCFunctionListEntry module_methods[] = {
 	JS_CFUNC_DEF("debugLog", 1, debug_log),
 	JS_CFUNC_MAGIC_DEF("setScreenSupported", 2, generic_operation, M_SET_SCREEN_SUPPORTED),
+	JS_CFUNC_MAGIC_DEF("setProgressBar", 2, generic_operation, M_SET_PROGRESS_BAR),
 	JS_CFUNC_MAGIC_DEF("setStorageInfo", 3, generic_operation, M_SET_STORAGE_INFO),
 	JS_CFUNC_MAGIC_DEF("addFileMetadata", 2, generic_operation, M_ADD_FILE_METADATA),
 	JS_CFUNC_MAGIC_DEF("addFileThumbnail", 2, generic_operation, M_ADD_FILE_THUMBNAIL),
-	JS_CFUNC_MAGIC_DEF("addFileContents", 2, generic_operation, M_ADD_FILE_CONTENTS),
+	JS_CFUNC_MAGIC_DEF("addFileContents", 4, generic_operation, M_ADD_FILE_CONTENTS),
 	JS_CFUNC_MAGIC_DEF("fatalError", 1, generic_operation, M_FATAL_ERROR),
 	JS_CFUNC_MAGIC_DEF("setProperty", 2, generic_operation, M_SET_PROP),
 	JS_CFUNC_MAGIC_DEF("addWidget", 1, generic_operation, M_ADD_WIDGET),
@@ -290,13 +297,12 @@ static int on_find_connection(struct PakModule *mod, int job) {
 	return call_module_method(mod->priv->ctx, mod->priv->object, "onFindConnection", 0, args);
 }
 
-static int on_run_test(struct PakModule *mod, int screen, int job) {
+static int on_run_test(struct PakModule *mod, int job) {
 	JS_UpdateStackTop(mod->priv->rt);
 	JSValue args[] = {
-		JS_NewInt32(mod->priv->ctx, screen),
 		JS_NewInt32(mod->priv->ctx, job),
 	};
-	return call_module_method(mod->priv->ctx, mod->priv->object, "onRunTest", 2, args);
+	return call_module_method(mod->priv->ctx, mod->priv->object, "onRunTest", 1, args);
 }
 
 static int on_disconnect(struct PakModule *mod) {
@@ -484,12 +490,12 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, J
 	if (mod == NULL) return JS_UNDEFINED;
     if (JS_IsString(argv[0])) {
 		const char *str = JS_ToCString(ctx, argv[0]);
-		pak_global_log("console.log: %s", str);
+		pak_global_log("%s", str);
 		JS_FreeCString(ctx, str);
 	} else {
 		JSValue val = JS_JSONStringify(ctx, argv[0], JS_UNDEFINED, JS_UNDEFINED);
 		const char *str = JS_ToCString(ctx, argv[0]);
-		pak_global_log("console.log: %s", str);
+		pak_global_log("%s", str);
 		JS_FreeCString(ctx, str);
 		JS_FreeValue(ctx, val);
 	}

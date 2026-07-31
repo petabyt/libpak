@@ -44,6 +44,19 @@ public class WiFi {
         AssociationInfo apAssociation;
         Network net;
         long handle;
+
+        public Integer getAssociationId() {
+            if (apAssociation == null) return null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                return apAssociation.getId();
+            } else {
+                return null;
+            }
+        }
+        public String getMacAddress() {
+            if (apScanResult == null) return null;
+            return apScanResult.BSSID;
+        }
     }
 
     public static boolean checkPermission() {
@@ -232,6 +245,7 @@ public class WiFi {
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     associationInfo = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
+                    Pak.deleteDuplicateAssociations(associationInfo);
                 }
                 scanResult = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
                 // According to https://medium.com/@mike_21858/wifinetworkspecifier-prompts-and-localonlyhotspot-f596c7b84968

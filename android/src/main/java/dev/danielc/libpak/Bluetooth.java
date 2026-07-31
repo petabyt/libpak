@@ -46,6 +46,7 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 public class Bluetooth {
     public static final String TAG = "bt";
@@ -111,26 +112,6 @@ public class Bluetooth {
                 }
             }
         };
-    }
-
-    public static void senseNearbyDevice(@NonNull String macAddress) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
-            if (Pak.getActivity().getPackageManager().hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
-                Log.d(TAG, "Start observing " + macAddress);
-                deviceManager.startObservingDevicePresence(macAddress);
-            }
-        }
-    }
-
-    public static void senseNearbyDevice(int associationId) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
-            if (Pak.getActivity().getPackageManager().hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
-                Log.d(TAG, "Start observing " + associationId);
-                deviceManager.startObservingDevicePresence(new ObservingDevicePresenceRequest.Builder().setAssociationId(associationId).build());
-            }
-        }
     }
 
     public static Device fromAddress(@NonNull String address) {
@@ -617,6 +598,7 @@ public class Bluetooth {
     public static abstract class ScanCallback {
         public abstract void onFound(@NonNull Device device);
         public abstract void onFailure(@NonNull String reason);
+        public abstract void onCancel();
     }
 
     /// Opens a dialog to save an access point as a companion device
@@ -696,58 +678,23 @@ public class Bluetooth {
 
         AssociationRequest request = associationBuilder.build();
 
-        class MyCallback extends CompanionDeviceManager.Callback {
-            final Semaphore waitForCallback = new Semaphore(0, true);
-            public int returnCode = 0;
-            public boolean waitForActivity = false;
-
-            @Override
-            public void onFailure(CharSequence error) {
-                scanCallback.onFailure("Association failure");
-                returnCode = Pak.Error.NON_FATAL;
-                waitForCallback.release();
-            }
-            @Override
-            public void onDeviceFound(@NonNull IntentSender intentSender) {
-                super.onDeviceFound(intentSender);
-                if (verbose) Log.d(TAG, "device found: " + intentSender);
-                try {
-                    Pak.startActivityForResult(intentSender);
-                    waitForActivity = true;
-                } catch (Exception e) {
-                    Log.d(TAG, e.getMessage());
-                    returnCode = Pak.Error.NON_FATAL;
-                    return;
-                }
-
-                waitForCallback.release();
-            }
-        }
-
-        MyCallback callback = new MyCallback();
-        deviceManager.associate(request, callback, null);
-
         try {
-            callback.waitForCallback.acquire();
-        } catch (Exception e) {
-            return Pak.Error.UNIMPLEMENTED;
-        }
-        if (callback.waitForActivity) {
-            Pak.waitForActivityResult();
-            if (Pak.lastIntent != null) {
-                Log.d(TAG, "Association result");
-                AssociationInfo associationInfo = null;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    associationInfo = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
-                }
-                ScanResult result = Pak.lastIntent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
-                if (result != null) {
-                    scanCallback.onFound(new Bluetooth.Device(getDefaultAdapter(), result.getDevice(), result, associationInfo));
-                }
+            Intent intent = Pak.companionAssociateGetResultBlocking(deviceManager, request);
+            if (intent == null) { return Pak.Error.NON_FATAL; }
+            AssociationInfo associationInfo = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                associationInfo = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
+                Pak.deleteDuplicateAssociations(associationInfo);
             }
-        }
+            ScanResult result = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
+            if (result != null) {
+                scanCallback.onFound(new Bluetooth.Device(getDefaultAdapter(), result.getDevice(), result, associationInfo));
+            }
 
-        return callback.returnCode;
+        } catch (Pak.CancelException e) {
+            return Pak.Error.CANCELLED;
+        }
+        return 0;
     }
 
     public static void openEnableBluetoothDialog() {

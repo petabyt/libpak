@@ -1,7 +1,6 @@
-/// Small helper class to help with permissions and Android native things
+/// Small helper class to help with permissions and Android native APIs
 package dev.danielc.libpak;
 
-import android.Manifest;
 import android.app.Activity;
 import android.companion.AssociationInfo;
 import android.companion.AssociationRequest;
@@ -28,6 +27,7 @@ public class Pak {
     static final String TAG = "pak";
     /// Hold a weak reference to main activity for permission requests
     public static WeakReference<Activity> weakCtx = null;
+    public static Callbacks callbacks = null;
     public static void setupAndroidContext(Activity ctx) {
         weakCtx = new WeakReference<>(ctx);
 
@@ -44,7 +44,9 @@ public class Pak {
     private static int permissionResult = 0;
     static Intent lastIntent = null;
 
-    public static class CancelException extends Exception { }
+    public static class CancelException extends Exception {
+        public CancelException(String reason) {}
+    }
 
     /// For cancelling blocking routines
     /// Can be used like new CancellableRunnable().run(() => {return 0;})
@@ -74,6 +76,10 @@ public class Pak {
         }
     }
 
+    public static abstract class Callbacks {
+        public abstract void onDeviceAppearance(String address, boolean isNearby);
+    }
+
     @RequiresApi(api = Build.VERSION_CODES.S)
     public static class MyCompanionDeviceService extends CompanionDeviceService {
         @Override
@@ -85,11 +91,13 @@ public class Pak {
         public void onDeviceAppeared(@NonNull String address) {
             super.onDeviceAppeared(address);
             Log.d(TAG, "onDeviceAppeared: " + address);
+            callbacks.onDeviceAppearance(address, true);
         }
         @Override
         public void onDeviceDisappeared(@NonNull String address) {
             super.onDeviceDisappeared(address);
             Log.d(TAG, "onDeviceDisappeared");
+            callbacks.onDeviceAppearance(address, false);
         }
         @Override
         public void onDevicePresenceEvent(@NonNull DevicePresenceEvent event) {
@@ -151,14 +159,46 @@ public class Pak {
         return permissionResult == PackageManager.PERMISSION_GRANTED;
     }
 
+    public static void startListeningToDevicePresence(@NonNull String macAddress) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            if (Pak.getActivity().getPackageManager().hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
+                Log.d(TAG, "Start observing " + macAddress);
+                deviceManager.startObservingDevicePresence(macAddress);
+            }
+        }
+    }
+
+    public static void startListeningToDevicePresence(int associationId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            if (Pak.getActivity().getPackageManager().hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
+                Log.d(TAG, "Start observing " + associationId);
+                deviceManager.startObservingDevicePresence(new ObservingDevicePresenceRequest.Builder().setAssociationId(associationId).build());
+            }
+        }
+    }
+
     public static void deleteDuplicateAssociations(AssociationInfo info) {
+        // TODO: Use mac address instead of association ID
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             CompanionDeviceManager deviceManager = (CompanionDeviceManager)getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
             List<AssociationInfo> list = deviceManager.getMyAssociations();
             for (AssociationInfo i: list) {
-                if (i.getDeviceMacAddress().toString() == info.getDeviceMacAddress().toString() && i.getId() != info.getId()) {
-                    deviceManager.disassociate(i.getId());
-                }
+                try {
+                    if (i.getDeviceMacAddress().toString().equals(info.getDeviceMacAddress().toString()) && i.getId() != info.getId()) {
+                        deviceManager.disassociate(i.getId());
+                    }
+                } catch (NullPointerException ignored) { }
+            }
+        }
+    }
+
+    public static void disassociate(@NonNull String macAddress) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            if (Pak.getActivity().getPackageManager().hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
+                deviceManager.disassociate(macAddress);
             }
         }
     }
@@ -174,8 +214,11 @@ public class Pak {
             public boolean waitForActivity = false;
             @Override
             public void onFailure(CharSequence error) {
-                Log.d(TAG, error.toString());
-                returnCode = Error.CANCELLED;
+                if (error != null && error.equals("canceled")) {
+                    returnCode = Pak.Error.CANCELLED;
+                } else {
+                    returnCode = Pak.Error.NON_FATAL;
+                }
                 waitForCallback.release();
             }
 
@@ -183,7 +226,6 @@ public class Pak {
             public void onAssociationCreated(@NonNull AssociationInfo associationInfo) {
                 super.onAssociationCreated(associationInfo);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-                    deleteDuplicateAssociations(associationInfo);
                     manager.startObservingDevicePresence(new ObservingDevicePresenceRequest.Builder().setAssociationId(associationInfo.getId()).build());
                 }
             }
@@ -211,9 +253,9 @@ public class Pak {
             callback.waitForCallback.acquire();
         } catch (InterruptedException ignored) {}
         if (callback.waitForActivity) {
-            Pak.waitForActivityResult();
+            waitForActivityResult();
             if (callback.returnCode != 0) throw new CancelException();
-            if (Pak.lastIntent == null) return null;
+            if (lastIntent == null) return null;
             return lastIntent;
         }
         throw new CancelException();

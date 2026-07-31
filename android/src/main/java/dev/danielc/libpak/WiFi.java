@@ -29,6 +29,7 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiInfo;
 import androidx.annotation.NonNull;
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.regex.Pattern;
 
@@ -134,6 +135,31 @@ public class WiFi {
         public native void failed(@NonNull String reason, int code);
     }
 
+    public static int connectFromBSSID(String bssid, WiFiDiscoveryCallback callback) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ApFilter filter = new ApFilter();
+            filter.bssid = bssid;
+
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager) Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            List<AssociationInfo> list = deviceManager.getMyAssociations();
+            for (AssociationInfo i : list) {
+                try {
+                    if (i.getDeviceMacAddress().toString().equalsIgnoreCase(bssid)) {
+                        ScanResult r = i.getAssociatedDevice().getWifiDevice();
+                        filter.ssidPattern = r.SSID;
+                        break;
+                    }
+                } catch (NullPointerException ignored) {
+                }
+            }
+
+            return connectToAccessPoint(filter, callback);
+        } else {
+            Log.d(TAG, "connectFromBSSID unsupported");
+            return -1;
+        }
+    }
+
     /** Opens an Android 10+ popup to prompt the user to select a WiFi network
      * When bssid is provided in the filter, there will be no prompt at all.
      * */
@@ -148,11 +174,12 @@ public class WiFi {
         Log.d(TAG, String.format("%s %s %s", filter.ssidPattern, filter.password, filter.bssid));
 
         WifiNetworkSpecifier.Builder builder = new WifiNetworkSpecifier.Builder();
-        if (filter.hidden) {
-            builder.setSsid(filter.ssidPattern);
-        } else {
-            Log.d(TAG, filter.ssidPattern);
-            builder.setSsidPattern(new PatternMatcher(filter.ssidPattern, PatternMatcher.PATTERN_ADVANCED_GLOB));
+        if (filter.ssidPattern != null) {
+            if (filter.hidden) {
+                builder.setSsid(filter.ssidPattern);
+            } else {
+                builder.setSsidPattern(new PatternMatcher(filter.ssidPattern, PatternMatcher.PATTERN_ADVANCED_GLOB));
+            }
         }
         if (filter.bssid != null) {
             builder.setBssid(MacAddress.fromString(filter.bssid));

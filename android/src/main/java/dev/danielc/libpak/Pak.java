@@ -45,7 +45,7 @@ public class Pak {
     static Intent lastIntent = null;
 
     public static class CancelException extends Exception {
-        public CancelException(String reason) {}
+        //public CancelException(String reason) {}
     }
 
     /// For cancelling blocking routines

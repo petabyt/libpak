@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <wifi.h>
 #include <bluetooth.h>
+typedef struct libusb_device libusb_device;
 
 /// @addtogroup PakDevice
 /// @{
@@ -47,10 +48,11 @@
 /// @addtogroup PakProperty
 /// @{
 #define PAK_PROP_NAME "name"
+#define PAK_PROP_FW_VER "firmware-version"
 #define PAK_PROP_BATTERY_MAIN "battery-main"
+// For earbuds
 #define PAK_PROP_BATTERY_LEFT "battery-left"
 #define PAK_PROP_BATTERY_RIGHT "battery-right"
-#define PAK_PROP_FW_VER "firmware-version"
 /// @}
 
 /// @addtogroup PakCommand
@@ -82,7 +84,7 @@ struct PakFileMetadata {
 	const char *filename;
 	// Mime types are compatible with IANA: https://www.iana.org/assignments/media-types/media-types.xhtml
 	const char *mime_type;
-	int file_size;
+	uint64_t file_size;
 	int image_width;
 	int image_height;
 };
@@ -220,15 +222,15 @@ struct PakModule {
 	int (*init)(struct PakModule *);
 	/// Free or release all memory associated with this module instance
 	int (*free)(struct PakModule *);
-	/// Fallback method to manually find a device to connect to if on_try_* methods didn't work
-	int (*on_find_connection)(struct PakModule *, int job);
 	/// Request to try to initiate a connection over a network handle
 	int (*on_try_connect_wifi)(struct PakModule *, struct PakWiFiAdapter *handle, struct PakSavedConnection *saved, int job);
 	/// Request to try to initiate connection for a Bluetooth device
 	/// returns zero if device is supported and connetion established 
 	int (*on_try_connect_bluetooth)(struct PakModule *, struct PakBtDevice *handle, struct PakSavedConnection *saved, int job);
 	/// Request to try to initiate a connection for a USB device
-	int (*on_try_connect_usb)(struct PakModule *, int port, struct PakSavedConnection *saved, int job);
+	int (*on_try_connect_usb)(struct PakModule *, libusb_device *dev, struct PakSavedConnection *saved, int job);
+	/// Fallback method to manually find a device to connect to if on_try_* methods didn't work
+	int (*on_find_connection)(struct PakModule *, int job);
 	/// Runs immediately after successful connection. Runs at a constant interval, 1s by default.
 	int (*on_idle_tick)(struct PakModule *, unsigned int us_since_last_tick);
 	/// On user requested disconnect
@@ -257,7 +259,8 @@ struct PakModule {
 
 /// Set info for a storage device by the name of storage_name
 /// If storage device doesn't exist, it will be created. Otherwise it will be updated
-/// @n_items sorted_by How many files are in the root filesystem folder
+/// A root folder will autmatically be created with n_items, call pak_rt_add_folder_info to overwrite this
+/// @n_items n_items How many files are on this device in total
 /// @param sorted_by How the file list data set is sorted by default
 int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum PakSortedBy sorted_by);
 /// If on_request_file_metadata is called on a folder, call this to specify the number of files in it instead of pak_rt_add_file_metadata
@@ -273,12 +276,12 @@ int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file,
 /// Can be submitted in partial, when offset + length < total_size.
 /// total_size can also be zero if you don't know the length beforehand,
 /// but a terminating call must be made with length = 0
-int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, unsigned int offset, unsigned int total_size);
+int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, uint64_t offset, uint64_t total_size);
 /// Registers a setting that is displayed in the UI and can be modified by the user
 int pak_rt_set_dashboard_pane(struct PakModule *mod, const struct PakWidget *s);
-/// Returns true if user requested to cancel the job.
+/// Returns true/nonzero if user requested to cancel the job.
 int pak_rt_is_job_cancelled(struct PakModule *mod, int job);
-/// Fatal error, all no more jobs will be issued
+/// Report a fatal error and prevent any more jobs from being issued
 void pak_rt_fatal_error(struct PakModule *mod, const char *fmt, ...);
 /// Submit error message for user to read for a non-fatal error on a job that's in progress
 void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);

@@ -166,7 +166,7 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 				.filename = JS_ToCString(ctx, a),
 				.mime_type = JS_ToCString(ctx, c),
 			};
-			JS_ToInt32(ctx, &metadata.file_size, b);
+			JS_ToInt64(ctx, (int64_t *)&metadata.file_size, b);
 			rc = pak_rt_add_file_metadata(mod, &handle.handle, &metadata);
 			JS_FreeValue(ctx, a); JS_FreeValue(ctx, b); JS_FreeValue(ctx, c);
 			JS_FreeValue(ctx, handle.x);

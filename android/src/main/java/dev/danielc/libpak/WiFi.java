@@ -41,7 +41,8 @@ public class WiFi {
             this.net = net;
             this.handle = net.getNetworkHandle();
         }
-        ScanResult apScanResult;
+        public String savedPassword;
+        public ScanResult apScanResult;
         AssociationInfo apAssociation;
         Network net;
         long handle;
@@ -129,6 +130,7 @@ public class WiFi {
         public abstract void onConnected(@NonNull Adapter net);
         public abstract void failed(@NonNull String reason, int code);
         public void onUserCancelled() {}
+        /// On beginning to search for network
         public void onConnecting(String ssid) {}
     }
 
@@ -257,18 +259,26 @@ public class WiFi {
         boolean skipCompanionDialog = apFilter.hidden;
 
         // Skip companion dialog if AP SSID was already associated
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !apFilter.hidden) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !apFilter.hidden) {
             CompanionDeviceManager deviceManager = (CompanionDeviceManager) Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
-            List<AssociationInfo> list = deviceManager.getMyAssociations();
-            for (AssociationInfo i : list) {
-                try {
-                    ScanResult r = i.getAssociatedDevice().getWifiDevice();
-                    if (r.SSID.equals(apFilter.ssidPattern)) {
-                        apFilter.bssid = r.BSSID;
-                        skipCompanionDialog = true;
-                        break;
+            for (String address : deviceManager.getAssociations()) {
+                if (address.equals(apFilter.bssid)) {
+                    skipCompanionDialog = true;
+                    break;
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                for (AssociationInfo i : deviceManager.getMyAssociations()) {
+                    try {
+                        ScanResult r = i.getAssociatedDevice().getWifiDevice();
+                        if (r.SSID.equals(apFilter.ssidPattern)) {
+                            apFilter.bssid = r.BSSID;
+                            skipCompanionDialog = true;
+                            break;
+                        }
+                    } catch (NullPointerException ignored) {
                     }
-                } catch (NullPointerException ignored) {
                 }
             }
         }
@@ -292,9 +302,11 @@ public class WiFi {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 associationBuilder.setDisplayName(companionName);
             }
-            if (!probablyIsRegularExpression(apFilter.ssidPattern)) {
-                associationBuilder.setSingleDevice(true);
-            }
+//            if (!probablyIsRegularExpression(apFilter.ssidPattern)) {
+//                Log.d(TAG, apFilter.ssidPattern + " doesn't look like regex, setting singleDevice to true");
+//                associationBuilder.setSingleDevice(true);
+//            }
+            associationBuilder.setSingleDevice(true); // Uses newer android dialog
             AssociationRequest request = associationBuilder.build();
             try {
                 Intent intent = Pak.companionAssociateGetResultBlocking(deviceManager, request);
@@ -326,12 +338,13 @@ public class WiFi {
 
         ScanResult finalScanResult = scanResult;
         AssociationInfo finalAssociationInfo = associationInfo;
-        wifiCallback.onConnecting(scanResult == null ? null : scanResult.SSID);
+        wifiCallback.onConnecting(scanResult == null ? apFilter.ssidPattern : scanResult.SSID);
         return connectToAccessPoint(apFilter, new WiFiDiscoveryCallback() {
             @Override
             public void onConnected(@NonNull Adapter net) {
                 Log.d(TAG, "Connected to network");
                 net.apAssociation = finalAssociationInfo;
+                net.savedPassword = apFilter.password;
                 net.apScanResult = finalScanResult;
                 wifiCallback.onConnected(net);
             }

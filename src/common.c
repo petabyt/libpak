@@ -10,39 +10,6 @@
 #include "runtime.h"
 
 __attribute__((weak))
-void pak_global_log(const char *fmt, ...) {
-	printf("LOG: ");
-	fflush(stdout);
-	va_list args;
-	va_start(args, fmt);
-	vfprintf(stdout, fmt, args);
-	va_end(args);
-	putchar('\n');
-}
-
-__attribute__((weak))
-void pak_error(const char *fmt, ...) {
-	printf("ERR: ");
-	fflush(stderr);
-	va_list args;
-	va_start(args, fmt);
-	vfprintf(stderr, fmt, args);
-	va_end(args);
-}
-
-__attribute__((weak))
-void pak_abort(const char *fmt, ...) {
-	printf("ABORT: ");
-	fflush(stdout);
-	va_list args;
-	va_start(args, fmt);
-	vprintf(fmt, args);
-	va_end(args);
-	fflush(stdout);
-	abort();
-}
-
-__attribute__((weak))
 int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec, int (*cb)(struct PakNet *ctx, struct PakWiFiAdapter *, void *arg), void *arg) {
 	regex_t regex;
 

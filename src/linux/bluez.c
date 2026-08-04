@@ -70,6 +70,10 @@ static void pak_uuid128_to_str(const uint8_t in[16], char str[37]) {
 		in[10], in[11], in[12], in[13], in[14], in[15]);
 }
 
+int pak_bt_set_device_callback(struct PakBt *ctx, struct PakBtDevice *device, pak_bt_listen_device *cb, void *cb_arg) {
+	return -1;
+}
+
 static DBusHandlerResult handle_messages(DBusConnection *conn, DBusMessage *message, void *user_data) {
 	if (dbus_message_get_type(message) != DBUS_MESSAGE_TYPE_SIGNAL)
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -403,6 +407,11 @@ static struct PakBtDeviceWrapper *fill_from_device1(struct DBusMessageIter *dict
 	return 0;
 }
 
+int pak_bt_device_update(struct PakBt *ctx, struct PakBtDevice *dev) {
+	// TODO:
+	return -1;
+}
+
 int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct PakBtDeviceWrapper **wrapper, int index, int filter) {
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
 	if (resp == NULL) return -1;
@@ -456,6 +465,11 @@ int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct Pa
 	dbus_message_unref(resp);
 
 	if (wrapper == NULL) return found;
+	return -1;
+}
+
+int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device) {
+	// TODO:
 	return -1;
 }
 

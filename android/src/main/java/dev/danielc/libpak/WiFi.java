@@ -95,21 +95,26 @@ public class WiFi {
             this.band = band;
             this.hidden = hidden;
         }
+        @Override
+        public String toString() {
+            return "ApFilter{" +
+                    "ssidPattern='" + ssidPattern + '\'' +
+                    ", bssid='" + bssid + '\'' +
+                    ", password='" + password + '\'' +
+                    ", securityType='" + securityType + '\'' +
+                    ", band=" + band +
+                    ", hidden=" + hidden +
+                    '}';
+        }
         public ApFilter() {
             this(null, null, null, -1, false);
         }
-        public String ssidPattern;
-        public String bssid;
-        public String password;
-        /// wpa2 by default
-        public String securityType;
-        public int band;
-        public boolean hidden;
-    }
-
-    private static ConnectivityManager cm = null;
-    public void setConnectivityManager(ConnectivityManager cm) {
-        WiFi.cm = cm;
+        public String ssidPattern = null;
+        public String bssid = null;
+        public String password = null;
+        public String securityType = "wpa2";
+        public int band = 0;
+        public boolean hidden = false;
     }
 
     public static boolean isWiFiEnabled() {
@@ -169,9 +174,9 @@ public class WiFi {
             return Pak.Error.UNSUPPORTED;
         }
 
-        ConnectivityManager connectivityManager = (ConnectivityManager)ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+        Log.d(TAG, filter.toString());
 
-        Log.d(TAG, String.format("%s %s %s", filter.ssidPattern, filter.password, filter.bssid));
+        ConnectivityManager connectivityManager = (ConnectivityManager)ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
 
         WifiNetworkSpecifier.Builder builder = new WifiNetworkSpecifier.Builder();
         if (filter.ssidPattern != null) {
@@ -239,13 +244,36 @@ public class WiFi {
         return 0;
     }
 
+    private static boolean probablyIsRegularExpression(String s) {
+        return s.contains("*") || s.contains(".") || s.contains("!") || s.contains("^");
+    }
+
     /// Opens a dialog to save an access point as a companion device
     /// Then uses NetworkRequest to connect to the access point
-    public static int connectToAccessPointCompanion(ApFilter apFilter, String companionName, WiFiDiscoveryCallback wifiCallback) {
+    public static int connectToAccessPointCompanion(ApFilter apFilter, String companionName, WiFiDiscoveryCallback wifiCallback, boolean dontAssociate) {
         Context ctx = Pak.getActivity();
         AssociationInfo associationInfo = null;
         ScanResult scanResult = null;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !apFilter.hidden) {
+        boolean skipCompanionDialog = apFilter.hidden;
+
+        // Skip companion dialog if AP SSID was already associated
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !apFilter.hidden) {
+            CompanionDeviceManager deviceManager = (CompanionDeviceManager) Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+            List<AssociationInfo> list = deviceManager.getMyAssociations();
+            for (AssociationInfo i : list) {
+                try {
+                    ScanResult r = i.getAssociatedDevice().getWifiDevice();
+                    if (r.SSID.equals(apFilter.ssidPattern)) {
+                        apFilter.bssid = r.BSSID;
+                        skipCompanionDialog = true;
+                        break;
+                    }
+                } catch (NullPointerException ignored) {
+                }
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !skipCompanionDialog) {
             CompanionDeviceManager deviceManager = (CompanionDeviceManager)ctx.getSystemService(Context.COMPANION_DEVICE_SERVICE);
 
             WifiDeviceFilter.Builder builder = new WifiDeviceFilter.Builder();
@@ -264,10 +292,12 @@ public class WiFi {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 associationBuilder.setDisplayName(companionName);
             }
+            if (!probablyIsRegularExpression(apFilter.ssidPattern)) {
+                associationBuilder.setSingleDevice(true);
+            }
             AssociationRequest request = associationBuilder.build();
             try {
                 Intent intent = Pak.companionAssociateGetResultBlocking(deviceManager, request);
-                Log.d(TAG, "intent: " + intent);
                 if (intent == null) return Pak.Error.NON_FATAL; // User did not select a device
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -279,6 +309,10 @@ public class WiFi {
                 // if the WiFi AP is saved as a companion device (via the BSSID) then NetworkRequest will not show
                 // any system dialog and will automatically connect.
                 if (scanResult != null) {
+                    if (dontAssociate) {
+                        //deviceManager.disassociate(scanResult.BSSID);
+                    }
+
                     apFilter.ssidPattern = scanResult.SSID;
                     apFilter.bssid = scanResult.BSSID;
                 }
@@ -307,6 +341,9 @@ public class WiFi {
                 wifiCallback.failed(reason, code);
             }
         });
+    }
+    public static int connectToAccessPointCompanion(ApFilter apFilter, String companionName, WiFiDiscoveryCallback wifiCallback) {
+        return connectToAccessPointCompanion(apFilter, companionName, wifiCallback, false);
     }
 
     /// Start listener to obtain primary network (internet access) handle
@@ -348,14 +385,15 @@ public class WiFi {
      * On Android 12+ devices, this causes a 2x rx/tx speed hit.
      * https://source.android.com/docs/core/connect/wifi-sta-sta-concurrency#local-only */
     public static boolean isHandlingConflictingConnections(Network a, Network b) {
+        ConnectivityManager connectivityManager = (ConnectivityManager)Pak.getActivity().getSystemService(Context.CONNECTIVITY_SERVICE);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             if (isNetworkValid(a) && isNetworkValid(b)) {
-                NetworkCapabilities c1 = cm.getNetworkCapabilities(a);
+                NetworkCapabilities c1 = connectivityManager.getNetworkCapabilities(a);
                 if (c1 == null) return false;
                 WifiInfo info1 = (WifiInfo) c1.getTransportInfo();
                 if (info1 == null) return false;
                 int mainBand = info1.getFrequency() / 100;
-                NetworkCapabilities c2 = cm.getNetworkCapabilities(b);
+                NetworkCapabilities c2 = connectivityManager.getNetworkCapabilities(b);
                 if (c2 == null) return false;
                 WifiInfo info2 = (WifiInfo) c2.getTransportInfo();
                 if (info2 == null) return false;
@@ -368,8 +406,9 @@ public class WiFi {
     }
 
     public static boolean isNetworkValid(Network net) {
-        if (cm == null) return false;
-        NetworkInfo wifiInfo = cm.getNetworkInfo(net);
+        ConnectivityManager connectivityManager = (ConnectivityManager)Pak.getActivity().getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connectivityManager == null) return false;
+        NetworkInfo wifiInfo = connectivityManager.getNetworkInfo(net);
         if (net == null) return false;
         if (wifiInfo == null) return false;
         return wifiInfo.isAvailable();

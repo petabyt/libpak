@@ -628,7 +628,7 @@ public class Bluetooth {
                 if (filter.manufacData != null) {
                     byte[] trimmed = Arrays.copyOfRange(filter.manufacData, 2, filter.manufacData.length);
                     int companyIdentifier = (filter.manufacData[0] & 0xff) | ((filter.manufacData[1] & 0xff) << 8);
-                    if (verbose) Log.d(TAG, "str: " + companyIdentifier);
+//                    if (verbose) Log.d(TAG, "str: " + companyIdentifier);
                     try {
                         if (filter.manufacDataMask != null) {
                             byte[] maskTrimmed = Arrays.copyOfRange(filter.manufacDataMask, 2, filter.manufacDataMask.length);

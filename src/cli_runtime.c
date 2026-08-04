@@ -10,11 +10,48 @@ struct RuntimePriv {
 	int current_job;
 };
 
+__attribute__((weak))
+void pak_global_log(const char *fmt, ...) {
+	printf("LOG: ");
+	fflush(stdout);
+	va_list args;
+	va_start(args, fmt);
+	vfprintf(stdout, fmt, args);
+	va_end(args);
+	putchar('\n');
+}
 
+__attribute__((weak))
+void pak_error(const char *fmt, ...) {
+	printf("ERR: ");
+	fflush(stderr);
+	va_list args;
+	va_start(args, fmt);
+	vfprintf(stderr, fmt, args);
+	va_end(args);
+}
+
+__attribute__((weak))
+void pak_abort(const char *fmt, ...) {
+	printf("ABORT: ");
+	fflush(stdout);
+	va_list args;
+	va_start(args, fmt);
+	vprintf(fmt, args);
+	va_end(args);
+	fflush(stdout);
+	abort();
+}
+
+int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter, const char *setup_option) {
+	return -1;
+}
+int pak_rt_set_download_stats(struct PakModule *mod, int job, long time, unsigned int n_bytes) {
+	return -1;
+}
 int pak_rt_set_dashboard_pane(struct PakModule *mod, const struct PakWidget *s) {
 	return 0;
 }
-
 int pak_rt_save_session_signature(struct PakModule *mod, struct PakSavedConnection *info) {
 	return -1;
 }
@@ -27,7 +64,7 @@ int pak_rt_set_session_property_int(struct PakModule *mod, const char *key, int 
 int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length) {
 	return -1;
 }
-int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, unsigned int offset, unsigned int total_size) {
+int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, uint64_t offset, uint64_t total_size) {
 	return -1;
 }
 int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum PakSortedBy sorted_by) {

@@ -20,7 +20,6 @@ import android.companion.AssociationRequest;
 import android.companion.BluetoothDeviceFilter;
 import android.companion.BluetoothLeDeviceFilter;
 import android.companion.CompanionDeviceManager;
-import android.companion.ObservingDevicePresenceRequest;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
 
@@ -38,7 +37,6 @@ import java.util.stream.Collectors;
 
 import android.content.Context;
 import android.content.IntentFilter;
-import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.ParcelUuid;
@@ -46,7 +44,6 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 public class Bluetooth {
     public static final String TAG = "bt";
@@ -326,6 +323,12 @@ public class Bluetooth {
                                 synchronized (bondSignal) {
                                     bondSignal.wait(10000);
                                 }
+                                Log.d(TAG, "Assuming bond is removed");
+                                // Reconnect
+                                if (!isGattConnected) {
+                                    Log.d(TAG, "GATT disconnected, trying again");
+                                    connectGatt(Pak.getActivity(), callback);
+                                }
                             } catch (SecurityException ignored) {
 
                             } catch (InterruptedException ignored) {
@@ -424,7 +427,7 @@ public class Bluetooth {
                 return Pak.Error.PERMISSION;
             }
         }
-        public int waitAsync(BluetoothGattCharacteristic characteristic, int ms) {
+        public int waitBlocking(BluetoothGattCharacteristic characteristic, int ms) {
             if (callback.checkCachedUpdate(characteristic, false) != null) {
                 return 0;
             }
@@ -567,7 +570,7 @@ public class Bluetooth {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             super.onCharacteristicChanged(gatt, characteristic);
-            if (verbose) Log.d(TAG, "Characteristic changed: " + characteristic.getUuid().toString());
+            if (verbose) Log.d(TAG, "Characteristic changed: " + characteristic.getUuid().toString() + " to " + Arrays.toString(characteristic.getValue()));
             cachedUpdates.add(new CachedCharUpdates(characteristic, characteristic.getValue()));
             synchronized (gattCharacteristicChanged) {
                 gattCharacteristicChanged.notify();

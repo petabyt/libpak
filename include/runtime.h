@@ -87,6 +87,8 @@ struct PakFileMetadata {
 	uint64_t file_size;
 	int image_width;
 	int image_height;
+	// should be 0 for landscape and 270 for portrait
+	int orientation;
 };
 
 /// A widget displayed on the dashboard that can show data or be manipulated by the user
@@ -251,9 +253,9 @@ struct PakModule {
 	int (*on_request_liveview_frame)(struct PakModule *, int job, struct PakFileHandle *file);
 	/// Runs when a setting has been changed by 
 	int (*on_setting_changed)(struct PakModule *, int job, struct PakWidget *setting);
-	/// On request to run self test, test suite, debug dumps, or other diagnostics
+	/// On request to run unit test
 	int (*on_run_test)(struct PakModule *, int job);
-	/// Process an arbritrary command
+	/// Process an arbitrary command
 	int (*on_custom_command)(struct PakModule *, int job, int argc, const char * const *argv);
 };
 
@@ -288,7 +290,7 @@ void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);
 /// Enable or disable a screen
 int pak_rt_set_screen_supported(struct PakModule *mod, int screen, int v);
 /// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
-int pak_rt_enter_screen(struct PakModule *mod, int screen);
+__attribute__((unused)) int pak_rt_enter_screen(struct PakModule *mod, int screen);
 /// Set the percent of a job's progress bar from 0-100. Is 100 by default for each job.
 int pak_rt_set_progress_bar(struct PakModule *mod, int job, int percent);
 /// Report how many bytes are being downloaded for a job currently in X amount of microseconds.
@@ -300,11 +302,11 @@ int pak_rt_save_session_signature(struct PakModule *mod, struct PakSavedConnecti
 int pak_rt_set_session_property(struct PakModule *mod, const char *key, const char *value);
 int pak_rt_set_session_property_int(struct PakModule *mod, const char *key, int value);
 /// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
-int pak_rt_disconnect(struct PakModule *mod, const char *reason);
+__attribute__((unused)) int pak_rt_disconnect(struct PakModule *mod, const char *reason);
 /// Set the tick interval in microseconds
 int pak_rt_set_tick_interval(struct PakModule *mod, unsigned int us);
 /// Get path for downloading a file
-//const char *pak_rt_get_path(struct PakModule *mod, const char *filename);
+__attribute__((unused)) const char *pak_rt_get_path(struct PakModule *mod, const char *filename);
 /// Logging function for data specfic to this session
 void pak_debug_log(struct PakModule *mod, const char *fmt, ...);
 /// Get metadata from file handle

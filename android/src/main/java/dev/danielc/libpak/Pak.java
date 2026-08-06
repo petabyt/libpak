@@ -17,7 +17,6 @@ import android.os.Handler;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
-
 import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.concurrent.Semaphore;

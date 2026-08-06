@@ -505,7 +505,7 @@ int pak_bt_set_cccd(struct PakBt *ctx, struct PakGattCharacteristic *characteris
 int pak_bt_watch_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, unsigned int ms) {
 	JNIEnv *env = get_jni_env();
 	(*env)->PushLocalFrame(env, 10);
-	jmethodID read_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "waitAsync", "(Landroid/bluetooth/BluetoothGattCharacteristic;I)I");
+	jmethodID read_m = (*env)->GetMethodID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "waitBlocking", "(Landroid/bluetooth/BluetoothGattCharacteristic;I)I");
 	jint rc = (*env)->CallIntMethod(env, characteristic->priv->device->priv->device, read_m, characteristic->priv->obj, (jint)ms);
 	(*env)->PopLocalFrame(env, NULL);
 	return rc;

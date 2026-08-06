@@ -683,7 +683,10 @@ public class Bluetooth {
 
         try {
             Intent intent = Pak.companionAssociateGetResultBlocking(deviceManager, request);
-            if (intent == null) { return Pak.Error.NON_FATAL; }
+            if (intent == null) {
+                scanCallback.onCancel();
+                return Pak.Error.CANCELLED;
+            }
             AssociationInfo associationInfo = null;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 associationInfo = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);

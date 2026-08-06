@@ -302,7 +302,10 @@ public class WiFi {
             AssociationRequest request = associationBuilder.build();
             try {
                 Intent intent = Pak.companionAssociateGetResultBlocking(deviceManager, request);
-                if (intent == null) return Pak.Error.NON_FATAL; // User did not select a device
+                if (intent == null) {
+                    wifiCallback.onUserCancelled();
+                    return Pak.Error.CANCELLED; // User did not select a device
+                }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     associationInfo = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);

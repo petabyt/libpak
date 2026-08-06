@@ -29,12 +29,16 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiInfo;
 import androidx.annotation.NonNull;
 import java.lang.reflect.Method;
-import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.regex.Pattern;
 
 public class WiFi {
     public static final String TAG = "wifi";
+    private static final Pak.CancellableRunnable cancellableRunnable = new Pak.CancellableRunnable();
+
+    public static void interruptAll() {
+        cancellableRunnable.cancel();
+    }
 
     public static class Adapter {
         Adapter(Network net) {
@@ -97,7 +101,7 @@ public class WiFi {
             this.hidden = hidden;
         }
         @Override
-        public String toString() {
+        public @NonNull String toString() {
             return "ApFilter{" +
                     "ssidPattern='" + ssidPattern + '\'' +
                     ", bssid='" + bssid + '\'' +
@@ -110,12 +114,12 @@ public class WiFi {
         public ApFilter() {
             this(null, null, null, -1, false);
         }
-        public String ssidPattern = null;
-        public String bssid = null;
-        public String password = null;
+        public String ssidPattern;
+        public String bssid;
+        public String password;
         public String securityType = "wpa2";
-        public int band = 0;
-        public boolean hidden = false;
+        public int band;
+        public boolean hidden;
     }
 
     public static boolean isWiFiEnabled() {
@@ -140,31 +144,6 @@ public class WiFi {
         public native void onConnected(@NonNull Adapter net);
         @Override
         public native void failed(@NonNull String reason, int code);
-    }
-
-    public static int connectFromBSSID(String bssid, WiFiDiscoveryCallback callback) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ApFilter filter = new ApFilter();
-            filter.bssid = bssid;
-
-            CompanionDeviceManager deviceManager = (CompanionDeviceManager) Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
-            List<AssociationInfo> list = deviceManager.getMyAssociations();
-            for (AssociationInfo i : list) {
-                try {
-                    if (i.getDeviceMacAddress().toString().equalsIgnoreCase(bssid)) {
-                        ScanResult r = i.getAssociatedDevice().getWifiDevice();
-                        filter.ssidPattern = r.SSID;
-                        break;
-                    }
-                } catch (NullPointerException ignored) {
-                }
-            }
-
-            return connectToAccessPoint(filter, callback);
-        } else {
-            Log.d(TAG, "connectFromBSSID unsupported");
-            return -1;
-        }
     }
 
     /** Opens an Android 10+ popup to prompt the user to select a WiFi network
@@ -221,13 +200,13 @@ public class WiFi {
                     onAvailableCalled = true;
                     callback.onConnected(new Adapter(network));
                 }
-                //waitForCallback.release();
+                waitForCallback.release();
             }
             @Override
             public void onUnavailable() {
                 if (++attempts > maxAttempts || onAvailableCalled) {
                     callback.failed("Network is not available", -1);
-                    //waitForCallback.release();
+                    waitForCallback.release();
                 } else {
                     connectivityManager.requestNetwork(request, this, 25000);
                 }
@@ -240,10 +219,21 @@ public class WiFi {
 
         MyCallback networkCallback = new MyCallback();
 
-        // Stock Android seems to cut off the dialog at 30s and never calls onUnavailable,
-        // so set the time limit a bit short of that to try and make sure onUnavailable gets called
-        connectivityManager.requestNetwork(request, networkCallback, 25000);
-        return 0;
+        return cancellableRunnable.run(() -> {
+            // Stock Android seems to cut off the dialog at 30s and never calls onUnavailable,
+            // so set the time limit a bit short of that to try and make sure onUnavailable gets called
+            connectivityManager.requestNetwork(request, networkCallback, 25000);
+
+            try {
+                synchronized (networkCallback.waitForCallback) {
+                    networkCallback.waitForCallback.acquire();
+                }
+            } catch (InterruptedException ignored) {
+                connectivityManager.unregisterNetworkCallback(networkCallback);
+                return Pak.Error.CANCELLED;
+            }
+            return 0;
+        });
     }
 
     private static boolean probablyIsRegularExpression(String s) {
@@ -258,8 +248,8 @@ public class WiFi {
         ScanResult scanResult = null;
         boolean skipCompanionDialog = apFilter.hidden;
 
-        // Skip companion dialog if AP SSID was already associated
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !apFilter.hidden) {
+            // Skip companion dialog if AP BSSID was already associated
             CompanionDeviceManager deviceManager = (CompanionDeviceManager) Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
             for (String address : deviceManager.getAssociations()) {
                 if (address.equals(apFilter.bssid)) {
@@ -269,6 +259,8 @@ public class WiFi {
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Skip companion dialog and set BSSID if already associated
+                // TODO: This is probably not necessary
                 for (AssociationInfo i : deviceManager.getMyAssociations()) {
                     try {
                         ScanResult r = i.getAssociatedDevice().getWifiDevice();

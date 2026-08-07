@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 #include <quickjs.h>
 #include <quickjs-libc.h>
+#pragma GCC diagnostic pop
 #include <runtime.h>
 #include "../main.h"
 #include "buffer_js.h"
@@ -208,7 +211,7 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 				widget.type = PAK_BOOLEAN;
 				widget.u.boolv.v = JS_ToBool(ctx, d);
 			}
-			rc = pak_rt_set_dashboard_pane(mod, &widget);
+			rc = pak_rt_set_widget(mod, &widget);
 			JS_FreeValue(ctx, a);
 			JS_FreeValue(ctx, b);
 			JS_FreeValue(ctx, c);

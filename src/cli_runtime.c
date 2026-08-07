@@ -49,7 +49,7 @@ int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *fi
 int pak_rt_set_download_stats(struct PakModule *mod, int job, long time, unsigned int n_bytes) {
 	return -1;
 }
-int pak_rt_set_dashboard_pane(struct PakModule *mod, const struct PakWidget *s) {
+int pak_rt_set_widget(struct PakModule *mod, const struct PakWidget *s) {
 	return 0;
 }
 int pak_rt_save_session_signature(struct PakModule *mod, struct PakSavedConnection *info) {

@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include <wifi.h>
 #include <bluetooth.h>
-typedef struct libusb_device libusb_device;
 
 /// @addtogroup PakDevice
 /// @{
@@ -156,7 +155,7 @@ enum PakTransport {
 	PAK_USB = 2,
 	/// Connect to a WiFi access point
 	PAK_WIFI_AP = 3,
-	/// Become a USB device
+	/// Expose a USB device through OTG mode
 	PAK_USB_DEVICE_MODE = 4,
 	/// Host an access point (hotspot) for something to connect to
 	PAK_HOST_WIFI_AP = 5,
@@ -207,6 +206,9 @@ struct PakLocation {
     double altitude;
     unsigned int satellites;
 };
+
+/// Strictly compatible with libusb1.0
+typedef struct libusb_device libusb_device;
 
 /// @brief A library that connects to and performs actions with an external device.
 /// @info Most "on_" methods are given a job number. This job number can be passed to other functions
@@ -279,9 +281,9 @@ int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file,
 /// total_size can also be zero if you don't know the length beforehand,
 /// but a terminating call must be made with length = 0
 int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, uint64_t offset, uint64_t total_size);
-/// Registers a setting that is displayed in the UI and can be modified by the user
-int pak_rt_set_dashboard_pane(struct PakModule *mod, const struct PakWidget *s);
-/// Returns true/nonzero if user requested to cancel the job.
+/// Registers a widget that is displayed in the UI and can be modified by the user
+int pak_rt_set_widget(struct PakModule *mod, const struct PakWidget *s);
+/// Returns true/nonzero if user requested to cancel the job (or disconnect)
 int pak_rt_is_job_cancelled(struct PakModule *mod, int job);
 /// Report a fatal error and prevent any more jobs from being issued
 void pak_rt_fatal_error(struct PakModule *mod, const char *fmt, ...);
@@ -289,11 +291,9 @@ void pak_rt_fatal_error(struct PakModule *mod, const char *fmt, ...);
 void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);
 /// Enable or disable a screen
 int pak_rt_set_screen_supported(struct PakModule *mod, int screen, int v);
-/// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
-__attribute__((unused)) int pak_rt_enter_screen(struct PakModule *mod, int screen);
-/// Set the percent of a job's progress bar from 0-100. Is 100 by default for each job.
+/// Set the percent of a job's progress bar from 0-100.
 int pak_rt_set_progress_bar(struct PakModule *mod, int job, int percent);
-/// Report how many bytes are being downloaded for a job currently in X amount of microseconds.
+/// Report how many bytes are being downloaded for a job currently in X amount of microseconds. TODO: currently ms
 int pak_rt_set_download_stats(struct PakModule *mod, int job, long time, unsigned int n_bytes);
 /// Set the unique ID of the current connected device. Will be stored for future use.
 /// If the string is already stored, it will be loaded to the current session.
@@ -301,14 +301,12 @@ int pak_rt_save_session_signature(struct PakModule *mod, struct PakSavedConnecti
 /// Report device information to the UI
 int pak_rt_set_session_property(struct PakModule *mod, const char *key, const char *value);
 int pak_rt_set_session_property_int(struct PakModule *mod, const char *key, int value);
-/// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
-__attribute__((unused)) int pak_rt_disconnect(struct PakModule *mod, const char *reason);
 /// Set the tick interval in microseconds
 int pak_rt_set_tick_interval(struct PakModule *mod, unsigned int us);
-/// Get path for downloading a file
-__attribute__((unused)) const char *pak_rt_get_path(struct PakModule *mod, const char *filename);
-/// Logging function for data specfic to this session
+/// Log debug info to user-viewable console
 void pak_debug_log(struct PakModule *mod, const char *fmt, ...);
+/// Log verbose info into a buffer that can be dumped for a bug report
+void pak_verbose_log(struct PakModule *mod, const char *fmt, ...);
 /// Get metadata from file handle
 /// free with pak_rt_release_metadata
 struct PakFileMetadata *pak_rt_get_metadata(struct PakModule *mod, struct PakFileHandle *file);
@@ -318,10 +316,17 @@ void pak_rt_release_metadata(struct PakModule *mod, struct PakFileMetadata *md);
 const char *pak_rt_get_setup_option(struct PakModule *mod);
 /// Return string of client name, do not free
 const char *pak_rt_get_client_name(void);
-/// Covers 'Bluetooth -> WiFi handover case common in some devices'
+/// Covers 'Bluetooth -> WiFi' handover case common in some devices
 /// onTryConnectWiFi will be called
 int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter, const char *setup_option);
 /// Adds a RTSP livestream source that will be independently managed by the runtime.
 /// on_request_liveview_frame won't be called 
 int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *adapter, const char *url);
+
+/// Get path for downloading a file
+__attribute__((unused)) const char *pak_rt_get_path(struct PakModule *mod, const char *filename);
+/// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
+__attribute__((unused)) int pak_rt_disconnect(struct PakModule *mod, const char *reason);
+/// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
+__attribute__((unused)) int pak_rt_enter_screen(struct PakModule *mod, int screen);
 #endif

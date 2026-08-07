@@ -1,0 +1,5 @@
+if(NOT TARGET pakrt)
+    add_library(pakrt INTERFACE IMPORTED)
+    #target_link_options(pakrt INTERFACE "--allow-undefined-file=${CMAKE_CURRENT_LIST_DIR}/symbols.txt")
+    target_include_directories(pakrt INTERFACE "${CMAKE_CURRENT_LIST_DIR}/../include")
+endif()

@@ -93,13 +93,13 @@ public class Pak {
         public void onDeviceAppeared(@NonNull String address) {
             super.onDeviceAppeared(address);
             Log.d(TAG, "onDeviceAppeared: " + address);
-            callbacks.onDeviceAppearance(address, true);
+            if (callbacks != null) callbacks.onDeviceAppearance(address, true);
         }
         @Override
         public void onDeviceDisappeared(@NonNull String address) {
             super.onDeviceDisappeared(address);
             Log.d(TAG, "onDeviceDisappeared");
-            callbacks.onDeviceAppearance(address, false);
+            if (callbacks != null) callbacks.onDeviceAppearance(address, false);
         }
         @Override
         public void onDevicePresenceEvent(@NonNull DevicePresenceEvent event) {

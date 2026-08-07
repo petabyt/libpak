@@ -52,13 +52,13 @@ public class Bluetooth {
     private static final Pak.CancellableRunnable cancellableRunnable = new Pak.CancellableRunnable();
 
     public static void interruptAll() {
-        cancellableRunnable.cancel();
+        cancellableRunnable.cancelAll();
     }
 
-    public static abstract class Listener {
-        public abstract void onUpdate(Boolean bluetoothEnabled);
-        public abstract void onAvailableDevices(@NonNull Device[] devices);
-    }
+//    public static abstract class Listener {
+//        public abstract void onUpdate(Boolean bluetoothEnabled);
+//        public abstract void onAvailableDevices(@NonNull Device[] devices);
+//    }
 
     public static boolean checkPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -91,25 +91,25 @@ public class Bluetooth {
         return getDefaultAdapter().isEnabled();
     }
 
-    public static void setupListeners(Listener listener) {
-        BroadcastReceiver receiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                final String action = intent.getAction();
-                if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
-                    final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-                    switch (state) {
-                    case BluetoothAdapter.STATE_OFF:
-                        listener.onUpdate(false);
-                        break;
-                    case BluetoothAdapter.STATE_ON:
-                        listener.onUpdate(true);
-                        break;
-                    }
-                }
-            }
-        };
-    }
+//    public static void setupListeners(Listener listener) {
+//        BroadcastReceiver receiver = new BroadcastReceiver() {
+//            @Override
+//            public void onReceive(Context context, Intent intent) {
+//                final String action = intent.getAction();
+//                if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+//                    final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+//                    switch (state) {
+//                    case BluetoothAdapter.STATE_OFF:
+//                        listener.onUpdate(false);
+//                        break;
+//                    case BluetoothAdapter.STATE_ON:
+//                        listener.onUpdate(true);
+//                        break;
+//                    }
+//                }
+//            }
+//        };
+//    }
 
     public static Device fromAddress(@NonNull String address) {
         return new Device(getDefaultAdapter(), getDefaultAdapter().getRemoteDevice(address));
@@ -137,7 +137,6 @@ public class Bluetooth {
             this.name = Optional.ofNullable(dev.getName()).orElse("?");
             this.serviceUuids = Optional.ofNullable(dev.getUuids()).orElse(new ParcelUuid[]{});
             this.address = dev.getAddress();
-
         }
         Device(@NonNull BluetoothAdapter adapter, @NonNull BluetoothDevice dev, ScanResult scanResult) {
             this(adapter, dev);
@@ -167,6 +166,41 @@ public class Bluetooth {
             } catch (SecurityException ignored) {
                 return false;
             }
+        }
+
+        public int removePreviousBond() {
+            if (!Bluetooth.checkPermission()) return Pak.Error.PERMISSION;
+            setupListener();
+            if (dev.getBondState() == BluetoothDevice.BOND_NONE) return 0;
+            Log.d(TAG, "Removing bond...");
+            // Remove existing bond from system (requires association) and Android 15+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                if (associationInfo != null && dev.getBondState() != BluetoothDevice.BOND_NONE) {
+                    CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
+                    try {
+                        if (!deviceManager.removeBond(associationInfo.getId())) {
+                            Log.d(TAG, "removeBond failuree");
+                            return Pak.Error.NON_FATAL;
+                        }
+                        synchronized (bondSignal) {
+                            bondSignal.wait(10000);
+                        }
+                    } catch (Exception ignored) {
+
+                    }
+                }
+            } else {
+                try {
+                    Method m = dev.getClass().getMethod("removeBond", (Class[]) null);
+                    m.invoke(dev, (Object[]) null);
+                } catch (Exception e) { Log.e(TAG, e.getMessage()); }
+            }
+            if (dev.getBondState() == BluetoothDevice.BOND_NONE) {
+                Log.d(TAG, "Bond was removed");
+            } else {
+                Log.e(TAG, "Bond was not removed");
+            }
+            return 0;
         }
 
         public byte[] getManufacturerData(int index) {
@@ -313,30 +347,6 @@ public class Bluetooth {
             setupListener();
             return cancellableRunnable.run(() -> {
                 try {
-                    // Remove existing bond from system (requires association) and Android 15+
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-                        if (associationInfo != null && dev.getBondState() != BluetoothDevice.BOND_NONE) {
-                            CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
-                            try {
-                                Log.d(TAG, "Removing bond...");
-                                deviceManager.removeBond(associationInfo.getId());
-                                synchronized (bondSignal) {
-                                    bondSignal.wait(10000);
-                                }
-                                Log.d(TAG, "Assuming bond is removed");
-                                // Reconnect
-                                if (!isGattConnected) {
-                                    Log.d(TAG, "GATT disconnected, trying again");
-                                    connectGatt(Pak.getActivity(), callback);
-                                }
-                            } catch (SecurityException ignored) {
-
-                            } catch (InterruptedException ignored) {
-
-                            }
-                        }
-                    }
-
                     keyMissingFromBonding = false;
                     if (dev.getBondState() == BluetoothDevice.BOND_NONE) {
                         if (!dev.createBond()) {
@@ -606,7 +616,7 @@ public class Bluetooth {
 
     /// Opens a dialog to save an access point as a companion device
     @SuppressLint("WrongConstant")
-    public static int pairWithDeviceCompanion(@NonNull List<BtFilter> filters, String companionName, String deviceType, @NonNull ScanCallback scanCallback) {
+    public static int pairWithDeviceCompanion(@NonNull List<BtFilter> filters, String companionName, String deviceType, @NonNull ScanCallback scanCallback, boolean deleteOldBond) {
         Context ctx = Pak.getActivity();
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return Pak.Error.UNSUPPORTED;
@@ -631,7 +641,6 @@ public class Bluetooth {
                 if (filter.manufacData != null) {
                     byte[] trimmed = Arrays.copyOfRange(filter.manufacData, 2, filter.manufacData.length);
                     int companyIdentifier = (filter.manufacData[0] & 0xff) | ((filter.manufacData[1] & 0xff) << 8);
-//                    if (verbose) Log.d(TAG, "str: " + companyIdentifier);
                     try {
                         if (filter.manufacDataMask != null) {
                             byte[] maskTrimmed = Arrays.copyOfRange(filter.manufacDataMask, 2, filter.manufacDataMask.length);
@@ -690,13 +699,22 @@ public class Bluetooth {
             AssociationInfo associationInfo = null;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 associationInfo = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_ASSOCIATION);
+                Log.d(TAG, "Associated with " + associationInfo.getDeviceMacAddress());
                 Pak.deleteDuplicateAssociations(associationInfo);
             }
             ScanResult result = intent.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE);
-            if (result != null) {
+            if (result == null) return Pak.Error.NON_FATAL;
+
+            Bluetooth.Device dev = new Bluetooth.Device(getDefaultAdapter(), result.getDevice(), result, associationInfo);
+            if (dev.isBonded() && deleteOldBond) {
+                // This causes a repeat dialog but is necessary since removing bonds seems to cause devices to refresh advertisement
+                dev.removePreviousBond();
+                int rc = pairWithDeviceCompanion(filters, companionName, deviceType, scanCallback, false);
+                deviceManager.disassociate(result.getDevice().getAddress());
+                return rc;
+            } else {
                 scanCallback.onFound(new Bluetooth.Device(getDefaultAdapter(), result.getDevice(), result, associationInfo));
             }
-
         } catch (Pak.CancelException e) {
             return Pak.Error.CANCELLED;
         }

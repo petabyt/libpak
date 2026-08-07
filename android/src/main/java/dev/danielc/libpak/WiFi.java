@@ -37,7 +37,7 @@ public class WiFi {
     private static final Pak.CancellableRunnable cancellableRunnable = new Pak.CancellableRunnable();
 
     public static void interruptAll() {
-        cancellableRunnable.cancel();
+        cancellableRunnable.cancelAll();
     }
 
     public static class Adapter {

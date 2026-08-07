@@ -19,6 +19,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import java.lang.ref.WeakReference;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.function.Supplier;
 
@@ -50,28 +52,29 @@ public class Pak {
     /// For cancelling blocking routines
     /// Can be used like new CancellableRunnable().run(() => {return 0;})
     public static class CancellableRunnable {
-        Thread thread;
-        int rc;
+        Set<Thread> threads = ConcurrentHashMap.newKeySet();
         int run(Supplier<Integer> block) {
-            synchronized (this) {
-                thread = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        rc = block.get();
-                    }
-                });
-                thread.start();
-                try {
-                    thread.join();
-                } catch (InterruptedException e) {
-                    // This thread shouldn't be interrupted
+            final int[] rc = new int[1];
+            Thread thread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    rc[0] = block.get();
                 }
+            });
+            threads.add(thread);
+            thread.start();
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                // This thread shouldn't be interrupted
             }
-            thread = null;
-            return rc;
+            threads.remove(thread);
+            return rc[0];
         }
-        void cancel() {
-            if (thread != null) thread.interrupt();
+        void cancelAll() {
+            for (Thread t: threads) {
+                t.interrupt();
+            }
         }
     }
 

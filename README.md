@@ -1,20 +1,15 @@
-# libpak
+# libpak (WIP)
 
-(WIP) Cross-platform Bluetooth and WiFi library for pairing with consumer devices
+Sandbox/framework for pairing with consumer devices through Bluetooth or WiFi.
 
-## Features
-- Supports Android and Linux (BlueZ/NetworkManager)
-- APIs for using Android companion/selector dialogs (`AssociationRequest`, `WifiNetworkSpecifier`)
+## Goals
 - Supports Bluetooth Low Energy (BLE) and Bluetooth Classic
-- WiFi API supports probing APs, connect/disconnect, and socket binding
-- QuickJS bindings
-- (WIP) wasm c-api bindings
+- Supports probing WiFi access points, connect/disconnect, bind socket to interface
+- Android and Linux support
+- Implements new Android companion/selector dialogs (`AssociationRequest`, `WifiNetworkSpecifier`)
+- QuickJS and wasm c-api bindings (WIP)
 
-## Why
-All the cross-platform Bluetooth libraries I found had drawbacks:
-- Difficult to embed reliabily
-- Too many dependencies
-- No Bluetooth classic support
-
-## Future
-- Start WiFi hotspot and expose a network interface
+## Sandbox
+- Abstracted interface for device libraries (modules) to interact with the runtime
+- Allows a wide variety of UI screens, widgets, commands, and properties to be manipulated and controlled
+- Covers common device routines such as Bluetooth -> WiFi connection handover

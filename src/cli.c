@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <dlfcn.h>
 #include "wifi.h"
 #include "bluetooth.h"
 #include "runtime.h"
@@ -105,7 +106,9 @@ int test_bluetooth_connect(void) {
 }
 
 int help(void) {
-	printf("--test-js <js file>\n");
+	printf("--test-js <.js file>\n");
+	printf("--test-so <.so file>\n");
+	printf("--test-wasm <.wasm file>\n");
 	printf("--dump-bt\n");
 	return 0;
 }
@@ -148,6 +151,16 @@ int main(int argc, char **argv) {
 			if (buf == NULL) return -1;
 			if (setup_wasm_module(mod, buf, len)) return -1;
 			return pak_rt_test_module(mod);
+		} else if (!strcmp(argv[i], "--test-so")) {
+			struct PakModule *mod = pak_create_mod();
+			void *dl = dlopen(argv[i + 1], RTLD_NOW);
+			if (dl == NULL) { fprintf(stderr, "%s\n", dlerror()); abort(); }
+			int (*fun)(struct PakModule *) = dlsym(dl, "get_module");
+			if (fun == NULL) { fprintf(stderr, "%s\n", dlerror()); abort(); }
+			fun(mod);
+			int rc = pak_rt_test_module(mod);
+			dlclose(dl);
+			return rc;
 		} else if (!strcmp(argv[i], "--test")) {
 			int rc = test_wifi();
 			rc |= test_bluetooth();

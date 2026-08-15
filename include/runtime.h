@@ -14,6 +14,7 @@
 #define PAK_DEVICE_ACTION_CAMERA "action-camera"
 #define PAK_DEVICE_DASHCAM "dashcam"
 #define PAK_DEVICE_GENERIC_CAMERA "generic-camera"
+#define PAK_DEVICE_LENS "lens"
 #define PAK_DEVICE_WIFI_SD_CARD "wifi-sd-card"
 #define PAK_DEVICE_DOORBELL "doorbell"
 // Home class

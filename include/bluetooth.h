@@ -55,6 +55,7 @@ int pak_bt_get_n_adapters(struct PakBt *ctx);
 struct PakBtAdapter *pak_bt_get_adapter(struct PakBt *ctx, int index);
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter);
 
+/// Represents both a connected/non-connected device and advertisement
 struct PakBtDevice {
 	struct PakBtDevicePriv *priv;
 	_pad_pointer pad_priv;
@@ -78,7 +79,6 @@ int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int fi
 /// Get bluetooth devices through a filter
 /// @param filter See enum PakDeviceStateFilter
 struct PakBtDevice *pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, int index, int filter);
-
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device);
 
 /// @brief Update all fields in device struct to current values
@@ -89,8 +89,13 @@ int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device);
 
 int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device);
 
+/// Blocking call to establish bond with the device. Old bond is automatically removed if necessary.
+/// TODO: allow setting if blocking or not
+/// @returns error code if failed
 int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device);
 
+/// Get one of the manufacturer data blobs from the advertisement this device was connected to with
+/// @returns length of data read
 unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max);
 
 struct PakGattService {

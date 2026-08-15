@@ -20,8 +20,12 @@ import android.net.NetworkRequest;
 import android.net.NetworkSpecifier;
 import android.net.Uri;
 import android.net.wifi.ScanResult;
+import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiNetworkSpecifier;
+import android.net.wifi.WifiNetworkSuggestion;
+import android.net.wifi.WifiSsid;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.PatternMatcher;
 import android.provider.Settings;
 import android.util.Log;
@@ -29,6 +33,7 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiInfo;
 import androidx.annotation.NonNull;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.concurrent.Semaphore;
 import java.util.regex.Pattern;
 
@@ -208,7 +213,11 @@ public class WiFi {
                     callback.failed("Network is not available", -1);
                     waitForCallback.release();
                 } else {
-                    connectivityManager.requestNetwork(request, this, 25000);
+                    if (filter.hidden || filter.bssid != null) {
+                        connectivityManager.requestNetwork(request, this);
+                    } else {
+                        connectivityManager.requestNetwork(request, this, 25000);
+                    }
                 }
             }
             @Override
@@ -222,7 +231,11 @@ public class WiFi {
         return cancellableRunnable.run(() -> {
             // Stock Android seems to cut off the dialog at 30s and never calls onUnavailable,
             // so set the time limit a bit short of that to try and make sure onUnavailable gets called
-            connectivityManager.requestNetwork(request, networkCallback, 25000);
+            if (filter.hidden || filter.bssid != null) {
+                connectivityManager.requestNetwork(request, networkCallback);
+            } else {
+                connectivityManager.requestNetwork(request, networkCallback, 25000);
+            }
 
             try {
                 synchronized (networkCallback.waitForCallback) {
@@ -356,6 +369,7 @@ public class WiFi {
 
     /// Start listener to obtain primary network (internet access) handle
     public static void startNetworkListeners(Context ctx) {
+        // TODO: If wifi isn't available, it should fall back to cellular
         ConnectivityManager m = (ConnectivityManager)ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkRequest.Builder requestBuilder = new NetworkRequest.Builder();
         requestBuilder.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
@@ -448,6 +462,51 @@ public class WiFi {
         }
 
         return true;
+    }
+
+    public static int addNetworkToSystem(ApFilter filter) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WifiNetworkSuggestion.Builder builder = new WifiNetworkSuggestion.Builder();
+
+            if (filter.ssidPattern != null) {
+                builder.setSsid(filter.ssidPattern);
+            }
+            if (filter.bssid != null) {
+                builder.setBssid(MacAddress.fromString(filter.bssid));
+            }
+            if (filter.password != null) {
+                if (filter.securityType == null || filter.securityType.startsWith("wpa2")) {
+                    builder.setWpa2Passphrase(filter.password);
+                } else {
+                    builder.setWpa3Passphrase(filter.password);
+                }
+            }
+            builder.setIsHiddenSsid(filter.hidden);
+
+            ArrayList<WifiNetworkSuggestion> suggestionList = new ArrayList<>();
+            suggestionList.add(builder.build());
+
+            Bundle bundle = new Bundle();
+            bundle.putParcelableArrayList(Settings.EXTRA_WIFI_NETWORK_LIST, suggestionList);
+
+            Intent intent = new Intent(Settings.ACTION_WIFI_ADD_NETWORKS);
+            intent.putExtras(bundle);
+
+            Pak.getActivity().startActivity(intent);
+        }
+        return 0;
+    }
+
+    public static int connectToApLegacy() {
+        // Below Android 10 uses this API
+//        WifiManager wifiManager = (WifiManager) Pak.getActivity().getSystemService(Context.WIFI_SERVICE);
+//        int netId = wifiManager.addNetwork(wifiConfig);
+//        if (netId != -1) {
+//            wifiManager.disconnect()
+//            wifiManager.enableNetwork(netId, true)
+//            wifiManager.reconnect()
+//        }
+        return 0;
     }
 
     @SuppressLint("MissingPermission")

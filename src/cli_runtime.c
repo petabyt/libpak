@@ -67,7 +67,7 @@ int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file,
 int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, uint64_t offset, uint64_t total_size) {
 	return -1;
 }
-int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum PakSortedBy sorted_by) {
+int pak_rt_set_storage_info(struct PakModule *mod, const char *name, struct PakStorageInfo *info) {
 	return -1;
 }
 int pak_rt_set_progress_bar(struct PakModule *mod, int job, int percent) {

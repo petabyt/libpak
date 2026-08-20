@@ -172,7 +172,7 @@ enum PakScreen {
 	PAK_SCREEN_CONNECT = 1,
 	// Allows user to disconnect, change settings, switch to most other screens
 	PAK_SCREEN_DASHBOARD = 101,
-	/// A gallery of files, videos, or photos. Can include folders. Upon selecting a folder, on_switch_screen
+	/// A gallery of folders, files, videos, or photos. Upon selecting a file, on_switch_screen
 	/// will be called with PAK_SCREEN_FILE_GALLERY->PAK_SCREEN_FILE_GALLERY
 	/// Gallery may be a table of files with detailed info, or a thumbnail gallery of variable width.
 	/// In what order the files iterated through (LIFO/FIFO) can be controlled.
@@ -262,14 +262,24 @@ struct PakModule {
 	int (*on_custom_command)(struct PakModule *, int job, int argc, const char * const *argv);
 };
 
+struct PakStorageInfo {
+	unsigned n_files_total;
+	/// How the file list data set is sorted by default - includes folders
+	enum PakSortedBy sorted_by;
+	uint64_t size_bytes;
+	uint64_t used_bytes;
+	/// If this is a non-physical storage medium where files will be automatically downloaded
+	/// (such as a tethered camera's temporary photo storage)
+	int is_live;
+};
+
 /// Set info for a storage device by the name of storage_name
 /// If storage device doesn't exist, it will be created. Otherwise it will be updated
 /// A root folder will autmatically be created with n_items, call pak_rt_add_folder_info to overwrite this
-/// @n_items n_items How many files are on this device in total
-/// @param sorted_by How the file list data set is sorted by default
-int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, unsigned int n_items, enum PakSortedBy sorted_by);
+int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, struct PakStorageInfo *info);
 /// If on_request_file_metadata is called on a folder, call this to specify the number of files in it instead of pak_rt_add_file_metadata
 /// @param folder_path Folder names separated by '/'.
+/// TODO: sorted_by inherited from storageinfo?
 int pak_rt_add_folder_info(struct PakModule *mod, const char *storage_name, const char *folder_path, unsigned int n_items, enum PakSortedBy sorted_by);
 /// Submit metadata for a file
 /// @info May be freed and requested again later
@@ -323,6 +333,8 @@ int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *fi
 /// Adds a RTSP livestream source that will be independently managed by the runtime.
 /// on_request_liveview_frame won't be called 
 int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *adapter, const char *url);
+
+int pak_rt_set_liveview_info(struct PakModule *mod, int width, int height, int fps);
 
 /// Get path for downloading a file
 __attribute__((unused)) const char *pak_rt_get_path(struct PakModule *mod, const char *filename);

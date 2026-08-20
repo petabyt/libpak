@@ -192,7 +192,10 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 			int sortedby;
 			JS_ToUint32(ctx, &n_items, argv[1]);
 			JS_ToInt32(ctx, &sortedby, argv[2]);
-			rc = pak_rt_set_storage_info(mod, JS_ToCString(ctx, argv[0]), n_items, sortedby);
+			rc = pak_rt_set_storage_info(mod, JS_ToCString(ctx, argv[0]), &(struct PakStorageInfo){
+				.n_files_total = n_items,
+				.sorted_by = sortedby,
+			});
 		} break;
 		case M_ADD_WIDGET: {
 			if (!JS_IsObject(argv[0])) return JS_NewError(ctx);

@@ -40,10 +40,10 @@ import java.util.regex.Pattern;
 public class WiFi {
     public static final String TAG = "wifi";
     private static final Pak.CancellableRunnable cancellableRunnable = new Pak.CancellableRunnable();
-
     public static void interruptAll() {
         cancellableRunnable.cancelAll();
     }
+    public static final boolean requiresManualAccessPointConnection = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q;
 
     public static class Adapter {
         Adapter(Network net) {

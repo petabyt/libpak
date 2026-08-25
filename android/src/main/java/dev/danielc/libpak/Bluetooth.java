@@ -64,7 +64,7 @@ public class Bluetooth {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return Pak.getActivity().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
         }
-        return false;
+        return true;
     }
 
     public static void requestConnectPermission() {
@@ -88,6 +88,7 @@ public class Bluetooth {
     }
 
     public static boolean isBluetoothEnabled() {
+        if (getDefaultAdapter() == null) return false;
         return getDefaultAdapter().isEnabled();
     }
 

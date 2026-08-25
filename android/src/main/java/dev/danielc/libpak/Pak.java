@@ -44,6 +44,10 @@ public class Pak {
     private static final Semaphore perm = new Semaphore(0, true);
     private static int permissionResult = 0;
     static Intent lastIntent = null;
+    private static final Pak.CancellableRunnable cancellableRunnable = new Pak.CancellableRunnable();
+    public static void interruptAll() {
+        cancellableRunnable.cancelAll();
+    }
 
     public static class CancelException extends Exception {
         //public CancelException(String reason) {}
@@ -251,16 +255,22 @@ public class Pak {
         MyCallback callback = new MyCallback();
         manager.associate(request, callback, null);
 
-        try {
-            callback.waitForCallback.acquire();
-        } catch (InterruptedException ignored) {}
-        if (callback.waitForActivity) {
-            waitForActivityResult();
-            if (callback.returnCode != 0) throw new CancelException();
-            if (lastIntent == null) return null;
-            return lastIntent;
-        }
-        throw new CancelException();
+        int rc = cancellableRunnable.run(() -> {
+            try {
+                callback.waitForCallback.acquire();
+            } catch (InterruptedException ignored) {
+                return Error.CANCELLED;
+            }
+            if (callback.waitForActivity) {
+                waitForActivityResult();
+                if (callback.returnCode != 0) return Error.CANCELLED;
+                if (lastIntent == null) return null;
+                return 0;
+            }
+            return Error.CANCELLED;
+        });
+        if (rc == Error.CANCELLED) throw new CancelException();
+        return lastIntent;
     }
 
     /// C libpak error codes

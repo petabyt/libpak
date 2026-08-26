@@ -62,7 +62,9 @@ public class Pak {
             Thread thread = new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    rc[0] = block.get();
+                    Integer i = block.get();
+                    if (i == null) i = 0;
+                    rc[0] = i;
                 }
             });
             threads.add(thread);

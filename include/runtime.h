@@ -76,7 +76,7 @@ struct PakFileHandle {
 	int index_in_view;
 	/// name of storage device
 	const char *storage_name;
-	/// empty string by default. will be changed if folders are entered like 'DCIM/FUJI001'
+	/// NULL or empty string by default. folder names are separated by slash, for example 'DCIM/FUJI001'
 	const char *path;
 };
 
@@ -93,46 +93,54 @@ struct PakFileMetadata {
 
 /// A widget displayed on the dashboard that can show data or be manipulated by the user
 struct PakWidget {
-	/// Unique name (id) of the widget
-	const char *name;
 	/// Human readable title for the widget
 	const char *title;
-	/// TODO: null = dashboard, "secondary" is for "more" settings page
-	const char *group;
+	/// Determines where the widget should be placed
+	enum WidgetGroup {
+		PAK_GROUP_DEFAULT = 0,
+	}group;
+	/// Set to true/nonzero to disable (grey out) this widget
+	int disabled;
 	enum WidgetType {
 		PAK_BUTTON = 0,
-		PAK_BOOLEAN,
-		PAK_INT,
-		PAK_SLIDER,
-		PAK_STRING,
-		PAK_DROPDOWN,
-		PAK_GRAPH,
+		PAK_BOOLEAN = 1,
+		PAK_INT = 2,
+		PAK_SLIDER = 3,
+		PAK_STRING = 4,
+		PAK_DROPDOWN = 5,
+		PAK_GRAPH = 6,
 	}type;
 	union SettingUnion {
-		struct SettingBoolean {
+		struct PakSwitch {
 			int v;
 		}boolv;
-		struct SettingInt {
+		struct PakNumber {
 			int v;
 		}intv;
-		struct SettingSlider {
+		struct PakSlider {
 			int v;
 			int min;
 			int max;
 		}slider;
-		struct SettingString {
+		struct PakTextBox {
 			const char *value;
 		}stringv;
-		struct SettingDropDown {
+		struct PakDropDown {
+			// NULL terminated cstring list
 			const char **list;
 			int index_value;
 		}dropdownv;
-		struct SettingGraph {
+		struct PakGraph {
 			const char *x_axis_name;
 			const char *y_axis_name;
 			int n_points;
 			int *points;
 		}graphv;
+		struct PakEqualizer {
+			int n_bands;
+			const char **band_names;
+			const int **band_values;
+		}equalizerv;
 	}u;
 };
 
@@ -255,7 +263,7 @@ struct PakModule {
 	/// send liveview frame contents with pak_rt_add_file_contents
 	int (*on_request_liveview_frame)(struct PakModule *, int job, struct PakFileHandle *file);
 	/// Runs when a setting has been changed by 
-	int (*on_setting_changed)(struct PakModule *, int job, struct PakWidget *setting);
+	int (*on_setting_changed)(struct PakModule *, int job, const char *name, struct PakWidget *setting);
 	/// On request to run unit test
 	int (*on_run_test)(struct PakModule *, int job);
 	/// Process an arbitrary command
@@ -268,8 +276,8 @@ struct PakStorageInfo {
 	enum PakSortedBy sorted_by;
 	uint64_t size_bytes;
 	uint64_t used_bytes;
-	/// If this is a non-physical storage medium where files will be automatically downloaded
-	/// (such as a tethered camera's temporary photo storage)
+	/// Should be set to true/nonzero if the medium is non-physical and files should be automatically downloaded. (such as tethered camera's temporary photo memory)
+	/// on_request_file_contents will be called in the order of files added through pak_rt_add_file_metadata
 	int is_live;
 };
 
@@ -283,9 +291,11 @@ int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, str
 int pak_rt_add_folder_info(struct PakModule *mod, const char *storage_name, const char *folder_path, unsigned int n_items, enum PakSortedBy sorted_by);
 /// Submit metadata for a file
 /// @info May be freed and requested again later
+/// @param metadata set to NULL for invalid/unknown
 int pak_rt_add_file_metadata(struct PakModule *mod, struct PakFileHandle *file, const struct PakFileMetadata *metadata);
 /// Submit thumbnail contents for a file
 /// @info May be freed and requested again later
+/// @param image_data set to NULL for invalid/unknown
 int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length);
 /// Submit contents for a file for the user to view or download
 /// Can be submitted in partial, when offset + length < total_size.
@@ -293,7 +303,8 @@ int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file,
 /// but a terminating call must be made with length = 0
 int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, uint64_t offset, uint64_t total_size);
 /// Registers a widget that is displayed in the UI and can be modified by the user
-int pak_rt_set_widget(struct PakModule *mod, const struct PakWidget *s);
+/// @param widget set to NULL to delete widget
+int pak_rt_set_widget(struct PakModule *mod, const char *name, const struct PakWidget *widget);
 /// Returns true/nonzero if user requested to cancel the job (or disconnect)
 int pak_rt_is_job_cancelled(struct PakModule *mod, int job);
 /// Report a fatal error and prevent any more jobs from being issued
@@ -310,6 +321,7 @@ int pak_rt_set_download_stats(struct PakModule *mod, int job, long time, unsigne
 /// If the string is already stored, it will be loaded to the current session.
 int pak_rt_save_session_signature(struct PakModule *mod, struct PakSavedConnection *info);
 /// Report device information to the UI
+/// @param value Set to NULL to unset value
 int pak_rt_set_session_property(struct PakModule *mod, const char *key, const char *value);
 int pak_rt_set_session_property_int(struct PakModule *mod, const char *key, int value);
 /// Set the tick interval in microseconds
@@ -333,7 +345,7 @@ int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *fi
 /// Adds a RTSP livestream source that will be independently managed by the runtime.
 /// on_request_liveview_frame won't be called 
 int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *adapter, const char *url);
-
+/// TODO: Unfinished API
 int pak_rt_set_liveview_info(struct PakModule *mod, int width, int height, int fps);
 
 /// Get path for downloading a file

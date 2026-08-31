@@ -49,7 +49,7 @@ int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *fi
 int pak_rt_set_download_stats(struct PakModule *mod, int job, long time, unsigned int n_bytes) {
 	return -1;
 }
-int pak_rt_set_widget(struct PakModule *mod, const struct PakWidget *s) {
+int pak_rt_set_widget(struct PakModule *mod, const char *name, const struct PakWidget *widget) {
 	return 0;
 }
 int pak_rt_save_session_signature(struct PakModule *mod, struct PakSavedConnection *info) {
@@ -59,6 +59,7 @@ int pak_rt_set_session_property(struct PakModule *mod, const char *key, const ch
 	return -1;
 }
 int pak_rt_set_session_property_int(struct PakModule *mod, const char *key, int value) {
+	printf("PROP: %s -> %d\n", key, value);
 	return -1;
 }
 int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length) {
@@ -109,6 +110,8 @@ struct PakModule *pak_create_mod(void) {
 	struct PakModule *mod = calloc(1, sizeof(struct PakModule));
 	mod->rt = malloc(sizeof(struct RuntimePriv));
 	mod->rt->current_job = 1;
+	mod->bt = pak_bt_get_context();
+	mod->net = pak_net_get_context();
 	return mod;
 }
 
@@ -140,8 +143,9 @@ int pak_rt_test_module(struct PakModule *mod) {
 	struct RuntimePriv *r = mod->rt;
 	if (mod->init) mod->init(mod);
 	if (mod->on_run_test) {
-		if (mod->on_run_test(mod, new_job(r))) {
-			printf("on_run_test\n");
+		int rc = mod->on_run_test(mod, new_job(r));
+		if (rc) {
+			printf("on_run_test: %d\n", rc);
 			return -1;
 		}
 	}

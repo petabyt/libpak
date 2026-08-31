@@ -194,6 +194,7 @@ static struct PakBtAdapterWrapper *fill_adapter_from_dict(struct DBusMessageIter
 	int len = dbus_message_iter_get_element_count(dict_iter);
 	DBusMessageIter arr_iter;
 	dbus_message_iter_recurse(dict_iter, &arr_iter);
+	struct PakBtAdapterWrapper *adapter = alloc_priv(sizeof(struct PakBtAdapterWrapper), path);
 	for (int i = 0; i < len; i++) {
 		struct DBusMessageIter dict;
 		dbus_message_iter_recurse(&arr_iter, &dict);
@@ -203,8 +204,6 @@ static struct PakBtAdapterWrapper *fill_adapter_from_dict(struct DBusMessageIter
 		dbus_message_iter_next(&dict);
 		struct DBusMessageIter dict_variant;
 		dbus_message_iter_recurse(&dict, &dict_variant);
-
-		struct PakBtAdapterWrapper *adapter = alloc_priv(sizeof(struct PakBtAdapterWrapper), path);
 
 		if (!strcmp(name, "Powered")) {
 			dbus_bool_t v;
@@ -222,7 +221,7 @@ static struct PakBtAdapterWrapper *fill_adapter_from_dict(struct DBusMessageIter
 
 		dbus_message_iter_next(&arr_iter);
 	}
-	return NULL;
+	return adapter;
 }
 
 int pak_bt_get_n_adapters(struct PakBt *ctx) {
@@ -288,7 +287,7 @@ struct PakBtAdapter *pak_bt_get_adapter(struct PakBt *ctx, int index) {
 	}
 
 	dbus_message_unref(resp);
-	return 0;
+	return NULL;
 }
 
 int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
@@ -404,7 +403,7 @@ static struct PakBtDeviceWrapper *fill_from_device1(struct DBusMessageIter *dict
 
 		dbus_message_iter_next(&arr_iter);
 	}
-	return 0;
+	return dev;
 }
 
 int pak_bt_device_update(struct PakBt *ctx, struct PakBtDevice *dev) {
@@ -478,7 +477,7 @@ int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int fi
 }
 
 struct PakBtDevice *pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, int index, int filter) {
-	struct PakBtDeviceWrapper *wrapper;
+	struct PakBtDeviceWrapper *wrapper = NULL;
 	int rc = pak_bt_get_object(ctx, adapter, &wrapper, index, filter);
 	if (rc) return NULL;
 	return (struct PakBtDevice *)wrapper;

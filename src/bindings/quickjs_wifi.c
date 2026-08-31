@@ -193,6 +193,7 @@ static int module_wifi(JSContext *ctx, JSModuleDef *m) {
 JSValue pak_js_create_wifi_context(JSContext *ctx, struct PakNet *wifi_ctx) {
 	JSValue ctx_obj = JS_NewObjectClass(ctx, wifi_class_id);
 	JS_SetOpaque(ctx_obj, wifi_ctx);
+	// old opaque is leaked
 	return ctx_obj;
 }
 

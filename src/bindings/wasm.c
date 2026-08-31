@@ -5,7 +5,6 @@
 #include <wasm_export.h>
 #include "runtime.h"
 
-
 uint32_t
 get_libc_builtin_export_apis(NativeSymbol **p_libc_builtin_apis);
 

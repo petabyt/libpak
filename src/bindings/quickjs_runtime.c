@@ -203,7 +203,6 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 			JSValue b = JS_GetPropertyStr(ctx, argv[0], "title");
 			JSValue c = JS_GetPropertyStr(ctx, argv[0], "type");
 			struct PakWidget widget = {
-				.name = JS_ToCString(ctx, a),
 				.title = JS_ToCString(ctx, b),
 			};
 			const char *type = JS_ToCString(ctx, c);
@@ -214,7 +213,7 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 				widget.type = PAK_BOOLEAN;
 				widget.u.boolv.v = JS_ToBool(ctx, d);
 			}
-			rc = pak_rt_set_widget(mod, &widget);
+			rc = pak_rt_set_widget(mod, JS_ToCString(ctx, a), &widget);
 			JS_FreeValue(ctx, a);
 			JS_FreeValue(ctx, b);
 			JS_FreeValue(ctx, c);
@@ -365,7 +364,7 @@ static int on_request_file_metadata(struct PakModule *mod, int job, struct PakFi
 		JS_NewInt32(mod->priv->ctx, job),
 		handle,
 	};
-	int rc = call_module_method(mod->priv->ctx, mod->priv->object, "onRequestFileMetadata", 2, args);
+	return call_module_method(mod->priv->ctx, mod->priv->object, "onRequestFileMetadata", 2, args);
 }
 
 static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst argv[]) {

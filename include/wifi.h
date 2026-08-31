@@ -37,7 +37,6 @@ int pak_wifi_is_enabled(struct PakNet *ctx);
 
 struct PakWiFiAdapter {
 	struct PakWiFiAdapterPriv *priv;
-	_pad_pointer pad_priv;
 	char name[32];
 	int is_active;
 };
@@ -54,7 +53,6 @@ int pak_wifi_request_scan(struct PakNet *ctx, struct PakWiFiAdapter *adapter);
 
 struct PakWiFiAp {
 	struct PakWiFiApPriv *priv;
-	_pad_pointer pad_priv;
 	char ssid[33];
 	char bssid[6];
 	enum PakWiFiBand band;
@@ -70,6 +68,7 @@ struct PakWiFiAp *pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAd
 /// Request to connect to access point
 int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *password);
 
+// TODO: This doesn't need to have fixed-length inline strings
 struct PakWiFiApFilter {
 	int has_ssid;
 	char ssid_pattern[64];

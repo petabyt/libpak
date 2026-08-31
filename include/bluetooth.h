@@ -45,7 +45,6 @@ int pak_bt_is_supported(struct PakBt *ctx, enum PakBtFeature feat);
 
 struct PakBtAdapter {
 	struct PakBtAdapterPriv *priv;
-	_pad_pointer pad_priv;
 	char address[64];
 	char name[64];
 	int powered;
@@ -58,7 +57,6 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter);
 /// Represents both a connected/non-connected device and advertisement
 struct PakBtDevice {
 	struct PakBtDevicePriv *priv;
-	_pad_pointer pad_priv;
 	int is_classic;
 	int is_connected;
 	int is_bonded;
@@ -100,7 +98,6 @@ unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice 
 
 struct PakGattService {
 	struct PakGattServicePriv *priv;
-	_pad_pointer pad_priv;
 	char uuid[UUID_STR_LENGTH];
 	uint16_t handle;
 };
@@ -121,7 +118,6 @@ static struct PakGattService *pak_bt_get_gatt_service_uuid(struct PakBt *ctx, st
 
 struct PakGattCharacteristic {
 	struct PakGattCharacteristicPriv *priv;
-	_pad_pointer pad_priv;
 	int flags;
 	char uuid[UUID_STR_LENGTH];
 	uint16_t handle;
@@ -163,7 +159,6 @@ int pak_bt_set_cccd(struct PakBt *ctx, struct PakGattCharacteristic *characteris
 
 struct PakGattDescriptor {
 	struct PakGattDescriptorPriv *priv;
-	_pad_pointer pad_priv;
 	char uuid[UUID_STR_LENGTH];
 	uint16_t handle;
 };

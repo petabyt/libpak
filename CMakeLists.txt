@@ -18,7 +18,7 @@ option(PAK_WASM "WAMR bindings" ON)
 set(LIBPAK_SOURCES src/common.c src/gc.c)
 
 if(PAK_QUICKJS)
-	list(APPEND LIBPAK_SOURCES src/bindings/quickjs_wifi.c src/bindings/quickjs_socket.c src/bindings/quickjs_runtime.c)
+	list(APPEND LIBPAK_SOURCES src/bindings/quickjs_wifi.c src/bindings/quickjs_bluetooth.c src/bindings/quickjs_socket.c src/bindings/quickjs_runtime.c)
 endif()
 if(PAK_WASM)
 	list(APPEND LIBPAK_SOURCES src/bindings/wasm.c)
@@ -58,7 +58,7 @@ elseif(LINUX)
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(DBUS IMPORTED_TARGET GLOBAL dbus-1)
 	pkg_check_modules(BLUETOOTH IMPORTED_TARGET GLOBAL bluez)
-	add_library(pak STATIC
+	add_library(pak SHARED
 		${LIBPAK_SOURCES}
 		src/linux/dbus.c
 		src/linux/bluez.c

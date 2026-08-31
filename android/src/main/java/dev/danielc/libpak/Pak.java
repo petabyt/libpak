@@ -161,9 +161,12 @@ public class Pak {
             }
         });
 
-        try {
-            perm.acquire();
-        } catch (Exception ignored) {}
+        cancellableRunnable.run(() -> {
+            try {
+                perm.acquire();
+            } catch (InterruptedException ignored) {}
+            return 0;
+        });
         return permissionResult == PackageManager.PERMISSION_GRANTED;
     }
 

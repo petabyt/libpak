@@ -11,7 +11,6 @@ option(PAK_INCLUDE_CLI "CLI program" ON)
 option(PAK_INCLUDE_WIFI "WiFi APIs" ON)
 option(PAK_INCLUDE_BT "Bluetooth APIs" ON)
 option(PAK_INCLUDE_RT "Runtime libraries" ON)
-option(PAK_INCLUDE_EXIF "EXIF Parser" ON)
 option(PAK_QUICKJS "QuickJS bindings" ON)
 option(PAK_WASM "WAMR bindings" ON)
 
@@ -22,9 +21,6 @@ if(PAK_QUICKJS)
 endif()
 if(PAK_WASM)
 	list(APPEND LIBPAK_SOURCES src/bindings/wasm.c)
-endif()
-if(PAK_INCLUDE_EXIF)
-	list(APPEND LIBPAK_SOURCES src/exif.c)
 endif()
 
 if(ANDROID)
@@ -37,7 +33,6 @@ if(ANDROID)
 		src/android/bluetooth.c
 		src/android/android.c
 		src/android/wifi.c
-		src/android/exif.c
 	)
 	find_library(log-lib log)
 	find_library(android-lib android)

@@ -3,7 +3,7 @@ import { BufferWriter, BufferReader } from "pak:buffer";
 import { Module } from "pak:runtime";
 
 export class Http {
-	static request(ip, path) {
+	static request(ip: string, path: string) {
 		 let socket = new HttpSocket(ip);
 		 socket.connect();
 		 let r = socket.request(path);
@@ -12,7 +12,7 @@ export class Http {
 	}
 }
 
-function hexdump(data) {
+function hexdump(data: Uint8Array) {
 	let str = "";
 	for (let i = 0; i < data.length; i++) {
 		str += data[i].toString(16) + " ";
@@ -21,16 +21,15 @@ function hexdump(data) {
 }
 
 export class HttpSocket {
-	ip;
-	fd;
-	port;
-	userAgent = "UserAgent";
-	constructor(ip) {
+	public ip: string;
+	public fd: number = -1;
+	public port: number = 80;
+	public userAgent = "UserAgent";
+	constructor(ip: string) {
           this.ip = ip;
-          this.port = 80;
 	}
 
-	connect(bindFunction = function(fd) {}) {
+	connect(bindFunction: (fd: number) => void = function(){}) {
           let fd = net.socket(net.AF_INET, net.SOCK_STREAM, net.IPPROTO_TCP);
           if (fd < 0) throw "socket()";
 
@@ -52,7 +51,7 @@ export class HttpSocket {
           net.close(this.fd);
 	}
 
-     request(path) {
+     request(path: string) {
           let content = "";
           let head = this.requestChunks(path, 2000, (buf, totalSize) => {
                for (let i = 0; i < buf.length; i++) {
@@ -62,7 +61,7 @@ export class HttpSocket {
           return [head, content];
      }
 
-     requestChunks(path, maxSize = 2000, handleContent) {
+     requestChunks(path: string, maxSize: number = 2000, handleContent: (buf: Uint8Array, totalSize: number) => void) {
           let writer = new BufferWriter();
           writer.addString("GET " + path + " HTTP/1.1\r\n");
           writer.addString("Accept-Encoding: gzip\r\n");
@@ -76,7 +75,7 @@ export class HttpSocket {
           }
 
           // Read at least header first so we can get content length and send it in chunks
-          let buffer = new Uint8Array();
+          let buffer = new Uint8Array(0);
           let reads = 0;
           while (buffer.length < 4096) {
                let temp1 = new Uint8Array(4096);

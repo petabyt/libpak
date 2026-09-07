@@ -21,7 +21,11 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     
-    "sourceMap": true
+    "sourceMap": true,
+
+    "paths": {
+      "pak:buffer": ["./src/buffer.ts"]
+    }
   },
   "include": [
     "src/**/*",

@@ -223,7 +223,7 @@ static const JSCFunctionListEntry socket_methods[] = {
 	JS_CFUNC_MAGIC_DEF("setsockopt", 4, generic_operation, M_SETSOCKOPT),
 	JS_CFUNC_MAGIC_DEF("getsockopt", 3, generic_operation, M_GETSOCKOPT),
 	JS_CFUNC_MAGIC_DEF("inet_pton", 3, generic_operation, M_INET_PTON),
-	JS_CFUNC_MAGIC_DEF("connect", 3, generic_operation, M_CONNECT),
+	JS_CFUNC_MAGIC_DEF("connect", 2, generic_operation, M_CONNECT),
 	JS_CFUNC_MAGIC_DEF("close", 1, generic_operation, M_CLOSE),
 	JS_CFUNC_MAGIC_DEF("select", 5, generic_operation, M_SELECT),
 	JS_CFUNC_MAGIC_DEF("read", 4, generic_operation, M_READ),

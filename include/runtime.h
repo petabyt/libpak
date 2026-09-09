@@ -7,44 +7,6 @@
 #include <wifi.h>
 #include <bluetooth.h>
 
-/// @addtogroup PakDevice
-/// @{
-// Photo class
-#define PAK_DEVICE_PROFESSIONAL_CAMERA "professional-camera"
-#define PAK_DEVICE_ACTION_CAMERA "action-camera"
-#define PAK_DEVICE_DASHCAM "dashcam"
-#define PAK_DEVICE_GENERIC_CAMERA "generic-camera"
-#define PAK_DEVICE_LENS "lens"
-#define PAK_DEVICE_WIFI_SD_CARD "wifi-sd-card"
-#define PAK_DEVICE_DOORBELL "doorbell"
-// Home class
-#define PAK_DEVICE_GENERIC_HOME_DEVICE "generic-home-device"
-#define PAK_DEVICE_DESK "desk"
-#define PAK_DEVICE_GENERIC_FURNITURE "generic-furniture"
-#define PAK_DEVICE_3D_PRINTER "3d-printer"
-// Accessory class
-#define PAK_DEVICE_HEADPHONES "headphones"
-#define PAK_DEVICE_EARBUDS "earbuds"
-#define PAK_DEVICE_SPEAKERS "speakers"
-#define PAK_DEVICE_GENERIC_AUDIO "generic-audio"
-#define PAK_DEVICE_SMART_GLASSES "smart-glasses"
-#define PAK_DEVICE_SMART_TV "smart-tv"
-#define PAK_DEVICE_SMARTWATCH "smartwatch"
-#define PAK_DEVICE_GENERIC_MEDICAL_WEARABLE "generic-medical-wearable"
-#define PAK_DEVICE_GENERIC_EXERCISE_MACHINE "generic-exercise-machine"
-// Non-photo gadget class
-#define PAK_DEVICE_POWER_TOOL "power-tool"
-#define PAK_DEVICE_GAME_CONTROLLER "game-controller"
-#define PAK_DEVICE_DRONE "drone"
-#define PAK_DEVICE_GENERIC_REMOTE_CONTROL "generic-remote-control"
-#define PAK_DEVICE_SCOOTER "scooter"
-#define PAK_DEVICE_BICYCLE "bicycle"
-#define PAK_DEVICE_GENERIC_RIDEABLE "generic-rideable"
-#define PAK_DEVICE_AUTOMOTIVE_INFOTAINMENT "automotive-infotainment"
-#define PAK_DEVICE_AUTOMOTIVE_DIAGNOSTIC "automotive-diagnostic"
-#define PAK_DEVICE_GENERIC_AUTOMOTIVE "generic-automotive"
-/// @}
-
 /// @addtogroup PakProperty
 /// @{
 #define PAK_PROP_NAME "name"
@@ -87,17 +49,19 @@ struct PakFileMetadata {
 	uint64_t file_size;
 	int image_width;
 	int image_height;
-	// should be 0 for landscape and 270 for portrait
+	// Should be 0 for landscape and 270 for portrait
 	int orientation;
 };
 
-/// A widget displayed on the dashboard that can show data or be manipulated by the user
+/// Info struct for a widget. Widgets can show data or be manipulated by the user
 struct PakWidget {
 	/// Human readable title for the widget
 	const char *title;
 	/// Determines where the widget should be placed
 	enum WidgetGroup {
 		PAK_GROUP_DEFAULT = 0,
+		PAK_GROUP_LIVEVIEW = 1,
+		PAK_GROUP_AUDIO = 2,
 	}group;
 	/// Set to true/nonzero to disable (grey out) this widget
 	int disabled;
@@ -109,6 +73,7 @@ struct PakWidget {
 		PAK_STRING = 4,
 		PAK_DROPDOWN = 5,
 		PAK_GRAPH = 6,
+		PAK_EQUALIZER = 7,
 	}type;
 	union SettingUnion {
 		struct PakSwitch {
@@ -128,6 +93,7 @@ struct PakWidget {
 		struct PakDropDown {
 			// NULL terminated cstring list
 			const char **list;
+			// If -1, then UI will show no item as selected
 			int index_value;
 		}dropdownv;
 		struct PakGraph {
@@ -137,9 +103,14 @@ struct PakWidget {
 			int *points;
 		}graphv;
 		struct PakEqualizer {
-			int n_bands;
-			const char **band_names;
-			const int **band_values;
+			// NULL terminated struct list
+			struct PakBand {
+				const char *name;
+				//int freq;
+				int value;
+				int min;
+				int max;
+			}*bands;
 		}equalizerv;
 	}u;
 };
@@ -155,23 +126,6 @@ struct PakSavedConnection {
 	/// Set to NULL if not used.
 	const uint8_t *aux_data;
 	unsigned int aux_data_length;
-};
-
-enum PakTransport {
-	/// Bluetooth classic and low-energy
-	PAK_BLUETOOTH = 1,
-	/// USB host access
-	PAK_USB = 2,
-	/// Connect to a WiFi access point
-	PAK_WIFI_AP = 3,
-	/// Expose a USB device through OTG mode
-	PAK_USB_DEVICE_MODE = 4,
-	/// Host an access point (hotspot) for something to connect to
-	PAK_HOST_WIFI_AP = 5,
-	/// Listen to/broadcast datagram packets on local network
-	PAK_LOCAL_NETWORK_UDP = 6,
-	/// Connect to internet service
-	PAK_INTERNET = 7,
 };
 
 enum PakScreen {
@@ -238,7 +192,8 @@ struct PakModule {
 	/// Request to try to initiate a connection over a network handle
 	int (*on_try_connect_wifi)(struct PakModule *, struct PakWiFiAdapter *handle, struct PakSavedConnection *saved, int job);
 	/// Request to try to initiate connection for a Bluetooth device
-	/// returns zero if device is supported and connetion established 
+	/// returns zero if device is supported and connection established
+	/// @param saved NULL if fresh connection, otherwise holds info for a previous connection
 	int (*on_try_connect_bluetooth)(struct PakModule *, struct PakBtDevice *handle, struct PakSavedConnection *saved, int job);
 	/// Request to try to initiate a connection for a USB device
 	int (*on_try_connect_usb)(struct PakModule *, libusb_device *dev, struct PakSavedConnection *saved, int job);
@@ -248,7 +203,7 @@ struct PakModule {
 	int (*on_idle_tick)(struct PakModule *, unsigned int us_since_last_tick);
 	/// On user requested disconnect
 	int (*on_disconnect)(struct PakModule *);
-	// Runs when switching to a new screen, or switching back to an previous screen.
+	/// Runs when switching to a new screen, or switching back to an previous screen.
 	int (*on_switch_screen)(struct PakModule *, int old_screen, int new_screen, int job);
 	/// Request entire contents of a file
 	/// send info back with pak_rt_add_file_contents
@@ -262,7 +217,9 @@ struct PakModule {
 	/// Request liveview frame
 	/// send liveview frame contents with pak_rt_add_file_contents
 	int (*on_request_liveview_frame)(struct PakModule *, int job, struct PakFileHandle *file);
-	/// Runs when a setting has been changed by 
+	///
+	int (*on_get_file_contents)(struct PakModule *, int job, struct PakFileHandle *file, void *data, unsigned int length, uint64_t offset, uint64_t total_size);
+	/// Runs when a setting has been changed by the runtime. This method should not update the widget.
 	int (*on_setting_changed)(struct PakModule *, int job, const char *name, struct PakWidget *setting);
 	/// On request to run unit test
 	int (*on_run_test)(struct PakModule *, int job);
@@ -301,7 +258,7 @@ int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file,
 /// Can be submitted in partial, when offset + length < total_size.
 /// total_size can also be zero if you don't know the length beforehand,
 /// but a terminating call must be made with length = 0
-int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, uint64_t offset, uint64_t total_size);
+int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *data, unsigned int length, uint64_t offset, uint64_t total_size);
 /// Registers a widget that is displayed in the UI and can be modified by the user
 /// @param widget set to NULL to delete widget
 int pak_rt_set_widget(struct PakModule *mod, const char *name, const struct PakWidget *widget);
@@ -309,8 +266,6 @@ int pak_rt_set_widget(struct PakModule *mod, const char *name, const struct PakW
 int pak_rt_is_job_cancelled(struct PakModule *mod, int job);
 /// Report a fatal error and prevent any more jobs from being issued
 void pak_rt_fatal_error(struct PakModule *mod, const char *fmt, ...);
-/// Submit error message for user to read for a non-fatal error on a job that's in progress
-void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);
 /// Enable or disable a screen
 int pak_rt_set_screen_supported(struct PakModule *mod, int screen, int v);
 /// Set the percent of a job's progress bar from 0-100.
@@ -354,4 +309,6 @@ __attribute__((unused)) const char *pak_rt_get_path(struct PakModule *mod, const
 __attribute__((unused)) int pak_rt_disconnect(struct PakModule *mod, const char *reason);
 /// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
 __attribute__((unused)) int pak_rt_enter_screen(struct PakModule *mod, int screen);
+/// Submit error message for user to read for a non-fatal error on a job that's in progress
+__attribute__((unused)) void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);
 #endif

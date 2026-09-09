@@ -137,7 +137,7 @@ void pak_debug_log(struct PakModule *mod, const char *fmt, ...) {
 
 int pak_rt_test_module(struct PakModule *mod) {
 	// runtime was not inited by pak_create_mod
-	mod->rt = malloc(sizeof(struct RuntimePriv));
+	mod->rt = calloc(1, sizeof(struct RuntimePriv));
 	mod->rt->current_job = 1;
 
 	struct RuntimePriv *r = mod->rt;

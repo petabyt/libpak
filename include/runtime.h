@@ -302,6 +302,8 @@ int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *fi
 int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *adapter, const char *url);
 /// TODO: Unfinished API
 int pak_rt_set_liveview_info(struct PakModule *mod, int width, int height, int fps);
+/// Get current time
+int pak_get_timestamp(struct PakTimestamp *ts);
 
 /// Get path for downloading a file
 __attribute__((unused)) const char *pak_rt_get_path(struct PakModule *mod, const char *filename);

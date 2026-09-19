@@ -27,7 +27,7 @@ if(ANDROID)
 	add_library(usb-1.0 STATIC
 		src/android/usb.c
 	)
-	target_include_directories(usb-1.0 PUBLIC ${PROJECT_SOURCE_DIR}/src/android)
+	target_include_directories(usb-1.0 PUBLIC ${PROJECT_SOURCE_DIR}/toolchain/include)
 	add_library(pak STATIC
 		${LIBPAK_SOURCES}
 		src/android/bluetooth.c

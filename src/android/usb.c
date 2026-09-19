@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
-#include "libusb.h"
+#include "../../toolchain/include/libusb.h"
 #include "ndk.h"
 
 struct libusb_context {
@@ -167,7 +167,7 @@ int libusb_get_config_descriptor(libusb_device *dev, uint8_t config_index, struc
 			ep->bDescriptorType = (uint8_t)(*env)->CallIntMethod(env, ep_obj, get_type_m);
 			ep->bEndpointAddress = (uint8_t)(*env)->CallIntMethod(env, ep_obj, get_addr_m);
 			ep->bmAttributes = (uint8_t)(*env)->CallIntMethod(env, ep_obj, get_dir_m);
-			ep->wMaxPacketSize = 0;
+			ep->wMaxPacketSize = 512;
 			ep->bInterval = 0;
 			ep->bRefresh = 0;
 			ep->bSynchAddress = 0;
@@ -315,4 +315,44 @@ int libusb_bulk_transfer(libusb_device_handle *dev, unsigned char endpoint,
 int libusb_control_transfer(libusb_device_handle *dev, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned char *data, uint16_t wLength, unsigned int timeout) {
 	printf("Not implemented yet\n");
 	abort();
+}
+
+int libusb_get_max_packet_size(libusb_device *dev, unsigned char endpoint) {
+	struct libusb_config_descriptor *config;
+	int r = libusb_get_config_descriptor(dev, 0, &config);
+	if (r < 0) return r;
+	int ret = LIBUSB_ERROR_NOT_FOUND;
+	for (int i = 0; i < config->interface[0].altsetting[0].bNumEndpoints; i++) {
+		const struct libusb_endpoint_descriptor *ep = &config->interface[0].altsetting[0].endpoint[i];
+		if (ep->bEndpointAddress == endpoint) {
+			ret = ep->wMaxPacketSize;
+			break;
+		}
+	}
+	libusb_free_config_descriptor(config);
+	return ret;
+}
+
+int libusb_set_interface_alt_setting(libusb_device_handle *dev_handle, int interface_number, int alternate_setting) {
+	(void)dev_handle; (void)interface_number; (void)alternate_setting;
+	return 0;
+}
+
+int libusb_clear_halt(libusb_device_handle *dev_handle, unsigned char endpoint) {
+	(void)dev_handle; (void)endpoint;
+	return 0;
+}
+
+int libusb_kernel_driver_active(libusb_device_handle *dev_handle, int interface_number) {
+	(void)dev_handle; (void)interface_number;
+	return 0;
+}
+
+int libusb_detach_kernel_driver(libusb_device_handle *dev_handle, int interface_number) {
+	(void)dev_handle; (void)interface_number;
+	return 0;
+}
+
+int libusb_interrupt_transfer(libusb_device_handle *dev, unsigned char endpoint, unsigned char *data, int length, int *transferred, unsigned int timeout) {
+	return -1;
 }

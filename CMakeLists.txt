@@ -17,10 +17,10 @@ option(PAK_WASM "WAMR bindings" ON)
 set(LIBPAK_SOURCES src/common.c src/gc.c)
 
 if(PAK_QUICKJS)
-	list(APPEND LIBPAK_SOURCES src/bindings/quickjs_wifi.c src/bindings/quickjs_bluetooth.c src/bindings/quickjs_socket.c src/bindings/quickjs_runtime.c)
+	list(APPEND LIBPAK_SOURCES src/quickjs/wifi.c src/quickjs/bluetooth.c src/quickjs/socket.c src/quickjs/runtime.c)
 endif()
 if(PAK_WASM)
-	list(APPEND LIBPAK_SOURCES src/bindings/wasm.c)
+	list(APPEND LIBPAK_SOURCES src/wasm/runtime.c)
 endif()
 
 if(ANDROID)
@@ -63,11 +63,12 @@ elseif(LINUX)
 	if(PAK_QUICKJS)
 		find_library(QUICKJS_LIB
 			NAMES quickjs qjs
+			PATHS /usr/local/lib /usr/local
 			PATH_SUFFIXES quickjs
 			REQUIRED
 		)
 		target_include_directories(pak PUBLIC /usr/include/quickjs)
-		target_link_libraries(pak PRIVATE ${QUICKJS_LIB} m)
+		target_link_libraries(pak PUBLIC ${QUICKJS_LIB} m)
 	endif()
 	if(PAK_WASM)
 		find_library(WAMR_LIB

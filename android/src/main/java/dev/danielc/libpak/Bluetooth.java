@@ -414,6 +414,7 @@ public class Bluetooth {
         public int setCccd(BluetoothGattCharacteristic characteristic, int value) {
             try {
                 BluetoothGattDescriptor desc = characteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"));
+                if (desc == null) return -1;
                 desc.setValue(new byte[]{(byte) value, 0});
                 if (gatt.writeDescriptor(desc)) {
                     synchronized (callback.gattDescriptorWrote) {
@@ -463,6 +464,7 @@ public class Bluetooth {
                     }
                     return 0;
                 }
+                Log.d(TAG, "readCharacteristic");
                 return -1;
             } catch (SecurityException e) {
                 return Pak.Error.PERMISSION;
@@ -566,6 +568,8 @@ public class Bluetooth {
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             super.onCharacteristicRead(gatt, characteristic, status);
+            Log.d(TAG, "characteristicRead");
+            cachedUpdates.add(new CachedCharUpdates(characteristic, characteristic.getValue()));
             synchronized (gattCharacteristicRead) {
                 gattCharacteristicRead.notify();
             }

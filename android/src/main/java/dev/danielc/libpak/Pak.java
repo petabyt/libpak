@@ -130,7 +130,11 @@ public class Pak {
 
     public static void onPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
         Log.d(TAG, "onPermissionResult");
-        permissionResult = grantResults[0];
+        if (grantResults.length == 0) {
+            permissionResult = PackageManager.PERMISSION_DENIED;
+        } else {
+            permissionResult = grantResults[0];
+        }
         perm.release();
     }
 

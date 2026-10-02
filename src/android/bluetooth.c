@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <bluetooth.h>
 #include <jni.h>
+#include <android/log.h>
 #include "ndk.h"
 #include "../gc.h"
 
@@ -38,13 +39,23 @@ struct PakGattCharacteristicPriv {
 	jobject obj;
 };
 
+static int read_uuid(JNIEnv *env, jobject uuid_o, char uuid[UUID_STR_LENGTH]) {
+	(*env)->PushLocalFrame(env, 10);
+	jstring str = (*env)->CallObjectMethod(env, uuid_o, (*env)->GetMethodID(env, (*env)->FindClass(env, "java/util/UUID"), "toString", "()Ljava/lang/String;"));
+	const char *s = (*env)->GetStringUTFChars(env, str, NULL);
+	strncpy(uuid, s, UUID_STR_LENGTH);
+	(*env)->ReleaseStringUTFChars(env, str, s);
+	(*env)->PopLocalFrame(env, NULL);
+	return 0;
+}
+
 static int setup_listener(struct PakBtDevice *dev) {
 	JNIEnv *env = get_jni_env();
 	if (!dev->priv->setup_gatt_listener) {
 		(*env)->PushLocalFrame(env, 10);
 
-		jbyteArray struct_o = (*env)->NewByteArray(env, (jsize) sizeof(*dev));
-		(*env)->SetByteArrayRegion(env, struct_o, 0, (jsize) sizeof(*dev), (const jbyte *)dev);
+		jbyteArray struct_o = (*env)->NewByteArray(env, (jsize) sizeof(struct PakBtDevice *));
+		(*env)->SetByteArrayRegion(env, struct_o, 0, (jsize) sizeof(struct PakBtDevice *), (const jbyte *)&dev);
 
 		jclass device_c = (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device");
 		jmethodID connect_m = (*env)->GetMethodID(env, device_c, "connectGattNative", "([B)I");
@@ -63,23 +74,32 @@ int pak_bt_set_device_callback(struct PakBt *ctx, struct PakBtDevice *device, pa
 	return 0;
 }
 
-static int get_struct_priv(JNIEnv *env, struct PakBtDevice *dev, jobject listener) {
-	jfieldID field = (*env)->GetFieldID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$NativeBluetoothGattCallback"), "struct", "[B");
-	jobject struct_o = (*env)->GetObjectField(env, listener, field);
-	(*env)->GetByteArrayRegion(env, struct_o, 0, (jsize)sizeof(struct PakBtDevice), (jbyte *)dev);
-	return 0;
+struct PakGattCharacteristic *characteristic_from_jobject(JNIEnv *env, struct PakBt *ctx, jobject chr_o) {
+	struct PakGattCharacteristic *characteristic = calloc(1, sizeof(struct PakGattCharacteristic));
+
+	jobject uuid_o = (*env)->CallObjectMethod(env, chr_o, (*env)->GetMethodID(env, (*env)->FindClass(env, "android/bluetooth/BluetoothGattCharacteristic"), "getUuid", "()Ljava/util/UUID;"));
+	read_uuid(env, uuid_o, characteristic->uuid);
+
+	characteristic->priv = calloc(1, sizeof(struct PakGattCharacteristicPriv));
+	pak_gc_add(&ctx->gc, GATT_CHR, characteristic);
+	characteristic->priv->obj = (*env)->NewGlobalRef(env, chr_o);
+	return characteristic;
 }
 
 JNIEXPORT void JNICALL Java_dev_danielc_libpak_Bluetooth_00024NativeBluetoothGattCallback_onEvent(JNIEnv *env, jobject thiz, jint id, jobject chr) {
 	set_jni_env_ctx(env, NULL);
 	(*env)->PushLocalFrame(env, 10);
-	struct PakBtDevice dev;
+	struct PakBtDevice *dev = NULL;
 	jfieldID field = (*env)->GetFieldID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$NativeBluetoothGattCallback"), "struct", "[B");
 	jobject struct_o = (*env)->GetObjectField(env, thiz, field);
-	(*env)->GetByteArrayRegion(env, struct_o, 0, (jsize)sizeof(struct PakBtDevice), (jbyte *)&dev);
+	(*env)->GetByteArrayRegion(env, struct_o, 0, (jsize)sizeof(struct PakBtDevice *), (jbyte *)&dev);
 
-	if (dev.priv->cb != NULL) {
-		dev.priv->cb(dev.priv->ctx, id, &dev, NULL, dev.priv->cb_arg);
+//	__android_log_print(ANDROID_LOG_ERROR, __func__, "%p %p", dev, dev->priv->ctx);
+
+	if (dev->priv->cb != NULL) {
+		struct PakGattCharacteristic *chr2 = (chr == NULL) ? NULL : characteristic_from_jobject(env, dev->priv->ctx, chr);
+		dev->priv->cb(dev->priv->ctx, id, dev, chr2, dev->priv->cb_arg);
+		if (chr != NULL) pak_bt_unref_gatt_characteristic(dev->priv->ctx, chr2);
 	}
 
 	(*env)->PopLocalFrame(env, NULL);
@@ -144,6 +164,7 @@ struct PakBtDevice *pak_bt_device_from_jobject(JNIEnv *env, struct PakBt *ctx, j
 
 	struct PakBtDevice *device = calloc(sizeof(struct PakBtDevice), 1);
 	device->priv = calloc(1, sizeof(struct PakBtDevicePriv));
+	device->priv->ctx = ctx;
 	pak_gc_add_ex(&ctx->gc, BT_DEVICE, device, free_dev, ctx);
 	device->priv->device = (*env)->NewGlobalRef(env, dev_o);
 	jfieldID dev_f = (*env)->GetFieldID(env, (*env)->FindClass(env, "dev/danielc/libpak/Bluetooth$Device"), "dev", "Landroid/bluetooth/BluetoothDevice;");
@@ -353,16 +374,6 @@ int pak_bt_close_socket(struct PakBtSocket *conn) {
 	return -1;
 }
 
-static int read_uuid(JNIEnv *env, jobject uuid_o, char uuid[UUID_STR_LENGTH]) {
-	(*env)->PushLocalFrame(env, 10);
-	jstring str = (*env)->CallObjectMethod(env, uuid_o, (*env)->GetMethodID(env, (*env)->FindClass(env, "java/util/UUID"), "toString", "()Ljava/lang/String;"));
-	const char *s = (*env)->GetStringUTFChars(env, str, NULL);
-	strncpy(uuid, s, UUID_STR_LENGTH);
-	(*env)->ReleaseStringUTFChars(env, str, s);
-	(*env)->PopLocalFrame(env, NULL);
-	return 0;
-}
-
 struct PakGattService *pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDevice *device, int index) {
 	JNIEnv *env = get_jni_env();
 	int rc = setup_listener(device);
@@ -414,14 +425,7 @@ struct PakGattCharacteristic *pak_bt_get_gatt_characteristic(struct PakBt *ctx, 
 		return NULL;
 	}
 
-	struct PakGattCharacteristic *characteristic = malloc(sizeof(struct PakGattCharacteristic));
-
-	jobject uuid_o = (*env)->CallObjectMethod(env, chr_o, (*env)->GetMethodID(env, (*env)->FindClass(env, "android/bluetooth/BluetoothGattCharacteristic"), "getUuid", "()Ljava/util/UUID;"));
-	read_uuid(env, uuid_o, characteristic->uuid);
-
-	characteristic->priv = calloc(1, sizeof(struct PakGattCharacteristicPriv));
-	pak_gc_add(&ctx->gc, GATT_CHR, characteristic);
-	characteristic->priv->obj = (*env)->NewGlobalRef(env, chr_o);
+	struct PakGattCharacteristic *characteristic = characteristic_from_jobject(env, ctx, chr_o);
 	characteristic->priv->device = service->priv->device;
 	characteristic->priv->service = service;
 

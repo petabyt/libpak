@@ -51,6 +51,7 @@ struct PakFileMetadata {
 	int image_height;
 	// Should be 0 for landscape and 270 for portrait
 	int orientation;
+	const char *created_date;
 };
 
 /// Info struct for a widget. Widgets can show data or be manipulated by the user
@@ -66,12 +67,14 @@ struct PakWidget {
 	/// Set to true/nonzero to disable (grey out) this widget
 	int disabled;
 	enum WidgetType {
+		// on_setting_changed is called when clicked
 		PAK_BUTTON = 0,
 		PAK_BOOLEAN = 1,
 		PAK_INT = 2,
 		PAK_SLIDER = 3,
 		PAK_STRING = 4,
 		PAK_DROPDOWN = 5,
+		// on_setting_changed won't be called for this widget
 		PAK_GRAPH = 6,
 		PAK_EQUALIZER = 7,
 	}type;

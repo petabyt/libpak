@@ -3,9 +3,6 @@
 #define LIBPAK_H
 #include <stdint.h>
 
-// Place after pointer for abi compatible packed structs
-typedef char _pad_pointer[(sizeof(uintptr_t) - sizeof(uint32_t)) ? 4 : 0];
-
 enum PakErrorCode {
 	PAK_ERR_NON_FATAL = -1,
 	/// IO or protocol error

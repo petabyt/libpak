@@ -24,23 +24,23 @@ if(PAK_WASM)
 endif()
 
 if(ANDROID)
-	add_library(usb-1.0 STATIC
-		src/android/usb.c
-	)
-	target_include_directories(usb-1.0 PUBLIC ${PROJECT_SOURCE_DIR}/toolchain/include)
+#	add_library(usb-1.0 STATIC
+#		src/android/usb.c
+#	)
+#	target_include_directories(usb-1.0 PUBLIC ${PROJECT_SOURCE_DIR}/toolchain/include)
 	add_library(pak STATIC
 		${LIBPAK_SOURCES}
-		src/android/bluetooth.c
-		src/android/android.c
-		src/android/wifi.c
+#		src/android/bluetooth.c
+#		src/android/android.c
+#		src/android/wifi.c
 	)
-	find_library(log-lib log)
-	find_library(android-lib android)
-	target_link_libraries(pak PRIVATE
-		${log-lib}
-		${android-lib}
-		usb-1.0
-	)
+#	find_library(log-lib log)
+#	find_library(android-lib android)
+#	target_link_libraries(pak PRIVATE
+#		${log-lib}
+#		${android-lib}
+#		usb-1.0
+#	)
 	if(PAK_QUICKJS AND TARGET qjs)
 		target_link_libraries(pak PRIVATE qjs)
 	endif()

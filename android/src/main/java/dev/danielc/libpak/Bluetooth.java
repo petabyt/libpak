@@ -180,7 +180,7 @@ public class Bluetooth {
                     CompanionDeviceManager deviceManager = (CompanionDeviceManager)Pak.getActivity().getSystemService(Context.COMPANION_DEVICE_SERVICE);
                     try {
                         if (!deviceManager.removeBond(associationInfo.getId())) {
-                            Log.d(TAG, "removeBond failuree");
+                            Log.e(TAG, "removeBond failure");
                             return Pak.Error.NON_FATAL;
                         }
                         synchronized (bondSignal) {
@@ -228,7 +228,7 @@ public class Bluetooth {
                 Method m = dev.getClass().getMethod("isConnected");
                 return (boolean)m.invoke(dev);
             } catch (Exception e) {
-                Log.d(TAG, e.getMessage());
+                Log.e(TAG, e.getMessage());
                 return false;
             }
         }
@@ -317,13 +317,13 @@ public class Bluetooth {
             }
             UUID u = findServiceUuid(uuid);
             if (u == null) {
-                Log.d(TAG, "UUID not found");
+                Log.e(TAG, "UUID not found");
                 throw new Exception("UUID not found");
             }
             try {
                 return dev.createInsecureRfcommSocketToServiceRecord(u);
             } catch (IOException e) {
-                Log.d(TAG, e.toString());
+                Log.e(TAG, e.toString());
                 throw e;
             }
         }
@@ -333,7 +333,7 @@ public class Bluetooth {
             try {
                 return gatt.getServices().get(index);
             } catch (Exception e) {
-                Log.d(TAG, "getServices fail: " + e.getMessage());
+                Log.e(TAG, "getServices fail: " + e.getMessage());
                 return null;
             }
         }
@@ -351,7 +351,7 @@ public class Bluetooth {
                     keyMissingFromBonding = false;
                     if (dev.getBondState() == BluetoothDevice.BOND_NONE) {
                         if (!dev.createBond()) {
-                            Log.d(TAG, "createBond failed");
+                            Log.e(TAG, "createBond failed");
                             return Pak.Error.IO;
                         }
                         if (verbose) Log.d(TAG, "Waiting for bond callback");
@@ -383,7 +383,7 @@ public class Bluetooth {
                         callback.connectSignal.wait(5000);
                     }
                     if (!isGattConnected) {
-                        Log.d(TAG, "connectGatt failed after timeout");
+                        Log.e(TAG, "connectGatt failed after timeout");
                         return Pak.Error.NO_CONNECTION;
                     }
                     //gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
@@ -464,7 +464,7 @@ public class Bluetooth {
                     }
                     return 0;
                 }
-                Log.d(TAG, "readCharacteristic");
+                Log.e(TAG, "readCharacteristic");
                 return -1;
             } catch (SecurityException e) {
                 return Pak.Error.PERMISSION;
@@ -476,7 +476,7 @@ public class Bluetooth {
             if (verbose) Log.d(TAG, "Write " + Arrays.toString(data) + " to " + characteristic.getUuid().toString());
             try {
                 if (!characteristic.setValue(data)) {
-                    Log.d(TAG, "setValue");
+                    Log.e(TAG, "setValue");
                     return Pak.Error.UNDEFINED;
                 }
                 if (gatt.writeCharacteristic(characteristic)) {

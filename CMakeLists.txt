@@ -20,7 +20,7 @@ if(PAK_QUICKJS)
 	list(APPEND LIBPAK_SOURCES src/quickjs/wifi.c src/quickjs/bluetooth.c src/quickjs/socket.c src/quickjs/runtime.c)
 endif()
 if(PAK_WASM)
-	list(APPEND LIBPAK_SOURCES src/wasm/runtime.c)
+	list(APPEND LIBPAK_SOURCES src/wasm/runtime.c src/wasm/printf.c src/wasm/pointer_table.c src/wasm/libusb.c)
 endif()
 
 if(ANDROID)
@@ -39,6 +39,7 @@ if(ANDROID)
 	target_link_libraries(pak PRIVATE
 		${log-lib}
 		${android-lib}
+		usb-1.0
 	)
 	if(PAK_QUICKJS AND TARGET qjs)
 		target_link_libraries(pak PRIVATE qjs)
@@ -53,13 +54,14 @@ elseif(LINUX)
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(DBUS IMPORTED_TARGET GLOBAL dbus-1)
 	pkg_check_modules(BLUETOOTH IMPORTED_TARGET GLOBAL bluez)
+	pkg_check_modules(LIBUSB IMPORTED_TARGET GLOBAL libusb-1.0)
 	add_library(pak SHARED
 		${LIBPAK_SOURCES}
 		src/linux/dbus.c
 		src/linux/bluez.c
 		src/linux/networkmanager.c
 	)
-	target_link_libraries(pak PRIVATE PkgConfig::DBUS PkgConfig::BLUETOOTH)
+	target_link_libraries(pak PRIVATE PkgConfig::DBUS PkgConfig::BLUETOOTH PkgConfig::LIBUSB)
 	if(PAK_QUICKJS)
 		find_library(QUICKJS_LIB
 			NAMES quickjs qjs

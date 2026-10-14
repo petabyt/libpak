@@ -300,6 +300,9 @@ const char *pak_rt_get_client_name(void);
 /// Covers 'Bluetooth -> WiFi' handover case common in some devices
 /// onTryConnectWiFi will be called
 int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter, const char *setup_option);
+/// Shows a message that will popup to the user.
+int pak_rt_add_user_instruction(struct PakModule *mod, const char *message);
+
 /// Adds a RTSP livestream source that will be independently managed by the runtime.
 /// on_request_liveview_frame won't be called 
 int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *adapter, const char *url);
@@ -307,6 +310,9 @@ int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *ada
 int pak_rt_set_liveview_info(struct PakModule *mod, int width, int height, int fps);
 /// Get current time
 int pak_get_timestamp(struct PakTimestamp *ts);
+/// @brief Get current location
+/// @returns NULL if user denied permission/not available
+int pak_get_location(struct PakModule *mod, struct PakLocation *coords);
 
 /// Get path for downloading a file
 __attribute__((unused)) const char *pak_rt_get_path(struct PakModule *mod, const char *filename);

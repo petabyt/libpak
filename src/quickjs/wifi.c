@@ -183,7 +183,7 @@ static int module_wifi(JSContext *ctx, JSModuleDef *m) {
 	JS_SetPropertyFunctionList(ctx, proto, wifi_methods, sizeof(wifi_methods) / sizeof(wifi_methods[0]));
 	JS_SetClassProto(ctx, wifi_class_id, proto);
 
-	JSValue class = JS_NewCFunction2(ctx, js_wifi_constructor, class_name, 5, JS_CFUNC_constructor, 0);
+	JSValue class = JS_NewCFunction2(ctx, js_wifi_constructor, class_name, 0, JS_CFUNC_constructor, 0);
 	JS_SetConstructor(ctx, class, proto);
 
 	JS_SetModuleExport(ctx, m, class_name, class);

@@ -11,10 +11,13 @@
 #include "buffer_js.h"
 #include "http_js.h"
 
+JSModuleDef *js_init_module_bluetooth(JSContext *ctx, const char *module_name);
 JSModuleDef *js_init_module_socket(JSContext *ctx, const char *module_name);
 JSModuleDef *js_init_module_wifi(JSContext *ctx, const char *module_name);
 
+JSValue pak_js_create_device(JSContext *ctx, JSValue bt, struct PakBtDevice *dev);
 JSValue pak_js_create_adapter(JSContext *ctx, JSValue wifi, struct PakWiFiAdapter *adapter);
+JSValue pak_js_create_bt_context(JSContext *ctx, struct PakBt *bt_ctx);
 JSValue pak_js_create_wifi_context(JSContext *ctx, struct PakNet *wifi_ctx);
 
 __attribute__((weak))
@@ -294,6 +297,20 @@ static int on_try_connect_wifi(struct PakModule *mod, struct PakWiFiAdapter *han
 	return rc;
 }
 
+static int on_try_connect_bluetooth(struct PakModule *mod, struct PakBtDevice *handle, struct PakSavedConnection *saved, int job) {
+	JS_UpdateStackTop(mod->priv->rt);
+	JSValue dev = JS_GetPropertyStr(mod->priv->ctx, mod->priv->object, "bt");
+	JSValue adapter = pak_js_create_device(mod->priv->ctx, dev, handle);
+	JS_FreeValue(mod->priv->ctx, dev);
+	JSValue args[] = {
+		adapter,
+		JS_UNDEFINED,
+		JS_NewInt32(mod->priv->ctx, job),
+	};
+	int rc = call_module_method(mod->priv->ctx, mod->priv->object, "onTryConnectBluetooth", 3, args);
+	return rc;
+}
+
 static int on_find_connection(struct PakModule *mod, int job) {
 	JS_UpdateStackTop(mod->priv->rt);
 	JSValue args[] = {
@@ -377,6 +394,7 @@ static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, in
 	mod->free = on_free;
 	mod->on_run_test = on_run_test;
 	mod->on_try_connect_wifi = on_try_connect_wifi;
+	mod->on_try_connect_bluetooth = on_try_connect_bluetooth;
 	mod->on_find_connection = on_find_connection;
 	mod->on_disconnect = on_disconnect;
 	mod->on_switch_screen = on_switch_screen;
@@ -389,6 +407,7 @@ static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, in
 	mod->priv->ctx = ctx;
 
 	JS_SetPropertyStr(ctx, mod->priv->object, "wifi", pak_js_create_wifi_context(ctx, mod->net));
+	JS_SetPropertyStr(ctx, mod->priv->object, "bt", pak_js_create_bt_context(ctx, mod->bt));
 
 	JS_SetOpaque(obj, mod);
 	
@@ -516,6 +535,7 @@ int setup_quickjs_module(struct PakModule *mod, char *file_contents, unsigned in
 	JS_SetContextOpaque(ctx, mod);
 	js_std_add_helpers(ctx, 0, NULL);
 
+	JS_AddModuleExport(ctx, js_init_module_bluetooth(ctx, "pak:bt"), "Bluetooth");
 	JS_AddModuleExport(ctx, js_init_module_wifi(ctx, "pak:wifi"), "WiFi");
 	JS_AddModuleExport(ctx, js_init_module_pak_runtime(ctx, "pak:runtime"), "Module");
 	js_init_module_socket(ctx, "c:socket");

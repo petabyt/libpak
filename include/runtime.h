@@ -67,14 +67,14 @@ struct PakWidget {
 	/// Set to true/nonzero to disable (grey out) this widget
 	int disabled;
 	enum WidgetType {
-		// on_setting_changed is called when clicked
+		// on_widget_updated is called when clicked
 		PAK_BUTTON = 0,
 		PAK_BOOLEAN = 1,
-		PAK_INT = 2,
+		PAK_NUMBER = 2,
 		PAK_SLIDER = 3,
-		PAK_STRING = 4,
-		PAK_DROPDOWN = 5,
-		// on_setting_changed won't be called for this widget
+		PAK_TEXTBOX = 4,
+		PAK_COMBOBOX = 5,
+		// on_widget_updated won't be called for this widget
 		PAK_GRAPH = 6,
 		PAK_EQUALIZER = 7,
 	}type;
@@ -84,7 +84,7 @@ struct PakWidget {
 		}boolv;
 		struct PakNumber {
 			int v;
-		}intv;
+		}numberv;
 		struct PakSlider {
 			int v;
 			int min;
@@ -92,13 +92,13 @@ struct PakWidget {
 		}slider;
 		struct PakTextBox {
 			const char *value;
-		}stringv;
-		struct PakDropDown {
+		}textboxv;
+		struct PakComboBox {
 			// NULL terminated cstring list
 			const char **list;
 			// If -1, then UI will show no item as selected
 			int index_value;
-		}dropdownv;
+		}comboboxv;
 		struct PakGraph {
 			const char *x_axis_name;
 			const char *y_axis_name;
@@ -220,10 +220,10 @@ struct PakModule {
 	/// Request liveview frame
 	/// send liveview frame contents with pak_rt_add_file_contents
 	int (*on_request_liveview_frame)(struct PakModule *, int job, struct PakFileHandle *file);
-	///
+	/// Handle file uploading and incoming data
 	int (*on_get_file_contents)(struct PakModule *, int job, struct PakFileHandle *file, void *data, unsigned int length, uint64_t offset, uint64_t total_size);
-	/// Runs when a setting has been changed by the runtime. This method should not update the widget.
-	int (*on_setting_changed)(struct PakModule *, int job, const char *name, struct PakWidget *setting);
+	/// Runs when a setting has been changed by the user. This method should not update the widget.
+	int (*on_widget_updated)(struct PakModule *, int job, const char *name, struct PakWidget *setting);
 	/// On request to run unit test
 	int (*on_run_test)(struct PakModule *, int job);
 	/// Process an arbitrary command
@@ -302,24 +302,23 @@ const char *pak_rt_get_client_name(void);
 int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter, const char *setup_option);
 /// Shows a message that will popup to the user.
 int pak_rt_add_user_instruction(struct PakModule *mod, const char *message);
-
-/// Adds a RTSP livestream source that will be independently managed by the runtime.
-/// on_request_liveview_frame won't be called 
-int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *adapter, const char *url);
-/// TODO: Unfinished API
-int pak_rt_set_liveview_info(struct PakModule *mod, int width, int height, int fps);
 /// Get current time
 int pak_get_timestamp(struct PakTimestamp *ts);
 /// @brief Get current location
 /// @returns NULL if user denied permission/not available
 int pak_get_location(struct PakModule *mod, struct PakLocation *coords);
+/// Adds a RTSP livestream source that will be independently managed by the runtime.
+/// on_request_liveview_frame won't be called
+int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *adapter, const char *url);
+/// TODO: Unfinished API
+int pak_rt_set_liveview_info(struct PakModule *mod, int width, int height, int fps);
 
 /// Get path for downloading a file
-__attribute__((unused)) const char *pak_rt_get_path(struct PakModule *mod, const char *filename);
+__attribute__((deprecated)) const char *pak_rt_get_path(struct PakModule *mod, const char *filename);
 /// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
-__attribute__((unused)) int pak_rt_disconnect(struct PakModule *mod, const char *reason);
+__attribute__((deprecated)) int pak_rt_disconnect(struct PakModule *mod, const char *reason);
 /// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
-__attribute__((unused)) int pak_rt_enter_screen(struct PakModule *mod, int screen);
+__attribute__((deprecated)) int pak_rt_enter_screen(struct PakModule *mod, int screen);
 /// Submit error message for user to read for a non-fatal error on a job that's in progress
-__attribute__((unused)) void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);
+__attribute__((deprecated)) void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);
 #endif

@@ -71,6 +71,8 @@ pak_rt_set_progress_bar
 pak_rt_get_setup_option
 pak_rt_is_job_cancelled
 pak_rt_set_session_property_int
+pak_rt_add_user_instruction
+pak_get_timestamp
 
 pak_bt_close_socket
 pak_bt_connect_to_service_channel

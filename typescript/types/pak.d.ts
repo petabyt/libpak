@@ -20,6 +20,7 @@ declare module "pak:runtime" {
 
 	export class Module {
 		onTryConnectWiFi(adapter: import("pak:wifi").WiFiAdapter, saved: ArrayBuffer, job: number): void;
+		onTryConnectBluetooth(device: import("pak:bt").BluetoothDevice, saved: ArrayBuffer, job: number): void;
 		onFindConnection(job: number): void;
 		onDisconnect(): void;
 		onSwitchScreen(oldScreen: number, newScreen: number, job: number): void;

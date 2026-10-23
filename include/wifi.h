@@ -73,8 +73,8 @@ struct PakWiFiApFilter {
 	int has_ssid;
 	char ssid_pattern[64];
 	int has_bssid;
-	char bssid_mask[6];
-	char bssid[6];
+	char bssid_mask[32];
+	char bssid[32];
 	int has_password;
 	char password[64];
 	int has_band;

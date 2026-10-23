@@ -44,7 +44,7 @@ enum PakTransport {
 	PAK_BLUETOOTH = 1,
 	/// USB host access
 	PAK_USB = 2,
-	/// Connect to a WiFi access point
+	/// Connect to a WiFi access point (station mode)
 	PAK_WIFI_AP = 3,
 	/// Expose a USB device through OTG mode
 	PAK_USB_DEVICE_MODE = 4,

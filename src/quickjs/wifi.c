@@ -108,20 +108,16 @@ static int connected(struct PakNet *ctx, struct PakWiFiAdapter *adapter, void *a
 static JSValue wifi_request_connection(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
 	struct PakNet *wifi_ctx = JS_GetOpaque(this_val, wifi_class_id);
 
-	struct PakWiFiApFilter spec;
+	char ssid_cstr[64], password_cstr[64];
+
+	struct PakWiFiApFilter spec = {0};
 	JSValue ssid = JS_GetPropertyStr(ctx, argv[0], "ssidPattern");
-	if (JS_IsUndefined(ssid)) {
-		spec.has_ssid = 0;
-	} else {
-		spec.has_ssid = 1;
-		strlcpy(spec.ssid_pattern, JS_ToCString(ctx, ssid), sizeof(spec.ssid_pattern));
+	if (JS_IsString(ssid)) {
+		spec.ssid_pattern = JS_ToCString(ctx, ssid);
 	}
 	JSValue password = JS_GetPropertyStr(ctx, argv[0], "password");
-	if (JS_IsUndefined(password)) {
-		spec.has_password = 0;
-	} else {
-		spec.has_password = 1;
-		strlcpy(spec.password, JS_ToCString(ctx, password), sizeof(spec.password));
+	if (JS_IsString(password)) {
+		spec.password = JS_ToCString(ctx, password);
 	}
 
 	struct RequestConnectionPriv *temp_priv = malloc(sizeof(struct RequestConnectionPriv));

@@ -111,9 +111,10 @@ export class BufferWriter {
 		return i;
 	}
 
-	addString(s: string, nullTerminate = false) {
-		this.offset += this.setString(this.offset, s, nullTerminate);
-	}
+	addString(s: string, nullTerminate = false) { this.offset += this.setString(this.offset, s, nullTerminate); }
+	addUint32(v: number) { this.setUint32(this.offset, v); this.offset += 4; }
+	addUint16(v: number) { this.setUint16(this.offset, v); this.offset += 2; }
+	addUint8(v: number) { this.setUint8(this.offset, v); this.offset += 1; }
 
 	toString() {
 		let s = "";

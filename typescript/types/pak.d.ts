@@ -18,16 +18,18 @@ declare module "pak:runtime" {
 		| { type: "slider"; value: number; min: number; max: number };
 	export type Widget = BaseWidget & WidgetTypeProps;
 
+	type MaybeAsync = void | Promise<void>;
+
 	export class Module {
-		onTryConnectWiFi(adapter: import("pak:wifi").WiFiAdapter, saved: ArrayBuffer, job: number): void;
-		onTryConnectBluetooth(device: import("pak:bt").BluetoothDevice, saved: ArrayBuffer, job: number): void;
-		onFindConnection(job: number): void;
-		onDisconnect(): void;
-		onSwitchScreen(oldScreen: number, newScreen: number, job: number): void;
-		onRequestFileThumbnail(job: number, handle: FileHandle): void;
-		onRequestFileMetadata(job: number, handle: FileHandle): void;
-		onRequestFileContents(job: number, handle: FileHandle): void;
-		onIdleTick(sinceLastTick: number): void;
+		onTryConnectWiFi(adapter: import("pak:wifi").WiFiAdapter, saved: ArrayBuffer, job: number): MaybeAsync;
+		onTryConnectBluetooth(device: import("pak:bt").BluetoothDevice, saved: ArrayBuffer, job: number): MaybeAsync;
+		onFindConnection(job: number): MaybeAsync;
+		onDisconnect(): MaybeAsync;
+		onSwitchScreen(oldScreen: number, newScreen: number, job: number): MaybeAsync;
+		onRequestFileThumbnail(job: number, handle: FileHandle): MaybeAsync;
+		onRequestFileMetadata(job: number, handle: FileHandle): MaybeAsync;
+		onRequestFileContents(job: number, handle: FileHandle): MaybeAsync;
+		onIdleTick(sinceLastTick: number): MaybeAsync;
 
 		static export(mod: Module): void;
 

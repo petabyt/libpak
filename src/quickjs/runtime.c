@@ -269,6 +269,12 @@ static int call_module_method(struct JSContext *ctx, JSValue obj, const char *na
 		dump_exception(ctx);
 		rc = -1;
 	}
+	// Workaround to tell if JSValue is a promise or not
+	if (JS_PromiseState(ctx, rv) != -1) {
+		while (JS_IsJobPending(JS_GetRuntime(ctx))) {
+			JS_ExecutePendingJob(JS_GetRuntime(ctx), &ctx);
+		}
+	}
 	for (int i = 0; i < argc; i++) {
 		JS_FreeValue(ctx, argv[i]);
 	}

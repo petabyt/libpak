@@ -22,7 +22,7 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 		return -1;
 	}
 
-	if (spec->has_ssid) {
+	if (spec->ssid_pattern != NULL) {
 		if (regcomp(&regex, spec->ssid_pattern, 0)) {
 			pak_error("regcomp\n");
 			return -1;

@@ -1,5 +1,6 @@
 // Extras, not runtime stuff
 #include <stdint.h>
+#include "runtime.h"
 
 /// Initialize QuickJS wrapper around PakModule
 int setup_quickjs_module(struct PakModule *mod, char *file_contents, unsigned int length);

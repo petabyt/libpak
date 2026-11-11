@@ -6,7 +6,7 @@
 struct PakNet;
 
 enum PakWiFiFeature {
-	// Get arbitrary list of access points
+	/// Getting arbitrary list of access points
 	PAK_SUPPORT_GETTING_AP_LIST = 1,
 	/// OS WiFi pairing prompt supported
 	PAK_SUPPORT_ANDROID_REQUEST_DIALOG,
@@ -19,6 +19,7 @@ enum PakWiFiFeature {
 };
 
 enum PakWiFiBand {
+	// 0 = none
 	PAK_WIFI_2GHZ = 1,
 	PAK_WIFI_5GHZ,
 };
@@ -73,7 +74,6 @@ struct PakWiFiApFilter {
 	const char *bssid_mask;
 	const char *bssid;
 	const char *password;
-	int has_band;
 	enum PakWiFiBand band;
 	int is_hidden;
 };

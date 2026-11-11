@@ -30,7 +30,7 @@ enum PakErrorCode {
 /// TODO: Add way to kill this
 int pak_main_loop(void);
 
-void pak_error(const char *fmt, ...);
+void pak_error(const char *fmt, ...); // TODO: pak_error_log
 void pak_abort(const char *fmt, ...);
 void pak_global_log(const char *fmt, ...);
 #endif

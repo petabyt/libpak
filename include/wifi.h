@@ -55,7 +55,7 @@ int pak_wifi_request_scan(struct PakNet *ctx, struct PakWiFiAdapter *adapter);
 struct PakWiFiAp {
 	struct PakWiFiApPriv *priv;
 	char ssid[33];
-	char bssid[6];
+	char bssid[33];
 	enum PakWiFiBand band;
 };
 
@@ -67,7 +67,7 @@ int pak_wifi_unref_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct
 struct PakWiFiAp *pak_wifi_get_connected_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter);
 
 /// Request to connect to access point
-int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *password);
+int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *password, int blocking);
 
 struct PakWiFiApFilter {
 	const char *ssid_pattern;
@@ -81,6 +81,7 @@ struct PakWiFiApFilter {
 /// Tries to open a connection with the specified PakWiFiApFilter
 /// Will automatically select an adapter, prefers one that is not currently connected to anything
 /// callback must call pak_wifi_unref_adapter when it doesn't need the adapter handle anymore
+//__attribute__((deprecated))
 int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec, int (*cb)(struct PakNet *ctx, struct PakWiFiAdapter *, void *arg), void *arg);
 
 #endif

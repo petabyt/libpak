@@ -6,8 +6,8 @@
 #include "pak.h"
 
 enum PakBtOptions {
-	PAK_BT_BLOCK,
-	PAK_BT_NO_BLOCK,
+	PAK_BLOCK,
+	PAK_NONBLOCK,
 };
 
 // Max size of RFC compliant cstring UUID
@@ -79,18 +79,18 @@ int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int fi
 struct PakBtDevice *pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *adapter, int index, int filter);
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device);
 
-/// @brief Update all fields in device struct to current values
+/// @brief Updates all fields in device struct to current values
 int pak_bt_device_update(struct PakBt *ctx, struct PakBtDevice *dev);
 
 /// Establish connection with a bluetooth device for this context
-int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device);
+int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device, int blocking);
 
 int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device);
 
 /// Blocking call to establish bond with the device. Old bond is automatically removed if necessary.
 /// TODO: allow setting if blocking or not
 /// @returns error code if failed
-int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device);
+int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device, int blocking);
 
 /// Get one of the manufacturer data blobs from the advertisement this device was connected to with
 /// @returns length of data read

@@ -467,7 +467,7 @@ int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct Pa
 	return -1;
 }
 
-int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device) {
+int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device, int blocking) {
 	// TODO:
 	return -1;
 }
@@ -511,7 +511,7 @@ int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int
 	return 0;
 }
 
-int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device) {
+int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device, int blocking) {
 	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
 	if (device->is_connected) return 0;
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Device1", "Connect");

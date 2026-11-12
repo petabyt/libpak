@@ -597,7 +597,8 @@ static int find_existing_connection(DBusConnection *conn, struct PakWiFiAdapter 
 	return 0;
 }
 
-int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap, const char *password) {
+int pak_wifi_connect_to_ap(struct PakNet *ctx, struct PakWiFiAdapter *adapter, struct PakWiFiAp *ap,
+						   const char *password, int blocking) {
 	DBusError error;
 	dbus_error_init(&error);
 

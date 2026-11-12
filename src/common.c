@@ -59,7 +59,7 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 			pak_wifi_unref_ap(ctx, adapter, ap);
 			continue;
 		}
-		if (pak_wifi_connect_to_ap(ctx, adapter, ap, spec->password)) {
+		if (pak_wifi_connect_to_ap(ctx, adapter, ap, spec->password, 0)) {
 			return PAK_ERR_NO_CONNECTION;
 		}
 

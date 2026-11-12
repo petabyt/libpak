@@ -14,7 +14,7 @@ int main(void) {
 	struct PakBtDevice *dev = pak_bt_get_device(ctx, adapter, 0, PAK_FILTER_CONNECTED);
 	if (dev == NULL) return -1;
 
-	int rc = pak_bt_device_connect(ctx, dev);
+	int rc = pak_bt_device_connect(ctx, dev, PAK_BLOCK);
 	if (rc) {
 		printf("pak_bt_device_connect\n");
 		return rc;

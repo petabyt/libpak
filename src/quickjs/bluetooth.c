@@ -77,11 +77,11 @@ static JSValue magic_char_method(JSContext *ctx, JSValueConst this_val, int argc
 		case M_SET_VALUE: {
 			size_t len;
 			void *buf = JS_GetArrayBuffer(ctx, &len, argv[0]);
-			int rc = pak_bt_write_characteristic(wrapper->ctx, wrapper->c, buf, len, PAK_BT_BLOCK);
+			int rc = pak_bt_write_characteristic(wrapper->ctx, wrapper->c, buf, len, PAK_BLOCK);
 			return helper_dummy_promise(ctx, rc, JS_UNDEFINED);
 		}
 		case M_GET_VALUE: {
-			int rc = pak_bt_read_characteristic(wrapper->ctx, wrapper->c, PAK_BT_BLOCK);
+			int rc = pak_bt_read_characteristic(wrapper->ctx, wrapper->c, PAK_BLOCK);
 			uint8_t buffer[512];
 			unsigned int sz = pak_bt_read_characteristic_cached_value(wrapper->ctx, wrapper->c, buffer, sizeof(buffer));
 			return helper_dummy_promise(ctx, rc, JS_NewArrayBufferCopy(ctx, buffer, sz));
@@ -220,7 +220,8 @@ static JSValue magic_device_method(JSContext *ctx, JSValueConst this_val, int ar
 		case M_IS_CLASSIC: pak_bt_device_update(dev->ctx, dev->dev); return JS_NewBool(ctx, dev->dev->is_classic);
 		case M_IS_BONDED: pak_bt_device_update(dev->ctx, dev->dev); return JS_NewBool(ctx, dev->dev->is_bonded);
 		case M_IS_CONNECTED: pak_bt_device_update(dev->ctx, dev->dev); return JS_NewBool(ctx, dev->dev->is_connected);
-		case M_CONNECT: return helper_dummy_promise(ctx, pak_bt_device_connect(dev->ctx, dev->dev), JS_NULL);
+		case M_CONNECT: return helper_dummy_promise(ctx, pak_bt_device_connect(dev->ctx, dev->dev,
+																			   PAK_BLOCK), JS_NULL);
 	}
 	return JS_NULL;
 }

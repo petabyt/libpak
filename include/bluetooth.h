@@ -5,11 +5,6 @@
 #include <string.h>
 #include "pak.h"
 
-enum PakBtOptions {
-	PAK_BLOCK,
-	PAK_NONBLOCK,
-};
-
 // Max size of RFC compliant cstring UUID
 #define UUID_STR_LENGTH 37
 

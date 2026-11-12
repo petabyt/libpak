@@ -55,7 +55,7 @@ getsockname
 sendto
 
 pak_verbose_log
-pak_error
+pak_error_log
 pak_global_log
 pak_debug_log
 pak_rt_set_session_property

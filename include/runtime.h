@@ -219,6 +219,7 @@ struct PakModule {
 	int (*on_disconnect)(struct PakModule *);
 	/// Runs when switching to a new screen, or switching back to an previous screen.
 	int (*on_switch_screen)(struct PakModule *, int old_screen, int new_screen, int job);
+	/// Runs when user switches the current storage device. pak_rt_set_storage_info may be used to update info
 	int (*on_switch_storage_device)(struct PakModule *, int job, const char *name);
 	//int (*on_switch_folder)(struct PakModule *, int job, const char *path);
 	/// Request entire contents of a file
@@ -244,7 +245,7 @@ struct PakModule {
 };
 
 /// Set info for a storage device by the name of storage_name
-/// If storage device doesn't exist, it will be created. Otherwise it will be updated
+/// The first call to this function will create the default (currently selected) storage device
 /// A root folder will autmatically be created with n_items, call pak_rt_add_folder_info to overwrite this
 int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, struct PakStorageInfo *info);
 /// If on_request_file_metadata is called on a folder, call this to specify the number of files in it instead of pak_rt_add_file_metadata

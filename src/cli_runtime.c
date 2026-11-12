@@ -22,7 +22,7 @@ void pak_global_log(const char *fmt, ...) {
 }
 
 __attribute__((weak))
-void pak_error(const char *fmt, ...) {
+void pak_error_log(const char *fmt, ...) {
 	printf("ERR: ");
 	fflush(stderr);
 	va_list args;

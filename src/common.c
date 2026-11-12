@@ -18,13 +18,13 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 	int n_adapters = pak_wifi_get_n_adapters(ctx);
 	if (n_adapters <= 0) return -1;
 	if ((adapter = pak_wifi_get_adapter(ctx, 0)) == NULL) {
-		pak_error("pak_wifi_get_adapter\n");
+		pak_error_log("pak_wifi_get_adapter\n");
 		return -1;
 	}
 
 	if (spec->ssid_pattern != NULL) {
 		if (regcomp(&regex, spec->ssid_pattern, 0)) {
-			pak_error("regcomp\n");
+			pak_error_log("regcomp\n");
 			return -1;
 		}
 	}
@@ -42,7 +42,7 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 
 	int rc = pak_wifi_request_scan(ctx, adapter);
 	if (rc) {
-		pak_error("pak_wifi_request_scan\n");
+		pak_error_log("pak_wifi_request_scan\n");
 		return -1;
 	}
 
@@ -50,7 +50,7 @@ int pak_wifi_request_connection(struct PakNet *ctx, struct PakWiFiApFilter *spec
 	struct PakWiFiAp *ap;
 	for (int i = 0; i < n_aps; i++) {
 		if ((ap = pak_wifi_get_ap(ctx, adapter, i)) == NULL) {
-			pak_error("pak_wifi_get_ap\n");
+			pak_error_log("pak_wifi_get_ap\n");
 			return -1;
 		}
 

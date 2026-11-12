@@ -30,7 +30,7 @@ static DBusMessage *send_message_noargs(DBusConnection *conn, const char *dest, 
 	DBusMessage *resp = dbus_connection_send_with_reply_and_block(conn, call, DBUS_TIMEOUT_USE_DEFAULT, &error);
 	dbus_message_unref(call);
 	if (resp == NULL || dbus_error_is_set(&error)) {
-		pak_error("dbus_connection_send_with_reply_and_block: %s\n", error.message);
+		pak_error_log("dbus_connection_send_with_reply_and_block: %s\n", error.message);
 		if (resp != NULL) dbus_message_unref(resp);
 		return NULL;
 	}
@@ -43,7 +43,7 @@ static DBusMessage *send_reply_and_block(DBusConnection *conn, DBusMessage *call
 	DBusMessage *resp = dbus_connection_send_with_reply_and_block(conn, call, DBUS_TIMEOUT_USE_DEFAULT, &error);
 	dbus_message_unref(call);
 	if (resp == NULL || dbus_error_is_set(&error)) {
-		pak_error("dbus_connection_send_with_reply_and_block: %s, %s\n", error.name, error.message);
+		pak_error_log("dbus_connection_send_with_reply_and_block: %s, %s\n", error.name, error.message);
 		if (resp != NULL) dbus_message_unref(resp);
 		return NULL;
 	}
@@ -58,7 +58,7 @@ static int get_dbus_property(DBusConnection *conn, const char *dest, const char 
 	(*resp) = dbus_connection_send_with_reply_and_block(conn, call, DBUS_TIMEOUT_USE_DEFAULT, &error);
 	dbus_message_unref(call);
 	if (resp == NULL || dbus_error_is_set(&error)) {
-		pak_error("dbus_connection_send_with_reply_and_block: %s\n", error.message);
+		pak_error_log("dbus_connection_send_with_reply_and_block: %s\n", error.message);
 		if (*resp != NULL) dbus_message_unref(*resp);
 		return -1;
 	}

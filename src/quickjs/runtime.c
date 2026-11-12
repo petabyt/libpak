@@ -108,7 +108,7 @@ enum Operations {
 struct PakFileHandleWrapper {
 	JSValue x;
 	JSValue y;
-	struct PakFileHandle handle;
+	struct PakObjectHandle handle;
 };
 
 static struct PakFileHandleWrapper to_file_handle(JSContext *ctx, JSValue obj) {
@@ -353,14 +353,14 @@ static inline JSValue JS_NewStringOrNull(JSContext *ctx, const char *str) {
     return JS_NewString(ctx, str);
 }
 
-static JSValue create_handle(struct PakModule *mod, struct PakFileHandle *file) {
+static JSValue create_handle(struct PakModule *mod, struct PakObjectHandle *file) {
 	JSValue handle = JS_NewObject(mod->priv->ctx);
 	JS_SetPropertyStr(mod->priv->ctx, handle, "storageName", JS_NewStringOrNull(mod->priv->ctx, file->storage_name));
 	JS_SetPropertyStr(mod->priv->ctx, handle, "index", JS_NewInt32(mod->priv->ctx, file->index_in_view));
 	return handle;
 }
 
-static int on_request_file_contents(struct PakModule *mod, int job, struct PakFileHandle *file) {
+static int on_request_file_contents(struct PakModule *mod, int job, struct PakObjectHandle *file) {
 	JS_UpdateStackTop(mod->priv->rt);
 	JSValue handle = create_handle(mod, file);
 	JSValue args[] = {
@@ -370,7 +370,7 @@ static int on_request_file_contents(struct PakModule *mod, int job, struct PakFi
 	return call_module_method(mod->priv->ctx, mod->priv->object, "onRequestFileContents", 2, args);
 }
 
-static int on_request_thumbnail(struct PakModule *mod, int job, struct PakFileHandle *file) {
+static int on_request_thumbnail(struct PakModule *mod, int job, struct PakObjectHandle *file) {
 	JS_UpdateStackTop(mod->priv->rt);
 	JSValue handle = create_handle(mod, file);
 	JSValue args[] = {
@@ -380,7 +380,7 @@ static int on_request_thumbnail(struct PakModule *mod, int job, struct PakFileHa
 	return call_module_method(mod->priv->ctx, mod->priv->object, "onRequestFileThumbnail", 2, args);
 }
 
-static int on_request_file_metadata(struct PakModule *mod, int job, struct PakFileHandle *file) {
+static int on_request_file_metadata(struct PakModule *mod, int job, struct PakObjectHandle *file) {
 	JS_UpdateStackTop(mod->priv->rt);
 	JSValue handle = create_handle(mod, file);
 	JSValue args[] = {
@@ -406,7 +406,7 @@ static JSValue js_module_constructor(JSContext *ctx, JSValueConst new_target, in
 	mod->on_switch_screen = on_switch_screen;
 	mod->on_request_file_contents = on_request_file_contents;
 	mod->on_request_file_thumbnail = on_request_thumbnail;
-	mod->on_request_file_metadata = on_request_file_metadata;
+	mod->on_request_object_info = on_request_file_metadata;
 
 	mod->priv = malloc(sizeof(struct ModulePriv));
 	mod->priv->object = JS_DupValue(ctx, obj);

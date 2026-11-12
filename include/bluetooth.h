@@ -167,12 +167,12 @@ struct PakGattDescriptor {
 struct PakBtSocket;
 
 enum PakBtSocketOption {
-	PAK_RFCOMM_SECURE = 1 << 0,
-	PAK_RFCOMM_INSECURE = 1 << 1,
+	PAK_RFCOMM_INSECURE = 1 << 0,
+	PAK_RFCOMM_SECURE = 1 << 1,
 };
 
 /// Setup RFCOMM connection to a UUID via SDP lookup
-struct PakBtSocket *pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid);
+struct PakBtSocket *pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid, int flags);
 /// write()
 int pak_bt_write(struct PakBtSocket *conn, const void *data, unsigned int length);
 /// read()
@@ -180,7 +180,7 @@ int pak_bt_read(struct PakBtSocket *conn, void *data, unsigned int length);
 /// close()
 int pak_bt_close_socket(struct PakBtSocket *conn);
 
-typedef int pak_bt_listen_device(struct PakBt *ctx, enum PakBtEvent evtype, struct PakBtDevice *dev, struct PakGattCharacteristic *chr, void *arg);
+typedef int pak_bt_listen_device(struct PakBt *ctx, enum PakBtEvent type, struct PakBtDevice *dev, struct PakGattCharacteristic *chr, void *arg);
 
 /// @brief Set event callback for a device
 int pak_bt_set_device_callback(struct PakBt *ctx, struct PakBtDevice *device, pak_bt_listen_device *cb, void *cb_arg);

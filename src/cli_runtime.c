@@ -62,10 +62,10 @@ int pak_rt_set_session_property_int(struct PakModule *mod, const char *key, int 
 	printf("PROP: %s -> %d\n", key, value);
 	return -1;
 }
-int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length) {
+int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakObjectHandle *file, const void *image_data, unsigned int length) {
 	return -1;
 }
-int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length, uint64_t offset, uint64_t total_size) {
+int pak_rt_add_file_contents(struct PakModule *mod, struct PakObjectHandle *file, const void *data, unsigned int length, uint64_t offset, uint64_t total_size) {
 	return -1;
 }
 int pak_rt_set_storage_info(struct PakModule *mod, const char *name, struct PakStorageInfo *info) {
@@ -83,11 +83,11 @@ int pak_rt_set_screen_supported(struct PakModule *mod, int screen, int v) {
 const char *pak_rt_get_client_name(void) {
 	return (const char *)"client";
 }
-int pak_rt_add_file_metadata(struct PakModule *mod, struct PakFileHandle *file, const struct PakFileMetadata *metadata) {
+int pak_rt_add_file_metadata(struct PakModule *mod, struct PakObjectHandle *file, const struct PakFileMetadata *metadata) {
 	return -1;
 }
 void pak_rt_release_metadata(struct PakModule *mod, struct PakFileMetadata *md) {}
-struct PakFileMetadata *pak_rt_get_metadata(struct PakModule *mod, struct PakFileHandle *file) {
+struct PakFileMetadata *pak_rt_get_metadata(struct PakModule *mod, struct PakObjectHandle *file) {
 	return NULL;
 }
 void pak_rt_fatal_error(struct PakModule *mod, const char *fmt, ...) {}

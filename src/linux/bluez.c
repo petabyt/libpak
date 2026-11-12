@@ -755,7 +755,9 @@ static int get_service_channel(const char *mac_address, const char *uuid) {
 }
 
 // https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1
-struct PakBtSocket *pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid) {
+struct PakBtSocket *
+pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid,
+								  int flags) {
 	int channel = get_service_channel(dev->mac_address, uuid);
 	if (channel < 0) return NULL;
 

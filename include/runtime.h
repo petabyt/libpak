@@ -33,7 +33,7 @@ enum PakSortedBy {
 	PAK_SMALLEST_FIRST = 4,
 };
 
-struct PakFileHandle {
+struct PakObjectHandle {
 	/// zero based index in the current folder
 	int index_in_view;
 	/// name of storage device
@@ -173,6 +173,17 @@ struct PakLocation {
     unsigned int satellites;
 };
 
+struct PakStorageInfo {
+	unsigned n_files_total;
+	/// How the file list data set is sorted by default - includes folders
+	enum PakSortedBy sorted_by;
+	uint64_t size_bytes;
+	uint64_t used_bytes;
+	/// Should be set to true/nonzero if the medium is non-physical and files should be automatically downloaded. (such as tethered camera's temporary photo memory)
+	/// on_request_file_contents will be called in the order of files added through pak_rt_add_file_metadata
+	int is_live;
+};
+
 /// Strictly compatible with libusb1.0
 typedef struct libusb_device libusb_device;
 
@@ -208,37 +219,28 @@ struct PakModule {
 	int (*on_disconnect)(struct PakModule *);
 	/// Runs when switching to a new screen, or switching back to an previous screen.
 	int (*on_switch_screen)(struct PakModule *, int old_screen, int new_screen, int job);
+	int (*on_switch_storage_device)(struct PakModule *, int job, const char *name);
+	//int (*on_switch_folder)(struct PakModule *, int job, const char *path);
 	/// Request entire contents of a file
 	/// send info back with pak_rt_add_file_contents
-	int (*on_request_file_contents)(struct PakModule *, int job, struct PakFileHandle *file);
+	int (*on_request_file_contents)(struct PakModule *, int job, struct PakObjectHandle *file);
 	/// Request small thumbnail for a file
 	/// send info back with pak_rt_add_file_thumbnail
-	int (*on_request_file_thumbnail)(struct PakModule *, int job, struct PakFileHandle *file);
+	int (*on_request_file_thumbnail)(struct PakModule *, int job, struct PakObjectHandle *file);
 	/// Request metadata for a file
-	/// send info back with pak_rt_add_file_metadata
-	int (*on_request_file_metadata)(struct PakModule *, int job, struct PakFileHandle *file);
+	/// send info back with pak_rt_add_file_metadata or pak_rt_add_folder_info
+	int (*on_request_object_info)(struct PakModule *, int job, struct PakObjectHandle *file);
 	/// Request liveview frame
 	/// send liveview frame contents with pak_rt_add_file_contents
-	int (*on_request_liveview_frame)(struct PakModule *, int job, struct PakFileHandle *file);
+	int (*on_request_liveview_frame)(struct PakModule *, int job, struct PakObjectHandle *file);
 	/// Handle file uploading and incoming data
-	int (*on_get_file_contents)(struct PakModule *, int job, struct PakFileHandle *file, void *data, unsigned int length, uint64_t offset, uint64_t total_size);
+	int (*on_receive_file_contents)(struct PakModule *, int job, struct PakObjectHandle *file, void *data, unsigned int length, uint64_t offset, uint64_t total_size);
 	/// Runs when a setting has been changed by the user. This method should not update the widget.
 	int (*on_widget_updated)(struct PakModule *, int job, const char *name, struct PakWidget *setting);
 	/// On request to run unit test
 	int (*on_run_test)(struct PakModule *, int job);
 	/// Process an arbitrary command
 	int (*on_custom_command)(struct PakModule *, int job, int argc, const char * const *argv);
-};
-
-struct PakStorageInfo {
-	unsigned n_files_total;
-	/// How the file list data set is sorted by default - includes folders
-	enum PakSortedBy sorted_by;
-	uint64_t size_bytes;
-	uint64_t used_bytes;
-	/// Should be set to true/nonzero if the medium is non-physical and files should be automatically downloaded. (such as tethered camera's temporary photo memory)
-	/// on_request_file_contents will be called in the order of files added through pak_rt_add_file_metadata
-	int is_live;
 };
 
 /// Set info for a storage device by the name of storage_name
@@ -248,20 +250,20 @@ int pak_rt_set_storage_info(struct PakModule *mod, const char *storage_name, str
 /// If on_request_file_metadata is called on a folder, call this to specify the number of files in it instead of pak_rt_add_file_metadata
 /// @param folder_path Folder names separated by '/'.
 /// TODO: sorted_by inherited from storageinfo?
-int pak_rt_add_folder_info(struct PakModule *mod, const char *storage_name, const char *folder_path, unsigned int n_items, enum PakSortedBy sorted_by);
+int pak_rt_add_folder_info(struct PakModule *mod,struct PakObjectHandle *file, unsigned int n_items, enum PakSortedBy sorted_by);
 /// Submit metadata for a file
 /// @info May be freed and requested again later
 /// @param metadata set to NULL for invalid/unknown
-int pak_rt_add_file_metadata(struct PakModule *mod, struct PakFileHandle *file, const struct PakFileMetadata *metadata);
+int pak_rt_add_file_metadata(struct PakModule *mod, struct PakObjectHandle *file, const struct PakFileMetadata *metadata);
 /// Submit thumbnail contents for a file
 /// @info May be freed and requested again later
-/// @param image_data set to NULL for invalid/unknown
-int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakFileHandle *file, void *image_data, unsigned int length);
+/// @param image_data set to NULL if thumbnail isn't available
+int pak_rt_add_file_thumbnail(struct PakModule *mod, struct PakObjectHandle *file, const void *image_data, unsigned int length);
 /// Submit contents for a file for the user to view or download
 /// Can be submitted in partial, when offset + length < total_size.
 /// total_size can also be zero if you don't know the length beforehand,
 /// but a terminating call must be made with length = 0
-int pak_rt_add_file_contents(struct PakModule *mod, struct PakFileHandle *file, void *data, unsigned int length, uint64_t offset, uint64_t total_size);
+int pak_rt_add_file_contents(struct PakModule *mod, struct PakObjectHandle *file, const void *data, unsigned int length, uint64_t offset, uint64_t total_size);
 /// Registers a widget that is displayed in the UI and can be modified by the user
 /// @param widget set to NULL to delete widget
 int pak_rt_set_widget(struct PakModule *mod, const char *name, const struct PakWidget *widget);
@@ -273,8 +275,9 @@ void pak_rt_fatal_error(struct PakModule *mod, const char *fmt, ...);
 int pak_rt_set_screen_supported(struct PakModule *mod, int screen, int v);
 /// Set the percent of a job's progress bar from 0-100.
 int pak_rt_set_progress_bar(struct PakModule *mod, int job, int percent);
-/// Report how many bytes are being downloaded for a job currently in X amount of microseconds. TODO: currently ms
-int pak_rt_set_download_stats(struct PakModule *mod, int job, long time, unsigned int n_bytes);
+/// Report how many bytes are being downloaded for a job currently in X amount of microseconds.
+/// TODO: currently ms
+int pak_rt_set_download_stats(struct PakModule *mod, int job, long time_ms, unsigned int n_bytes);
 /// Set the unique ID of the current connected device. Will be stored for future use.
 /// If the string is already stored, it will be loaded to the current session.
 int pak_rt_save_session_signature(struct PakModule *mod, struct PakSavedConnection *info);
@@ -288,37 +291,33 @@ int pak_rt_set_tick_interval(struct PakModule *mod, unsigned int us);
 void pak_debug_log(struct PakModule *mod, const char *fmt, ...);
 /// Log verbose info into a buffer that can be dumped for a bug report
 void pak_verbose_log(struct PakModule *mod, const char *fmt, ...);
-/// Get metadata from file handle
-/// free with pak_rt_release_metadata
-struct PakFileMetadata *pak_rt_get_metadata(struct PakModule *mod, struct PakFileHandle *file);
-/// Release returned metadata handle
-void pak_rt_release_metadata(struct PakModule *mod, struct PakFileMetadata *md);
 /// Get option name that was selected during setup, NULL if none selected, do not free
 const char *pak_rt_get_setup_option(struct PakModule *mod);
 /// Return string of client name, do not free
 const char *pak_rt_get_client_name(void);
+/// Connect to a new access point through filter. Once AP is selected and connected, onTryConnectWiFi
+/// is called with setup option setup_option. pak_rt_get_setup_option() will return the new value.
 /// Covers 'Bluetooth -> WiFi' handover case common in some devices
-/// onTryConnectWiFi will be called
 int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter, const char *setup_option);
-/// Shows a message that will popup to the user.
+/// Shows a quick message that will popup to the user.
 int pak_rt_add_user_instruction(struct PakModule *mod, const char *message);
-/// Get current time
-int pak_get_timestamp(struct PakTimestamp *ts);
-/// @brief Get current location
-/// @returns NULL if user denied permission/not available
-int pak_get_location(struct PakModule *mod, struct PakLocation *coords);
 /// Adds a RTSP livestream source that will be independently managed by the runtime.
 /// on_request_liveview_frame won't be called
 int pak_rt_add_rtsp_livestream(struct PakModule *mod, struct PakWiFiAdapter *adapter, const char *url);
 /// TODO: Unfinished API
 int pak_rt_set_liveview_info(struct PakModule *mod, int width, int height, int fps);
+/// Get current time
+int pak_get_timestamp(struct PakTimestamp *ts);
+/// @brief Get current location
+/// @returns NULL if user denied permission/not available
+int pak_get_location(struct PakModule *mod, struct PakLocation *coords);
 
-/// Get path for downloading a file
-__attribute__((deprecated)) const char *pak_rt_get_path(struct PakModule *mod, const char *filename);
-/// Notify to the runtime that the device is disconnected and to stop issuing new jobs immediately.
-__attribute__((deprecated)) int pak_rt_disconnect(struct PakModule *mod, const char *reason);
-/// Force the frontend to enter a screen. May not have intended effect (entering image viewer without an associating image)
-__attribute__((deprecated)) int pak_rt_enter_screen(struct PakModule *mod, int screen);
+/// Get metadata from file handle
+/// free with pak_rt_release_metadata
+struct PakFileMetadata *pak_rt_get_metadata(struct PakModule *mod, struct PakObjectHandle *file);
+/// Release returned metadata handle
+void pak_rt_release_metadata(struct PakModule *mod, struct PakFileMetadata *md);
+
 /// Submit error message for user to read for a non-fatal error on a job that's in progress
 __attribute__((deprecated)) void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);
 #endif

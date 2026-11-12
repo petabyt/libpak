@@ -1,5 +1,5 @@
 declare module "pak:runtime" {
-	export interface FileHandle {
+	export interface ObjectHandle {
 		index: number;
 	}
 
@@ -26,9 +26,9 @@ declare module "pak:runtime" {
 		onFindConnection(job: number): MaybeAsync;
 		onDisconnect(): MaybeAsync;
 		onSwitchScreen(oldScreen: number, newScreen: number, job: number): MaybeAsync;
-		onRequestFileThumbnail(job: number, handle: FileHandle): MaybeAsync;
-		onRequestFileMetadata(job: number, handle: FileHandle): MaybeAsync;
-		onRequestFileContents(job: number, handle: FileHandle): MaybeAsync;
+		onRequestFileThumbnail(job: number, handle: ObjectHandle): MaybeAsync;
+		onRequestFileMetadata(job: number, handle: ObjectHandle): MaybeAsync;
+		onRequestFileContents(job: number, handle: ObjectHandle): MaybeAsync;
 		onIdleTick(sinceLastTick: number): MaybeAsync;
 
 		static export(mod: Module): void;
@@ -39,7 +39,7 @@ declare module "pak:runtime" {
 		setProperty(key: string, value: string | number): void;
 		setScreenSupported(screen: number, supported: boolean): void;
 		addWidget(widget: Widget): void;
-		addFileMetadata(handle: FileHandle, md: FileMetadata): void;
+		addFileMetadata(handle: ObjectHandle, md: FileMetadata): void;
 	}
 }
 

@@ -89,12 +89,12 @@ struct PakWidget {
 			int v;
 			int min;
 			int max;
-		}slider;
+		}sliderv;
 		struct PakTextBox {
 			const char *value;
 		}textboxv;
 		struct PakComboBox {
-			// NULL terminated cstring list
+			/// NULL terminated cstring list
 			const char **list;
 			// If -1, then UI will show no item as selected
 			int index_value;
@@ -103,7 +103,7 @@ struct PakWidget {
 			const char *x_axis_name;
 			const char *y_axis_name;
 			int n_points;
-			int *points;
+			const int *points;
 		}graphv;
 		struct PakEqualizer {
 			// NULL terminated struct list
@@ -171,6 +171,12 @@ struct PakLocation {
     double longitude;
     double altitude;
     unsigned int satellites;
+};
+
+enum PakStorageType {
+	PAK_FILESYSTEM = 0,
+	PAK_LIVE_QUEUE = 1,
+	PAK_BACKUP = 2,
 };
 
 struct PakStorageInfo {
@@ -312,12 +318,16 @@ int pak_get_timestamp(struct PakTimestamp *ts);
 /// @brief Get current location
 /// @returns NULL if user denied permission/not available
 int pak_get_location(struct PakModule *mod, struct PakLocation *coords);
-
 /// Get metadata from file handle
 /// free with pak_rt_release_metadata
 struct PakFileMetadata *pak_rt_get_metadata(struct PakModule *mod, struct PakObjectHandle *file);
 /// Release returned metadata handle
 void pak_rt_release_metadata(struct PakModule *mod, struct PakFileMetadata *md);
+int pak_rt_set_thread_policy(struct PakModule *mod, enum PakThreadPolicy v);
+
+// API TODO List:
+// - Way to do backups (fuji)
+// - way to do status dump (fuji)
 
 /// Submit error message for user to read for a non-fatal error on a job that's in progress
 __attribute__((deprecated)) void pak_rt_error_message(struct PakModule *mod, int job, const char *fmt, ...);

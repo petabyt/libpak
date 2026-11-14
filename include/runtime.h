@@ -174,20 +174,22 @@ struct PakLocation {
 };
 
 enum PakStorageType {
+	/// Standard disk/card/etc
 	PAK_FILESYSTEM = 0,
+	/// Should be set to true/nonzero if the medium is non-physical and files should be automatically downloaded. (such as tethered camera's temporary photo memory)
+	/// on_request_file_contents will be called in the order of files added through pak_rt_add_file_metadata
 	PAK_LIVE_QUEUE = 1,
-	PAK_BACKUP = 2,
+	///
+	PAK_BACKUPS = 2,
 };
 
 struct PakStorageInfo {
-	unsigned n_files_total;
+	unsigned int n_files_root;
 	/// How the file list data set is sorted by default - includes folders
 	enum PakSortedBy sorted_by;
+	enum PakStorageType type;
 	uint64_t size_bytes;
 	uint64_t used_bytes;
-	/// Should be set to true/nonzero if the medium is non-physical and files should be automatically downloaded. (such as tethered camera's temporary photo memory)
-	/// on_request_file_contents will be called in the order of files added through pak_rt_add_file_metadata
-	int is_live;
 };
 
 /// Strictly compatible with libusb1.0

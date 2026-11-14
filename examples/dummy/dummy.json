@@ -1,0 +1,21 @@
+{
+  "name": "dummymod",
+  "description": "dummy module that doesn't connect to anything",
+  "license": "MIT",
+  "author": "Daniel Cook",
+  "version": 1,
+  "moduleType": "so",
+  "modulePath": "libdummy.so",
+  "targets": [
+    {
+      "deviceType": "game-controller",
+      "company": "Dummy",
+      "summary": "Fake target that can be used to test this app",
+      "setupOptions": [
+        {"name": "camera", "title": "Camera", "transport": 3},
+        {"name": "slow", "title": "Slow camera", "transport": 3},
+        {"name": "tethered", "title": "Tethered camera", "transport": 2}
+      ]
+    }
+  ]
+}

@@ -7,7 +7,9 @@
 #include <quickjs-libc.h>
 #pragma GCC diagnostic pop
 #include <runtime.h>
+#include <pthread.h>
 #include "../main.h"
+#include "main.h"
 #include "buffer_js.h"
 #include "http_js.h"
 
@@ -32,12 +34,6 @@ int JS_GetLength(JSContext *ctx, JSValueConst obj, int64_t *pres) {
 }
 
 static JSClassID module_class_id = 0;
-
-struct ModulePriv {
-	JSContext *ctx;
-	JSRuntime *rt;
-	JSValue object;
-};
 
 static JSValue test_module(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst argv[]) {
 	JSValue obj = argv[0];
@@ -196,7 +192,7 @@ static JSValue generic_operation(JSContext *ctx, JSValueConst this_val, int argc
 			JS_ToUint32(ctx, &n_items, argv[1]);
 			JS_ToInt32(ctx, &sortedby, argv[2]);
 			rc = pak_rt_set_storage_info(mod, JS_ToCString(ctx, argv[0]), &(struct PakStorageInfo){
-				.n_files_total = n_items,
+				.n_files_root = n_items,
 				.sorted_by = sortedby,
 			});
 		} break;

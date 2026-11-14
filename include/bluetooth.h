@@ -52,9 +52,9 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter);
 /// Represents both a connected/non-connected device and advertisement
 struct PakBtDevice {
 	struct PakBtDevicePriv *priv;
-	int is_classic;
-	int is_connected;
-	int is_bonded;
+	_Bool is_classic;
+	_Bool is_connected;
+	_Bool is_bonded;
 	char name[64];
 	char mac_address[64];
 	uint32_t btclass;
@@ -89,7 +89,7 @@ int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device, int
 
 /// Get one of the manufacturer data blobs from the advertisement this device was connected to with
 /// @returns length of data read
-unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max);
+unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, void *buffer, unsigned int max);
 
 struct PakGattService {
 	struct PakGattServicePriv *priv;
@@ -137,11 +137,11 @@ static struct PakGattCharacteristic *pak_bt_get_gatt_characteristic_uuid(struct 
 int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int blocking);
 
 /// Request to write data to a characteristic. Write acknowledgement will be fired in the callback
-int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const uint8_t *data, unsigned int length, int blocking);
+int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const void *data, unsigned int length, int blocking);
 
 /// @brief Read cached characteristic value
 /// @returns Number of bytes read, 0 if error
-unsigned int pak_bt_read_characteristic_cached_value(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *buffer, unsigned int max);
+unsigned int pak_bt_read_characteristic_cached_value(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, void *buffer, unsigned int max);
 
 /// @brief Block thread and watch characteristic changes for x ms or until event occurs
 int pak_bt_watch_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, unsigned int ms);

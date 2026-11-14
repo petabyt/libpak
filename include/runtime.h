@@ -100,6 +100,7 @@ struct PakWidget {
 			int index_value;
 		}comboboxv;
 		struct PakGraph {
+			_Bool add_refresh_button;
 			const char *x_axis_name;
 			const char *y_axis_name;
 			int n_points;
@@ -115,6 +116,10 @@ struct PakWidget {
 				int max;
 			}*bands;
 		}equalizerv;
+		struct PakMarkdownBox {
+			_Bool add_refresh_button;
+			const char *text;
+		};
 	}u;
 };
 
@@ -179,7 +184,7 @@ enum PakStorageType {
 	/// Should be set to true/nonzero if the medium is non-physical and files should be automatically downloaded. (such as tethered camera's temporary photo memory)
 	/// on_request_file_contents will be called in the order of files added through pak_rt_add_file_metadata
 	PAK_LIVE_QUEUE = 1,
-	///
+	/// TODO: Used for downloading/restoring system backups
 	PAK_BACKUPS = 2,
 };
 
@@ -243,7 +248,7 @@ struct PakModule {
 	/// send liveview frame contents with pak_rt_add_file_contents
 	int (*on_request_liveview_frame)(struct PakModule *, int job, struct PakObjectHandle *file);
 	/// Handle file uploading and incoming data
-	int (*on_receive_file_contents)(struct PakModule *, int job, struct PakObjectHandle *file, void *data, unsigned int length, uint64_t offset, uint64_t total_size);
+	int (*on_receive_file_contents)(struct PakModule *, int job, struct PakFileMetadata *md, struct PakObjectHandle *file, void *data, unsigned int length, uint64_t offset, uint64_t total_size);
 	/// Runs when a setting has been changed by the user. This method should not update the widget.
 	int (*on_widget_updated)(struct PakModule *, int job, const char *name, struct PakWidget *setting);
 	/// On request to run unit test

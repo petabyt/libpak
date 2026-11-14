@@ -8,6 +8,7 @@
 #include <bluetooth/sdp_lib.h>
 #include <dbus/dbus.h>
 #include <errno.h>
+#include "../main.h"
 #include "dbus.h"
 #include "bluetooth.h"
 
@@ -296,7 +297,7 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
 }
 
 unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max) {
-	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
+	struct PakBtDeviceWrapper *wrapper = to_wrapper(device);
 #define min(x, y) (((x) < (y)) ? (x) : (y))
 	memcpy(buffer, wrapper->mfg_data, min(wrapper->mfg_data_len, max));
 #undef min
@@ -484,14 +485,14 @@ struct PakBtDevice *pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *ad
 }
 
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *device) {
-	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
+	struct PakBtDeviceWrapper *wrapper = to_wrapper(device);
 	free(wrapper->uuids.uuids);
 	free(device);
 	return 0;
 }
 
 int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int *percent) {
-	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
+	struct PakBtDeviceWrapper *wrapper = to_wrapper(device);
 	DBusMessage *resp;
 	int rc = get_dbus_property(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Battery1", "Percentage", &resp);
 	if (rc) return rc;
@@ -512,7 +513,7 @@ int pak_bt_get_device_battery(struct PakBt *ctx, struct PakBtDevice *device, int
 }
 
 int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device, int blocking) {
-	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
+	struct PakBtDeviceWrapper *wrapper = to_wrapper(device);
 	if (device->is_connected) return 0;
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Device1", "Connect");
 	if (resp == NULL) return -1;
@@ -521,7 +522,7 @@ int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device, int blo
 }
 
 int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device) {
-	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
+	struct PakBtDeviceWrapper *wrapper = to_wrapper(device);
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Device1", "Disconnect");
 	if (resp == NULL) return -1;
     dbus_message_unref(resp);
@@ -529,7 +530,7 @@ int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device) {
 }
 
 int pak_bt_device_pair(struct PakBt *ctx, struct PakBtDevice *device) {
-	struct PakBtDeviceWrapper *wrapper = (struct PakBtDeviceWrapper *)device;
+	struct PakBtDeviceWrapper *wrapper = to_wrapper(device);
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Device1", "Pair");
 	if (resp == NULL) return -1;
     dbus_message_unref(resp);
@@ -542,8 +543,8 @@ int pak_bt_device_pair(struct PakBt *ctx, struct PakBtDevice *device) {
 
 // Some parameters are allowed to be NULL for different filter flags
 static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService **service, struct PakGattCharacteristic **characteristic, int index, int filter) {
-	struct PakBtDeviceWrapper *device_wrapper = (struct PakBtDeviceWrapper *)device;
-	struct PakGattServiceWrapper *service_wrapper = (struct PakGattServiceWrapper *)service;
+	struct PakBtDeviceWrapper *device_wrapper = to_wrapper(device);
+	struct PakGattServiceWrapper *service_wrapper = to_wrapper(*service);
 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
 	if (resp == NULL) return -1;
 
@@ -588,7 +589,7 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
 				if (find_dict(&adapter_dict, "Handle", &val_dict)) return -1;
 				dbus_message_iter_recurse(&val_dict, &val_dict2);
 				dbus_message_iter_get_basic(&val_dict2, &wrapper->base.handle);
-				(*service) = (struct PakGattService *)wrapper;
+				(*service) = from_wrapper(wrapper);
 				return 0;
 			}
 			found++;
@@ -614,7 +615,7 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
 				if (find_dict(&adapter_dict, "Handle", &val_dict)) return -1;
 				dbus_message_iter_recurse(&val_dict, &val_dict2);
 				dbus_message_iter_get_basic(&val_dict2, &wrapper->base.handle);
-				(*characteristic) = (struct PakGattCharacteristic *)wrapper;
+				(*characteristic) = from_wrapper(wrapper);
 				return 0;
 			}
 			found++;
@@ -659,7 +660,7 @@ int pak_bt_watch_characteristic(struct PakBt *ctx, struct PakGattCharacteristic 
 }
 
 int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int blocking) {
-	struct PakGattCharacteristicWrapper *wrapper = (struct PakGattCharacteristicWrapper *)characteristic;
+	struct PakGattCharacteristicWrapper *wrapper = to_wrapper(characteristic);
 	DBusMessage *call = dbus_message_new_method_call("org.bluez", wrapper->path, "org.bluez.GattCharacteristic1", "ReadValue");
 	DBusMessageIter iter;
 	dbus_message_iter_init_append(call, &iter);
@@ -679,7 +680,7 @@ int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *
 }
 
 int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const uint8_t *data, unsigned int length, int blocking) {
-	struct PakGattCharacteristicWrapper *wrapper = (struct PakGattCharacteristicWrapper *)characteristic;
+	struct PakGattCharacteristicWrapper *wrapper = to_wrapper(characteristic);
 	DBusMessage *call = dbus_message_new_method_call("org.bluez", wrapper->path, "org.bluez.GattCharacteristic1", "WriteValue");
 	DBusMessageIter iter;
 	dbus_message_iter_init_append(call, &iter);
@@ -756,8 +757,7 @@ static int get_service_channel(const char *mac_address, const char *uuid) {
 
 // https://man.freebsd.org/cgi/man.cgi?query=bluetooth&sektion=4&manpath=OpenBSD+5.1
 struct PakBtSocket *
-pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid,
-								  int flags) {
+pak_bt_connect_to_service_channel(struct PakBt *ctx, struct PakBtDevice *dev, const char *uuid, int flags) {
 	int channel = get_service_channel(dev->mac_address, uuid);
 	if (channel < 0) return NULL;
 

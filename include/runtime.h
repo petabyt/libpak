@@ -77,6 +77,7 @@ struct PakWidget {
 		// on_widget_updated won't be called for this widget
 		PAK_GRAPH = 6,
 		PAK_EQUALIZER = 7,
+		PAK_MARKDOWNBOX = 8,
 	}type;
 	union SettingUnion {
 		struct PakSwitch {
@@ -119,7 +120,7 @@ struct PakWidget {
 		struct PakMarkdownBox {
 			_Bool add_refresh_button;
 			const char *text;
-		};
+		}markdownboxv;
 	}u;
 };
 

@@ -43,4 +43,5 @@ int pak_kill_main_loop(void);
 void pak_error_log(const char *fmt, ...);
 void pak_global_log(const char *fmt, ...);
 void pak_abort(const char *fmt, ...);
+
 #endif

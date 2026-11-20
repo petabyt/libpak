@@ -149,8 +149,13 @@ int main(int argc, char **argv) {
 			unsigned int len = 0;
 			char *buf = alloc_file(argv[i + 1], &len);
 			if (buf == NULL) return -1;
-			if (setup_wasm_module(mod, buf, len)) return -1;
-			return pak_rt_test_module(mod);
+			int rc = setup_wasm_module(mod, buf, len);
+			free(buf);
+			if (!rc) {
+				rc = pak_rt_test_module(mod);
+				if (mod->free && mod->free(mod)) rc = -1;
+			}
+			return rc;
 		} else if (!strcmp(argv[i], "--test-so")) {
 			struct PakModule *mod = pak_create_mod();
 			void *dl = dlopen(argv[i + 1], RTLD_NOW);

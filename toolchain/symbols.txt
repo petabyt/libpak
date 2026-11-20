@@ -53,6 +53,9 @@ setsockopt
 recvfrom
 getsockname
 sendto
+getpeername
+__wrap_accept
+__wrap_getsockopt
 
 pak_verbose_log
 pak_error_log
@@ -124,6 +127,8 @@ pak_rt_set_download_stats
 pak_rt_set_liveview_info
 
 pak_wifi_bind_socket_to_adapter
+pak_net_get_context
+pak_net_unref_context
 pak_wifi_connect_to_ap
 pak_wifi_get_adapter
 pak_wifi_get_ap
@@ -143,6 +148,7 @@ libusb_release_interface
 libusb_set_auto_detach_kernel_driver
 libusb_set_interface_alt_setting
 libusb_get_device_descriptor
+libusb_get_string_descriptor_ascii
 libusb_get_config_descriptor
 libusb_free_config_descriptor
 libusb_get_max_packet_size

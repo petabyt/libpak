@@ -1,4 +1,20 @@
 #pragma once
+#include <stddef.h>
+
+/* Rules and their strings are borrowed for the duration of each check.
+ * IP rules accept IPv4/IPv6 literals with an optional CIDR prefix. */
+enum PakSandboxRuleType { PAK_SANDBOX_IP, PAK_SANDBOX_DOMAIN };
+struct PakSandboxRule {
+    enum PakSandboxRuleType type;
+    const char *value;
+};
+struct PakSandboxPolicy {
+    const struct PakSandboxRule *rules;
+    size_t count;
+};
+int pak_sandbox_allows_ip(const struct PakSandboxPolicy *policy, const char *ip);
+int pak_sandbox_allows_domain(const struct PakSandboxPolicy *policy, const char *domain);
+
 struct PakModule *pak_create_mod(void);
 
 int pak_rt_test_module(struct PakModule *mod);

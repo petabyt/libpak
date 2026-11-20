@@ -105,7 +105,7 @@ struct PakNet *pak_net_get_context(void) {
 	ctx->adapter_list = NULL;
 	ctx->ev = EV_NONE;
 
-	DBusConnection *conn = get_dbus_system();
+	DBusConnection *conn = ctx->conn;
 
 	dbus_connection_add_filter(conn, handle_messages, ctx, NULL);
 
@@ -118,6 +118,17 @@ struct PakNet *pak_net_get_context(void) {
 	dbus_connection_flush(conn);
 
 	return ctx;
+}
+
+void pak_net_unref_context(struct PakNet *ctx) {
+	if (!ctx) return;
+	dbus_connection_remove_filter(ctx->conn, handle_messages, ctx);
+	dbus_bus_remove_match(ctx->conn,
+		"type='signal',sender='org.freedesktop.NetworkManager',"
+		"interface='org.freedesktop.NetworkManager.Connection.Active',member='StateChanged'", NULL);
+	if (ctx->adapter_list) dbus_message_unref(ctx->adapter_list);
+	dbus_connection_unref(ctx->conn);
+	free(ctx);
 }
 
 // Block and wait for a dbus event

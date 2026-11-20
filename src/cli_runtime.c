@@ -141,7 +141,10 @@ int pak_rt_test_module(struct PakModule *mod) {
 	mod->rt->current_job = 1;
 
 	struct RuntimePriv *r = mod->rt;
-	if (mod->init) mod->init(mod);
+	if (mod->init && mod->init(mod)) {
+		printf("module initialization failed\n");
+		return -1;
+	}
 	if (mod->on_run_test) {
 		int rc = mod->on_run_test(mod, new_job(r));
 		if (rc) {

@@ -42,8 +42,8 @@ set(CMAKE_C_COMPILER_TARGET "${WASI_TARGET}")
 set(CMAKE_CXX_FLAGS "${WASI_TARGET_FLAGS} ${WASI_CXX_EXTRA}" CACHE INTERNAL "")
 set(CMAKE_CXX_COMPILER_TARGET "${WASI_TARGET}")
 
-set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -Wl,--export-table,--no-entry,--export=get_module,--allow-undefined-file=${CMAKE_CURRENT_LIST_DIR}/symbols.txt" CACHE INTERNAL "")
-set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--export-table,--no-entry,--allow-undefined-file=${CMAKE_CURRENT_LIST_DIR}/symbols.txt" CACHE INTERNAL "")
+set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -Wl,--wrap=accept,--wrap=getsockopt,--export-table,--no-entry,--export=get_module,--export=__errno_location,--allow-undefined-file=${CMAKE_CURRENT_LIST_DIR}/symbols.txt" CACHE INTERNAL "")
+set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--wrap=accept,--wrap=getsockopt,--export-table,--no-entry,--export=__errno_location,--allow-undefined-file=${CMAKE_CURRENT_LIST_DIR}/symbols.txt" CACHE INTERNAL "")
 set(CMAKE_OBJDUMP "/usr/bin/llvm-dwarfdump" CACHE INTERNAL "")
 set(PKG_CONFIG_EXECUTABLE "/bin/false")
 

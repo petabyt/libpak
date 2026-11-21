@@ -1,12 +1,12 @@
 enum ContainerType {
-	BT_DEVICE,
-	BT_ADAPTER,
-	GATT_SVC,
-	GATT_CHR,
-	GATT_DESC,
-	BT_SOCKET,
-	WIFI_ADAPTER,
-	WIFI_AP,
+	BT_DEVICE = 'd',
+	BT_ADAPTER = 'a',
+	GATT_SVC = 's',
+	GATT_CHR = 'c',
+	GATT_DESC = 'd',
+	BT_SOCKET = 'f',
+	WIFI_ADAPTER = 'w',
+	WIFI_AP = 'p',
 };
 
 struct Container {

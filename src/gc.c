@@ -4,7 +4,7 @@
 #include <runtime.h>
 #include <bluetooth.h>
 #include <wifi.h>
-#include "gc.h"
+#include "../include/pak_gc.h"
 
 void pak_setup_gc(struct GcContext *ctx) {
 	ctx->list = calloc(sizeof(struct Container), 100);
@@ -49,9 +49,9 @@ void pak_gc_close(struct GcContext *ctx) {
 		if (ctx->list[i].value != NULL) {
 			if (ctx->list[i].free != NULL) {
 				ctx->list[i].free(ctx->list[i].value, ctx->list[i].free_arg);
-				pak_global_log("Container of type %d ptr %p leaked, freed by gc\n", (char)ctx->list[i].type, ctx->list[i].value);
+				pak_global_log("Container of type %c ptr %p leaked, freed by gc\n", (char)ctx->list[i].type, ctx->list[i].value);
 			} else {
-				pak_global_log("Container of type %d ptr %p leaked, not freed by gc\n", (char)ctx->list[i].type, ctx->list[i].value);
+				pak_global_log("Container of type %c ptr %p leaked, not freed by gc\n", (char)ctx->list[i].type, ctx->list[i].value);
 			}
 		}
 	}

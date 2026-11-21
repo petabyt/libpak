@@ -67,7 +67,16 @@ static int init(struct PakModule *mod) {
 						.list = (const char *[]) {"4.0l I6", "5.6l v8", "7.4l v8", "2.8l tdi", NULL}
 				}
 		});
-
+		pak_rt_set_widget(mod, "text", &(struct PakWidget) {
+				.title = "HTML/Markdown",
+				.type = PAK_MARKDOWNBOX,
+				.u.markdownboxv = {
+						.text = "Hello World<br>"
+								"<h1>Hello, World</h1>"
+								"<h1>Hello, World</h1>",
+						.add_refresh_button = true
+				}
+		});
 		pak_rt_set_widget(mod, "iso", &(struct PakWidget) {
 				.title = "ISO",
 				.group = PAK_GROUP_LIVEVIEW,
@@ -193,6 +202,15 @@ static int on_prop_changed(struct PakModule *mod, int job, const char *name, str
 		pak_rt_add_file_metadata(mod, &(struct PakObjectHandle){.index_in_view = n_downloaded++, .storage_name = "live"}, &(struct PakFileMetadata){
 			.filename = "DSCF1001.JPG",
 			.mime_type = "image/jpeg",
+		});
+	} else if (!strcmp(name, "button")) {
+		for (int i = 0; i < 100; i++) {
+			pak_rt_set_progress_bar(mod, job, i);
+			usleep(10000);
+		}
+		pak_rt_set_widget(mod, "button", &(struct PakWidget) {
+				.title = "Waited",
+				.type = PAK_BUTTON,
 		});
 	}
 	return 0;

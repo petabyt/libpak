@@ -3,9 +3,11 @@
  * characteristic; handles are separately allocated snapshots. */
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include <bluetooth.h>
 
 struct PakBt {
+	pthread_mutex_t listener_lock;
 	int connected, bonded, watching;
 	unsigned char value[512];
 	unsigned int length;
@@ -16,11 +18,17 @@ struct PakBt {
 
 static int valid(struct PakBt *ctx, void *object) { return ctx && object; }
 static void event(struct PakBt *ctx, enum PakBtEvent type, struct PakGattCharacteristic *chr) {
+	pthread_mutex_lock(&ctx->listener_lock);
 	if (ctx->listener) ctx->listener(ctx, type, ctx->listener_device, chr, ctx->listener_arg);
+	pthread_mutex_unlock(&ctx->listener_lock);
 }
 
-struct PakBt *pak_bt_get_context(void) { return calloc(1, sizeof(struct PakBt)); }
-void pak_bt_unref_context(struct PakBt *ctx) { free(ctx); }
+struct PakBt *pak_bt_get_context(void) {
+	struct PakBt *ctx = calloc(1, sizeof(*ctx));
+	if (ctx && pthread_mutex_init(&ctx->listener_lock, NULL)) { free(ctx); return NULL; }
+	return ctx;
+}
+void pak_bt_unref_context(struct PakBt *ctx) { if (ctx) { pthread_mutex_destroy(&ctx->listener_lock); free(ctx); } }
 int pak_bt_is_enabled(struct PakBt *ctx) { return ctx ? 1 : 0; }
 int pak_bt_is_supported(struct PakBt *ctx, enum PakBtFeature feature) { return ctx && feature == PAK_SUPPORT_BLE; }
 int pak_bt_get_n_adapters(struct PakBt *ctx) { return ctx ? 1 : -1; }
@@ -45,7 +53,9 @@ struct PakBtDevice *pak_bt_get_device(struct PakBt *ctx, struct PakBtAdapter *a,
 }
 int pak_bt_unref_device(struct PakBt *ctx, struct PakBtDevice *d) {
 	if (!valid(ctx, d)) return -1;
+	pthread_mutex_lock(&ctx->listener_lock);
 	if (ctx->listener_device == d) { ctx->listener = NULL; ctx->listener_device = NULL; ctx->listener_arg = NULL; }
+	pthread_mutex_unlock(&ctx->listener_lock);
 	free(d); return 0;
 }
 int pak_bt_device_update(struct PakBt *ctx, struct PakBtDevice *d) {
@@ -53,9 +63,11 @@ int pak_bt_device_update(struct PakBt *ctx, struct PakBtDevice *d) {
 	d->is_connected = ctx->connected; d->is_bonded = ctx->bonded; return 0;
 }
 int pak_bt_set_device_callback(struct PakBt *ctx, struct PakBtDevice *d, pak_bt_listen_device *cb, void *arg) {
-	if (!valid(ctx, d)) return -1;
-	if (!cb && ctx->listener_device != d) return 0;
-	ctx->listener_device = cb ? d : NULL; ctx->listener = cb; ctx->listener_arg = cb ? arg : NULL; return 0;
+	if (!valid(ctx, d) || !cb) return -1;
+	pthread_mutex_lock(&ctx->listener_lock);
+	ctx->listener_device = d; ctx->listener = cb; ctx->listener_arg = arg;
+	pthread_mutex_unlock(&ctx->listener_lock);
+	return 0;
 }
 int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *d, int blocking) {
 	(void)blocking; if (!valid(ctx, d)) return -1;

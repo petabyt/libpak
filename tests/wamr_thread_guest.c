@@ -3,6 +3,8 @@
 
 __attribute__((import_module("env"), import_name("wait_for_event")))
 void wait_for_event(void);
+__attribute__((import_module("env"), import_name("register_callback")))
+int register_callback(uint32_t callback);
 
 static _Atomic int event_value;
 
@@ -17,6 +19,7 @@ uint32_t callback_index(void) {
 
 __attribute__((export_name("run")))
 int run(void) {
+	if (register_callback((uint32_t)(uintptr_t)bluetooth_callback)) return -1;
 	wait_for_event();
 	return atomic_load(&event_value);
 }

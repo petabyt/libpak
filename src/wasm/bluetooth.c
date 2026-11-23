@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <pthread.h>
 #include <bluetooth.h>
 #include "main.h"
 #include "layout.h"
@@ -27,20 +28,30 @@ struct bt_state {
 	struct bt_state *next;
 	wasm_module_inst_t inst;
 	struct PakBt *bt;
-	int owned, dispatching;
+	int owned;
 	struct PointerTable *table;
 	struct bt_object *objects;
 	struct bt_event events[128];
 	unsigned head, count;
 	uint32_t generation;
+	pthread_mutex_t lock;
+	pthread_cond_t wake;
+	wasm_thread_t worker;
+	wasm_module_inst_t worker_inst;
+	int worker_started, stopping;
 };
 static struct bt_state *states;
+static pthread_mutex_t states_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static struct bt_state *get_state(wasm_exec_env_t env) {
 	wasm_module_inst_t inst = wasm_runtime_get_module_inst(env);
+	pthread_mutex_lock(&states_lock);
 	for (struct bt_state *s = states; s; s = s->next)
-		if (s->inst == inst)
+		if (s->inst == inst || s->worker_inst == inst) {
+			pthread_mutex_unlock(&states_lock);
 			return s;
+		}
+	pthread_mutex_unlock(&states_lock);
 	return NULL;
 }
 
@@ -55,8 +66,21 @@ bool wasm_bt_attach(wasm_module_inst_t inst, struct PakBt *bt) {
 	}
 	s->inst = inst;
 	s->bt = bt;
+	if (pthread_mutex_init(&s->lock, NULL)) {
+		pointer_table_destroy(s->table, NULL);
+		free(s);
+		return false;
+	}
+	if (pthread_cond_init(&s->wake, NULL)) {
+		pthread_mutex_destroy(&s->lock);
+		pointer_table_destroy(s->table, NULL);
+		free(s);
+		return false;
+	}
+	pthread_mutex_lock(&states_lock);
 	s->next = states;
 	states = s;
+	pthread_mutex_unlock(&states_lock);
 	return true;
 }
 
@@ -70,8 +94,6 @@ static void destroy_object(void *payload, uint32_t refs, void *arg) {
 		pak_bt_unref_adapter(s->bt, o->native);
 		break;
 	case BT_DEVICE:
-		if (o->callback)
-			pak_bt_set_device_callback(s->bt, o->native, NULL, NULL);
 		pak_bt_unref_device(s->bt, o->native);
 		break;
 	case BT_SERVICE:
@@ -86,16 +108,33 @@ static void destroy_object(void *payload, uint32_t refs, void *arg) {
 }
 
 void wasm_bt_detach(wasm_module_inst_t inst) {
+	pthread_mutex_lock(&states_lock);
 	struct bt_state **p = &states;
 	while (*p && (*p)->inst != inst)
 		p = &(*p)->next;
-	if (!*p)
+	if (!*p) {
+		pthread_mutex_unlock(&states_lock);
 		return;
+	}
 	struct bt_state *s = *p;
-	*p = s->next;
+	pthread_mutex_unlock(&states_lock);
+	if (s->worker_started) {
+		pthread_mutex_lock(&s->lock);
+		s->stopping = 1;
+		pthread_cond_signal(&s->wake);
+		pthread_mutex_unlock(&s->lock);
+		wasm_runtime_join_thread(s->worker, NULL);
+	}
+	pthread_mutex_lock(&states_lock);
+	p = &states;
+	while (*p && *p != s) p = &(*p)->next;
+	if (*p) *p = s->next;
+	pthread_mutex_unlock(&states_lock);
 	pointer_table_destroy(s->table, NULL);
 	if (s->owned)
 		pak_bt_unref_context(s->bt);
+	pthread_cond_destroy(&s->wake);
+	pthread_mutex_destroy(&s->lock);
 	free(s);
 }
 
@@ -168,8 +207,10 @@ static uint32_t add(struct bt_state *s, uint32_t type, void *native) {
 		free(o);
 		goto fail_native;
 	}
+	pthread_mutex_lock(&s->lock);
 	o->next = s->objects;
 	s->objects = o;
+	pthread_mutex_unlock(&s->lock);
 	serialize(o);
 	return o->guest;
 fail_native:
@@ -189,19 +230,24 @@ static int remove_obj(struct bt_state *s, uint32_t guest, uint32_t type) {
 	if (!n)
 		return -1;
 	struct bt_object *o = pointer_table_payload(n);
+	pthread_mutex_lock(&s->lock);
+	if (o->type == BT_DEVICE && o->callback) {
+		pthread_mutex_unlock(&s->lock);
+		pointer_table_release(n);
+		return -1;
+	}
 	struct bt_object **p = &s->objects;
 	while (*p && *p != o)
 		p = &(*p)->next;
 	if (*p)
 		*p = o->next;
+	pthread_mutex_unlock(&s->lock);
 	pointer_table_user_unref(s->table, guest, NULL);
 	pointer_table_release(n);
 	return 0;
 }
 
-/* The fake backend invokes this synchronously; no guest code is called from
- * the native callback. Events are drained by the import that caused them. */
-#ifdef PAK_FAKE_BLUETOOTH
+/* Backend callbacks only enqueue; the worker owns its WAMR execution environment. */
 static int on_event(struct PakBt *ctx, enum PakBtEvent type, struct PakBtDevice *dev, struct PakGattCharacteristic *chr,
 					void *arg) {
 	(void)ctx;
@@ -209,50 +255,67 @@ static int on_event(struct PakBt *ctx, enum PakBtEvent type, struct PakBtDevice 
 	struct bt_object *o = arg;
 	struct bt_state *s = o->state;
 	uint32_t guest_chr = 0;
+	pthread_mutex_lock(&s->lock);
+	if (s->stopping) {
+		pthread_mutex_unlock(&s->lock);
+		return -1;
+	}
 	for (struct bt_object *c = s->objects; c; c = c->next)
 		if (c->type == BT_CHARACTERISTIC && c->native == chr) {
 			guest_chr = c->guest;
 			break;
 		}
 	if (s->count == 128) {
-		wasm_runtime_set_exception(s->inst, "Bluetooth event queue full");
+		pthread_mutex_unlock(&s->lock);
 		return -1;
 	}
 	unsigned i = (s->head + s->count++) % 128;
 	s->events[i] = (struct bt_event){o->guest, guest_chr, o->callback, o->callback_arg, type, o->generation};
+	pthread_cond_signal(&s->wake);
+	pthread_mutex_unlock(&s->lock);
 	return 0;
 }
-#endif
-static int dispatch(wasm_exec_env_t env, struct bt_state *s) {
-	if (s->dispatching)
-		return 0;
-	s->dispatching = 1;
-	int rc = 0;
-	while (s->count) {
+
+static void *bt_worker(wasm_exec_env_t env, void *arg) {
+	struct bt_state *s = arg;
+	pthread_mutex_lock(&states_lock);
+	s->worker_inst = wasm_runtime_get_module_inst(env);
+	pthread_mutex_unlock(&states_lock);
+	for (;;) {
+		pthread_mutex_lock(&s->lock);
+		while (!s->count && !s->stopping)
+			pthread_cond_wait(&s->wake, &s->lock);
+		if (s->stopping) {
+			pthread_mutex_unlock(&s->lock);
+			break;
+		}
 		struct bt_event ev = s->events[s->head];
 		s->head = (s->head + 1) % 128;
 		s->count--;
+		pthread_mutex_unlock(&s->lock);
 		struct PtNode *d = acquire(s, ev.device, BT_DEVICE);
 		struct PtNode *c = ev.chr ? acquire(s, ev.chr, BT_CHARACTERISTIC) : NULL;
 		if (d) {
 			struct bt_object *obj = pointer_table_payload(d);
-			if (obj->generation == ev.generation && obj->callback == ev.callback && obj->callback_arg == ev.arg &&
-				(!ev.chr || c)) {
-				serialize(obj);
+			pthread_mutex_lock(&s->lock);
+			int valid = obj->generation == ev.generation && obj->callback == ev.callback &&
+				obj->callback_arg == ev.arg && (!ev.chr || c);
+			pthread_mutex_unlock(&s->lock);
+			if (valid) {
 				uint32_t a[] = {1, ev.type, ev.device, ev.chr, ev.arg};
-				if (!wasm_runtime_call_indirect(env, ev.callback, 5, a))
-					rc = -1;
+				if (!wasm_runtime_call_indirect(env, ev.callback, 5, a)) {
+					pointer_table_release(c);
+					pointer_table_release(d);
+					break;
+				}
 			}
 		}
 		if (c)
 			pointer_table_release(c);
 		if (d)
 			pointer_table_release(d);
-		if (rc)
-			break;
 	}
-	s->dispatching = 0;
-	return rc;
+	return NULL;
 }
 
 static uint32_t bt_get_context(wasm_exec_env_t e) {
@@ -339,7 +402,7 @@ static int bt_device_op(wasm_exec_env_t e, uint32_t t, uint32_t h, int arg, int 
 		r = pak_bt_device_create_bond(s->bt, o->native, arg);
 	serialize(o);
 	pointer_table_release(n);
-	return dispatch(e, s) ? -1 : r;
+	return r;
 }
 
 static int bt_update(wasm_exec_env_t e, uint32_t t, uint32_t h) {
@@ -364,19 +427,27 @@ static int bt_callback(wasm_exec_env_t e, uint32_t t, uint32_t h, uint32_t cb, u
 	if (!n)
 		return -1;
 	struct bt_object *o = pointer_table_payload(n);
-#ifdef PAK_FAKE_BLUETOOTH
-	int r = pak_bt_set_device_callback(s->bt, o->native, cb ? on_event : NULL, cb ? o : NULL);
-	if (!r) {
+	wasm_memory_inst_t memory = wasm_runtime_get_default_memory(s->inst);
+	int r = -1;
+	if (cb && memory && wasm_memory_get_shared(memory) && !o->callback) {
+		if (!s->worker_started) {
+			if (wasm_runtime_spawn_thread(e, &s->worker, bt_worker, s))
+				goto done_callback;
+			s->worker_started = 1;
+		}
+		pthread_mutex_lock(&s->lock);
 		o->callback = cb;
 		o->callback_arg = arg;
 		o->generation = ++s->generation;
+		pthread_mutex_unlock(&s->lock);
+		r = pak_bt_set_device_callback(s->bt, o->native, on_event, o);
+		if (r) {
+			pthread_mutex_lock(&s->lock);
+			o->callback = 0;
+			pthread_mutex_unlock(&s->lock);
+		}
 	}
-#else
-	(void)cb;
-	(void)arg;
-	(void)o;
-	int r = PAK_ERR_UNSUPPORTED;
-#endif
+done_callback:
 	pointer_table_release(n);
 	return r;
 }
@@ -419,7 +490,7 @@ static int bt_char_op(wasm_exec_env_t e, uint32_t t, uint32_t h, int arg, int op
 	else
 		r = pak_bt_set_cccd(s->bt, o->native, arg);
 	pointer_table_release(n);
-	return dispatch(e, s) ? -1 : r;
+	return r;
 }
 
 static int bt_read_char(wasm_exec_env_t e, uint32_t t, uint32_t h, int b) {
@@ -451,7 +522,7 @@ static int bt_write_char(wasm_exec_env_t e, uint32_t t, uint32_t h, uint32_t dat
 	struct bt_object *o = pointer_table_payload(n);
 	int r = pak_bt_write_characteristic(s->bt, o->native, p, len, blocking);
 	pointer_table_release(n);
-	return dispatch(e, s) ? -1 : r;
+	return r;
 }
 
 static uint32_t bt_cached(wasm_exec_env_t e, uint32_t t, uint32_t h, uint32_t data, uint32_t len) {

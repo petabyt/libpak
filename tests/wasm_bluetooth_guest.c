@@ -7,7 +7,7 @@ _Static_assert(sizeof(struct PakBtDevice) == 140 && offsetof(struct PakBtDevice,
 _Static_assert(sizeof(struct PakGattService) == 44 && offsetof(struct PakGattService, handle) == 42, "wasm32 service ABI");
 _Static_assert(sizeof(struct PakGattCharacteristic) == 52 && offsetof(struct PakGattCharacteristic, mtu) == 48, "wasm32 characteristic ABI");
 
-static int events[16], count, callback_error, unregister_on_write;
+static int events[16], count, callback_error;
 static int listener(struct PakBt *ctx, enum PakBtEvent event, struct PakBtDevice *dev,
 		struct PakGattCharacteristic *chr, void *arg) {
 	if (!ctx || !dev || arg != (void *)0x1234 || count >= 16) return -1;
@@ -15,7 +15,6 @@ static int listener(struct PakBt *ctx, enum PakBtEvent event, struct PakBtDevice
 	if (event == PAK_BT_EVENT_GATT_CHAR_WRITTEN || event == PAK_BT_EVENT_GATT_CHAR_CHANGED) {
 		unsigned char out[4] = {0};
 		if (!chr || pak_bt_read_characteristic_cached_value(ctx, chr, out, sizeof(out)) != 3 || memcmp(out, "abc", 3)) callback_error = 1;
-		if (event == PAK_BT_EVENT_GATT_CHAR_WRITTEN && unregister_on_write && pak_bt_set_device_callback(ctx, dev, NULL, NULL)) callback_error = 1;
 	}
 	return 0;
 }
@@ -44,8 +43,8 @@ static int run(struct PakModule *mod, int job) {
 	if (callback_error || count != 6 || memcmp(events, expected, sizeof(expected))) return 13;
 	if (pak_bt_device_connect(ctx, d, PAK_BLOCK) || count != 8) return 16;
 	if (pak_bt_set_watching_characteristic(ctx, c, 1)) return 19;
-	unregister_on_write = 1;
-	if (pak_bt_write_characteristic(ctx, c, "abc", 3, PAK_BLOCK) || count != 9 || callback_error) return 20;
+	if (pak_bt_set_device_callback(ctx, d, NULL, NULL) != -1) return 20;
+	if (pak_bt_write_characteristic(ctx, c, "abc", 3, PAK_BLOCK) || count != 10 || callback_error) return 24;
 	if (pak_bt_get_n_devices(ctx, (struct PakBtAdapter *)c, 0) >= 0) return 17;
 	if (pak_bt_unref_gatt_characteristic(ctx, c) || pak_bt_unref_gatt_service(ctx, s) ||
 		pak_bt_unref_device(ctx, d) || pak_bt_unref_adapter(ctx, a)) return 15;

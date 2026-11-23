@@ -31,8 +31,8 @@ int main(void) {
 		PAK_BT_EVENT_GATT_CHAR_WRITTEN, PAK_BT_EVENT_GATT_CHAR_CHANGED,
 		PAK_BT_EVENT_GATT_CHAR_READ, PAK_BT_EVENT_DISCONNECTED };
 	assert(count == 6 && !memcmp(events, expected, sizeof(expected)));
-	assert(!pak_bt_set_device_callback(ctx, d, NULL, NULL));
-	assert(!pak_bt_device_connect(ctx, d, PAK_BLOCK) && count == 6);
+	assert(pak_bt_set_device_callback(ctx, d, NULL, NULL) == -1);
+	assert(!pak_bt_device_connect(ctx, d, PAK_BLOCK) && count == 8);
 	assert(!pak_bt_unref_gatt_characteristic(ctx, c));
 	assert(!pak_bt_unref_gatt_service(ctx, s));
 	assert(!pak_bt_unref_device(ctx, d));

@@ -506,7 +506,6 @@ static int guest_free(struct PakModule *m) {
 }
 
 int setup_wasm_module(struct PakModule *mod, char *file_contents, unsigned int file_length) {
-	static char global_heap_buf[4 * 1024 * 1024];
 	static NativeSymbol symbols[] = {
 		{"pak_global_log", (void *)(uintptr_t)pak_global_log_wrapper, "($*)", NULL},
 		{"pak_debug_log", (void *)(uintptr_t)pak_debug_log_wrapper, "(i$*)", NULL},
@@ -528,9 +527,10 @@ int setup_wasm_module(struct PakModule *mod, char *file_contents, unsigned int f
 		return -1;
 	if (!contexts) {
 		RuntimeInitArgs init = {0};
-		init.mem_alloc_type = Alloc_With_Pool;
-		init.mem_alloc_option.pool.heap_buf = global_heap_buf;
-		init.mem_alloc_option.pool.heap_size = sizeof(global_heap_buf);
+		init.mem_alloc_type = Alloc_With_Allocator;
+		init.mem_alloc_option.allocator.malloc_func = malloc;
+		init.mem_alloc_option.allocator.realloc_func = realloc;
+		init.mem_alloc_option.allocator.free_func = free;
 		init.n_native_symbols = sizeof(symbols) / sizeof(symbols[0]);
 		init.native_module_name = "env";
 		init.native_symbols = symbols;

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <wasm_c_api.h>
 #include <wasm_export.h>
+#include "memory.h"
 #include <runtime.h>
 #include "main.h"
 
@@ -124,7 +125,7 @@ int printf_core(printf_out_fn out, void *out_ctx, const char *fmt, void *next_in
 }
 
 const char *wasm_next_str(void *user) {
-	struct wasm_args_ctx *ctx = (struct wasm_args_ctx *)user;
+	struct WasmArgsCtx *ctx = (struct WasmArgsCtx *)user;
 	const uint8_t *p;
 	uint32_t app_addr;
 
@@ -134,7 +135,7 @@ const char *wasm_next_str(void *user) {
 	}
 
 	p = (uint8_t *)ctx->p;
-	app_addr = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+	app_addr = wasm_read_u32le(p);
 	ctx->p += 4;
 
 	if (app_addr == 0)
@@ -147,4 +148,3 @@ const char *wasm_next_str(void *user) {
 
 	return (const char *)wasm_runtime_addr_app_to_native(ctx->inst, app_addr);
 }
-

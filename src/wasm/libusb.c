@@ -1,25 +1,3 @@
-/**
- * @file libusb_native.c
- *
- * WASM wrapper for the host libusb-1.0 library.
- *
- * Design rules:
- * - No host pointer is ever stored in guest memory. libusb contexts, devices, device handles, device lists and config
- *   descriptors live in a per module instance pointer_table (see pointer_table.h), stored in the module instance context
- *   (wasm_runtime_create_context_key() and friends, the same mechanism libc-wasi uses for its context). The guest only
- *   sees integer handles typed as opaque pointers in the guest header.
- * - Structs returned to the guest (USB descriptors, device lists) are deep copied into guest memory allocated with
- *   wasm_runtime_module_malloc(), serialized field by field with a hardcoded wasm32 ABI (little endian, 4 byte pointers),
- *   because the host ABI (64 bit pointers) differs from the wasm32 ABI.
- * - Class specific "extra" descriptors are currently nulled out (extra = NULL, extra_length = 0).
- * - Transfers are blocking (libusb sync API); data crosses the boundary through a host staging buffer so memory growth of
- *   the instance can never invalidate a native pointer held across the call.
- * - The instance context destructor runs when the main instance is deinstantiated, after its linear memory (and app heap)
- *   has already been torn down, so the destroy callbacks take a "teardown" argument and skip guest memory frees in that
- *   case (the blobs die with the linear memory anyway). Payloads remember their creating instance so that a normal
- *   (non-teardown) removal always frees the guest blob from the right heap.
- */
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -29,38 +7,9 @@
 #include <runtime.h>
 
 #include "wasm_export.h"
-// #include "bh_log.h"
 #include "pointer_table.h"
-
-#ifndef WASM_ENABLE_MODULE_INST_CONTEXT
-#define WASM_ENABLE_MODULE_INST_CONTEXT 0
-#endif
-
-#if WASM_ENABLE_MODULE_INST_CONTEXT == 0
-#warning "the libusb wrapper requires WASM_ENABLE_MODULE_INST_CONTEXT (WAMR_BUILD_MODULE_INST_CONTEXT=1)"
-#endif
-
-// wasm32 ABI layout of the structures that are serialized (hardcoded offsets; verified against the guest header
-// through _Static_asserts in wasm/include/libusb.h)
-#define W32_SIZEOF_DEVICE_DESCRIPTOR 18
-#define W32_SIZEOF_ENDPOINT_DESCRIPTOR 20
-#define W32_SIZEOF_INTERFACE_DESCRIPTOR 24
-#define W32_SIZEOF_INTERFACE 8
-#define W32_SIZEOF_CONFIG_DESCRIPTOR 24
-
-#define W32_CFG_OFF_interface 12
-#define W32_CFG_OFF_extra 16
-#define W32_CFG_OFF_extra_length 20
-
-#define W32_IFACE_OFF_altsetting 0
-#define W32_IFACE_OFF_num_altsetting 4
-
-#define W32_IFD_OFF_endpoint 12
-#define W32_IFD_OFF_extra 16
-#define W32_IFD_OFF_extra_length 20
-
-#define W32_EPD_OFF_extra 12
-#define W32_EPD_OFF_extra_length 16
+#include "memory.h"
+#include "layout.h"
 
 enum {
 	T_CTX = 0,
@@ -70,136 +19,112 @@ enum {
 	T_CFG,
 };
 
-struct libusb_destroy_arg {
+struct LibusbDestroyArg {
 	bool teardown; // true at instance teardown: guest memory is gone, skip module_free
 };
 
-typedef struct devl_payload {
+struct LibusbDeviceListPayload {
 	libusb_device **list;
 	uint32_t count;
 	uint32_t *devs;
 	uint64_t blob;
 	wasm_module_inst_t owner;
-} devl_payload_t;
+};
 
-typedef struct cfg_payload {
+struct LibusbConfigPayload {
 	struct libusb_config_descriptor *cfg;
 	uint64_t blob;
 	wasm_module_inst_t owner;
-} cfg_payload_t;
+};
 
 static void *g_context_key;
 static pthread_mutex_t g_table_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static void put_u8le(uint8_t *p, uint8_t v) { p[0] = v; }
-
-static void put_i8le(uint8_t *p, int8_t v) { put_u8le(p, (uint8_t)v); }
-
-static void put_u16le(uint8_t *p, uint16_t v) {
-	p[0] = (uint8_t)v;
-	p[1] = (uint8_t)(v >> 8);
-}
-
-static void put_u32le(uint8_t *p, uint32_t v) {
-	p[0] = (uint8_t)v;
-	p[1] = (uint8_t)(v >> 8);
-	p[2] = (uint8_t)(v >> 16);
-	p[3] = (uint8_t)(v >> 24);
-}
-
-static void put_i32le(uint8_t *p, int32_t v) { put_u32le(p, (uint32_t)v); }
-
-static void *validate_app_addr_native(wasm_module_inst_t inst, uint32_t app_off, uint32_t size) {
-	if (!wasm_runtime_validate_app_addr(inst, app_off, size))
-		return NULL;
-	return wasm_runtime_addr_app_to_native(inst, app_off);
-}
-
 static bool write_u32_to_guest(wasm_module_inst_t inst, uint32_t app_off, uint32_t value) {
-	uint8_t *p = validate_app_addr_native(inst, app_off, sizeof(uint32_t));
+	uint8_t *p = wasm_guest_addr(inst, app_off, sizeof(uint32_t));
 
 	if (!p)
 		return false;
 
-	put_u32le(p, value);
+	wasm_put_u32le(p, value);
 	return true;
 }
 
 static void serialize_device_descriptor(const struct libusb_device_descriptor *desc, uint8_t *p) {
-	put_u8le(p + 0, desc->bLength);
-	put_u8le(p + 1, desc->bDescriptorType);
-	put_u16le(p + 2, desc->bcdUSB);
-	put_u8le(p + 4, desc->bDeviceClass);
-	put_u8le(p + 5, desc->bDeviceSubClass);
-	put_u8le(p + 6, desc->bDeviceProtocol);
-	put_u8le(p + 7, desc->bMaxPacketSize0);
-	put_u16le(p + 8, desc->idVendor);
-	put_u16le(p + 10, desc->idProduct);
-	put_u16le(p + 12, desc->bcdDevice);
-	put_u8le(p + 14, desc->iManufacturer);
-	put_u8le(p + 15, desc->iProduct);
-	put_u8le(p + 16, desc->iSerialNumber);
-	put_u8le(p + 17, desc->bNumConfigurations);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_B_LENGTH, desc->bLength);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_B_DESCRIPTOR_TYPE, desc->bDescriptorType);
+	wasm_put_u16le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_BCD_USB, desc->bcdUSB);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_B_DEVICE_CLASS, desc->bDeviceClass);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_B_DEVICE_SUB_CLASS, desc->bDeviceSubClass);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_B_DEVICE_PROTOCOL, desc->bDeviceProtocol);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_B_MAX_PACKET_SIZE0, desc->bMaxPacketSize0);
+	wasm_put_u16le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_ID_VENDOR, desc->idVendor);
+	wasm_put_u16le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_ID_PRODUCT, desc->idProduct);
+	wasm_put_u16le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_BCD_DEVICE, desc->bcdDevice);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_I_MANUFACTURER, desc->iManufacturer);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_I_PRODUCT, desc->iProduct);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_I_SERIAL_NUMBER, desc->iSerialNumber);
+	wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_DEVICE_DESCRIPTOR_B_NUM_CONFIGURATIONS, desc->bNumConfigurations);
 }
 
 static uint32_t config_blob_size(const struct libusb_config_descriptor *cfg) {
-	uint32_t size = W32_SIZEOF_CONFIG_DESCRIPTOR + cfg->bNumInterfaces * W32_SIZEOF_INTERFACE;
+	uint32_t size = WASM_SIZEOF_LIBUSB_CONFIG_DESCRIPTOR + cfg->bNumInterfaces * WASM_SIZEOF_LIBUSB_INTERFACE;
 	uint32_t i, j;
 
 	for (i = 0; i < cfg->bNumInterfaces; i++) {
 		const struct libusb_interface *iface = cfg->interface + i;
 
-		size += (uint32_t)iface->num_altsetting * W32_SIZEOF_INTERFACE_DESCRIPTOR;
+		size += (uint32_t)iface->num_altsetting * WASM_SIZEOF_LIBUSB_INTERFACE_DESCRIPTOR;
 		for (j = 0; j < (uint32_t)iface->num_altsetting; j++)
-			size += iface->altsetting[j].bNumEndpoints * W32_SIZEOF_ENDPOINT_DESCRIPTOR;
+			size += iface->altsetting[j].bNumEndpoints * WASM_SIZEOF_LIBUSB_ENDPOINT_DESCRIPTOR;
 	}
 
 	return size;
 }
 
 static void serialize_config_descriptor(const struct libusb_config_descriptor *cfg, uint32_t blob_app, uint8_t *base) {
-	uint8_t *p = base + W32_SIZEOF_CONFIG_DESCRIPTOR + cfg->bNumInterfaces * W32_SIZEOF_INTERFACE;
-	uint32_t iface_arr_off = W32_SIZEOF_CONFIG_DESCRIPTOR;
+	uint8_t *p = base + WASM_SIZEOF_LIBUSB_CONFIG_DESCRIPTOR + cfg->bNumInterfaces * WASM_SIZEOF_LIBUSB_INTERFACE;
+	uint32_t iface_arr_off = WASM_SIZEOF_LIBUSB_CONFIG_DESCRIPTOR;
 	uint32_t i;
 
-	put_u8le(base + 0, cfg->bLength);
-	put_u8le(base + 1, cfg->bDescriptorType);
-	put_u16le(base + 2, cfg->wTotalLength);
-	put_u8le(base + 4, cfg->bNumInterfaces);
-	put_u8le(base + 5, cfg->bConfigurationValue);
-	put_u8le(base + 6, cfg->iConfiguration);
-	put_u8le(base + 7, cfg->bmAttributes);
-	put_u8le(base + 8, cfg->MaxPower);
-	put_u32le(base + W32_CFG_OFF_interface, blob_app + iface_arr_off);
-	put_u32le(base + W32_CFG_OFF_extra, 0);
-	put_i32le(base + W32_CFG_OFF_extra_length, 0);
+	wasm_put_u8le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_B_LENGTH, cfg->bLength);
+	wasm_put_u8le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_B_DESCRIPTOR_TYPE, cfg->bDescriptorType);
+	wasm_put_u16le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_W_TOTAL_LENGTH, cfg->wTotalLength);
+	wasm_put_u8le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_B_NUM_INTERFACES, cfg->bNumInterfaces);
+	wasm_put_u8le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_B_CONFIGURATION_VALUE, cfg->bConfigurationValue);
+	wasm_put_u8le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_I_CONFIGURATION, cfg->iConfiguration);
+	wasm_put_u8le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_BM_ATTRIBUTES, cfg->bmAttributes);
+	wasm_put_u8le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_MAX_POWER, cfg->MaxPower);
+	wasm_put_u32le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_INTERFACE, blob_app + iface_arr_off);
+	wasm_put_u32le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_EXTRA, 0);
+	wasm_put_i32le(base + WASM_OFFSETOF_LIBUSB_CONFIG_DESCRIPTOR_EXTRA_LENGTH, 0);
 
 	for (i = 0; i < cfg->bNumInterfaces; i++) {
 		const struct libusb_interface *iface = cfg->interface + i;
-		uint32_t iface_entry_off = iface_arr_off + i * W32_SIZEOF_INTERFACE;
+		uint32_t iface_entry_off = iface_arr_off + i * WASM_SIZEOF_LIBUSB_INTERFACE;
 		uint32_t alt_start = (uint32_t)(p - base);
 		uint32_t num_altsetting = (uint32_t)iface->num_altsetting;
 		uint8_t *ep_p;
 		uint32_t j, k;
 
-		put_u32le(base + iface_entry_off + W32_IFACE_OFF_altsetting, blob_app + alt_start);
-		put_i32le(base + iface_entry_off + W32_IFACE_OFF_num_altsetting, iface->num_altsetting);
+		wasm_put_u32le(base + iface_entry_off + WASM_OFFSETOF_LIBUSB_INTERFACE_ALTSETTING, blob_app + alt_start);
+		wasm_put_i32le(base + iface_entry_off + WASM_OFFSETOF_LIBUSB_INTERFACE_NUM_ALTSETTING, iface->num_altsetting);
 
 		for (j = 0; j < num_altsetting; j++) {
 			const struct libusb_interface_descriptor *ifd = iface->altsetting + j;
 
-			put_u8le(p + 0, ifd->bLength);
-			put_u8le(p + 1, ifd->bDescriptorType);
-			put_u8le(p + 2, ifd->bInterfaceNumber);
-			put_u8le(p + 3, ifd->bAlternateSetting);
-			put_u8le(p + 4, ifd->bNumEndpoints);
-			put_u8le(p + 5, ifd->bInterfaceClass);
-			put_u8le(p + 6, ifd->bInterfaceSubClass);
-			put_u8le(p + 7, ifd->bInterfaceProtocol);
-			put_u8le(p + 8, ifd->iInterface);
-			put_u32le(p + W32_IFD_OFF_extra, 0);
-			put_i32le(p + W32_IFD_OFF_extra_length, 0);
-			p += W32_SIZEOF_INTERFACE_DESCRIPTOR;
+			wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_B_LENGTH, ifd->bLength);
+			wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_B_DESCRIPTOR_TYPE, ifd->bDescriptorType);
+			wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_B_INTERFACE_NUMBER, ifd->bInterfaceNumber);
+			wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_B_ALTERNATE_SETTING, ifd->bAlternateSetting);
+			wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_B_NUM_ENDPOINTS, ifd->bNumEndpoints);
+			wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_B_INTERFACE_CLASS, ifd->bInterfaceClass);
+			wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_B_INTERFACE_SUB_CLASS, ifd->bInterfaceSubClass);
+			wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_B_INTERFACE_PROTOCOL, ifd->bInterfaceProtocol);
+			wasm_put_u8le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_I_INTERFACE, ifd->iInterface);
+			wasm_put_u32le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_EXTRA, 0);
+			wasm_put_i32le(p + WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_EXTRA_LENGTH, 0);
+			p += WASM_SIZEOF_LIBUSB_INTERFACE_DESCRIPTOR;
 		}
 
 		ep_p = p;
@@ -210,20 +135,21 @@ static void serialize_config_descriptor(const struct libusb_config_descriptor *c
 			for (k = 0; k < ifd->bNumEndpoints; k++) {
 				const struct libusb_endpoint_descriptor *epd = ifd->endpoint + k;
 
-				put_u8le(ep_p + 0, epd->bLength);
-				put_u8le(ep_p + 1, epd->bDescriptorType);
-				put_u8le(ep_p + 2, epd->bEndpointAddress);
-				put_u8le(ep_p + 3, epd->bmAttributes);
-				put_u16le(ep_p + 4, epd->wMaxPacketSize);
-				put_u8le(ep_p + 6, epd->bInterval);
-				put_u8le(ep_p + 7, epd->bRefresh);
-				put_u8le(ep_p + 8, epd->bSynchAddress);
-				put_u32le(ep_p + W32_EPD_OFF_extra, 0);
-				put_i32le(ep_p + W32_EPD_OFF_extra_length, 0);
-				ep_p += W32_SIZEOF_ENDPOINT_DESCRIPTOR;
+				wasm_put_u8le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_B_LENGTH, epd->bLength);
+				wasm_put_u8le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_B_DESCRIPTOR_TYPE, epd->bDescriptorType);
+				wasm_put_u8le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_B_ENDPOINT_ADDRESS, epd->bEndpointAddress);
+				wasm_put_u8le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_BM_ATTRIBUTES, epd->bmAttributes);
+				wasm_put_u16le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_W_MAX_PACKET_SIZE, epd->wMaxPacketSize);
+				wasm_put_u8le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_B_INTERVAL, epd->bInterval);
+				wasm_put_u8le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_B_REFRESH, epd->bRefresh);
+				wasm_put_u8le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_B_SYNCH_ADDRESS, epd->bSynchAddress);
+				wasm_put_u32le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_EXTRA, 0);
+				wasm_put_i32le(ep_p + WASM_OFFSETOF_LIBUSB_ENDPOINT_DESCRIPTOR_EXTRA_LENGTH, 0);
+				ep_p += WASM_SIZEOF_LIBUSB_ENDPOINT_DESCRIPTOR;
 			}
 
-			put_u32le(base + alt_start + j * W32_SIZEOF_INTERFACE_DESCRIPTOR + W32_IFD_OFF_endpoint, blob_app + ep_base);
+			wasm_put_u32le(base + alt_start + j * WASM_SIZEOF_LIBUSB_INTERFACE_DESCRIPTOR +
+			               WASM_OFFSETOF_LIBUSB_INTERFACE_DESCRIPTOR_ENDPOINT, blob_app + ep_base);
 		}
 		p = ep_p;
 	}
@@ -254,8 +180,8 @@ static void destroy_devh(void *payload, uint32_t user_refs_left, void *destroy_a
 }
 
 static void destroy_devl(void *payload, uint32_t user_refs_left, void *destroy_arg) {
-	devl_payload_t *p = (devl_payload_t *)payload;
-	const struct libusb_destroy_arg *arg = (const struct libusb_destroy_arg *)destroy_arg;
+	struct LibusbDeviceListPayload *p = payload;
+	const struct LibusbDestroyArg *arg = destroy_arg;
 
 	(void)user_refs_left;
 
@@ -269,8 +195,8 @@ static void destroy_devl(void *payload, uint32_t user_refs_left, void *destroy_a
 }
 
 static void destroy_cfg(void *payload, uint32_t user_refs_left, void *destroy_arg) {
-	cfg_payload_t *p = (cfg_payload_t *)payload;
-	const struct libusb_destroy_arg *arg = (const struct libusb_destroy_arg *)destroy_arg;
+	struct LibusbConfigPayload *p = payload;
+	const struct LibusbDestroyArg *arg = destroy_arg;
 
 	(void)user_refs_left;
 
@@ -282,7 +208,7 @@ static void destroy_cfg(void *payload, uint32_t user_refs_left, void *destroy_ar
 }
 
 static void table_context_dtor(wasm_module_inst_t inst, void *ctx) {
-	struct libusb_destroy_arg arg = { .teardown = true };
+	struct LibusbDestroyArg arg = { .teardown = true };
 
 	(void)inst;
 
@@ -305,7 +231,7 @@ static struct PointerTable *get_table(wasm_module_inst_t inst) {
 		// another thread won the race
 		pthread_mutex_unlock(&g_table_lock);
 		{
-			struct libusb_destroy_arg arg = { .teardown = false };
+			struct LibusbDestroyArg arg = { .teardown = false };
 
 			pointer_table_destroy(table, &arg);
 		}
@@ -348,7 +274,7 @@ static int32_t libusb_init_wrapper(wasm_exec_env_t exec_env, uint32_t slot) {
 	}
 
 	if (!write_u32_to_guest(inst, slot, key)) {
-		pointer_table_remove(table, key, &(struct libusb_destroy_arg){ .teardown = false });
+		pointer_table_remove(table, key, &(struct LibusbDestroyArg){ .teardown = false });
 		return (int32_t)LIBUSB_ERROR_INVALID_PARAM;
 	}
 
@@ -367,7 +293,7 @@ static void libusb_exit_wrapper(wasm_exec_env_t exec_env, uint32_t ctx_ptr) {
 	if (!(table = peek_table(inst)))
 		return;
 
-	if (!pointer_table_remove(table, ctx_ptr, &(struct libusb_destroy_arg){ .teardown = false }))
+	if (!pointer_table_remove(table, ctx_ptr, &(struct LibusbDestroyArg){ .teardown = false }))
 		pak_global_log("libusb_exit: invalid context handle %u", ctx_ptr);
 }
 
@@ -401,12 +327,12 @@ static int32_t libusb_get_device_list_wrapper(wasm_exec_env_t exec_env, uint32_t
 	libusb_device **list = NULL;
 	uint8_t *blob_native = NULL;
 	uint64_t blob = 0;
-	devl_payload_t *devl = NULL;
+	struct LibusbDeviceListPayload *devl = NULL;
 	uint32_t key = 0;
 	ssize_t count;
 	uint32_t i;
 	int32_t ret = LIBUSB_SUCCESS;
-	struct libusb_destroy_arg arg = { .teardown = false };
+	struct LibusbDestroyArg arg = { .teardown = false };
 
 	if (!(table = get_table(inst)))
 		return (int32_t)LIBUSB_ERROR_NO_MEM;
@@ -431,7 +357,7 @@ static int32_t libusb_get_device_list_wrapper(wasm_exec_env_t exec_env, uint32_t
 		goto fail;
 	}
 
-	if (!(devl = (devl_payload_t *)wasm_runtime_malloc(sizeof(devl_payload_t)))) {
+	if (!(devl = wasm_runtime_malloc(sizeof(*devl)))) {
 		ret = (int32_t)LIBUSB_ERROR_NO_MEM;
 		goto fail;
 	}
@@ -458,10 +384,10 @@ static int32_t libusb_get_device_list_wrapper(wasm_exec_env_t exec_env, uint32_t
 			goto fail;
 		}
 		devl->devs[i] = dev_key;
-		put_u32le(blob_native + i * sizeof(uint32_t), dev_key);
+		wasm_put_u32le(blob_native + i * sizeof(uint32_t), dev_key);
 		devl->count = i + 1;
 	}
-	put_u32le(blob_native + (uint32_t)count * sizeof(uint32_t), 0);
+	wasm_put_u32le(blob_native + (uint32_t)count * sizeof(uint32_t), 0);
 
 	if (!write_u32_to_guest(inst, slot, (uint32_t)blob)) {
 		ret = (int32_t)LIBUSB_ERROR_INVALID_PARAM;
@@ -500,7 +426,7 @@ static void libusb_free_device_list_wrapper(wasm_exec_env_t exec_env, uint32_t l
 	wasm_module_inst_t inst = wasm_runtime_get_module_inst(exec_env);
 	struct PointerTable *table;
 	struct PtNode *devl_entry;
-	devl_payload_t *devl;
+	struct LibusbDeviceListPayload *devl;
 	uint32_t i;
 
 	if (!(table = peek_table(inst)))
@@ -511,7 +437,7 @@ static void libusb_free_device_list_wrapper(wasm_exec_env_t exec_env, uint32_t l
 		return;
 	}
 
-	devl = (devl_payload_t *)pointer_table_payload(devl_entry);
+	devl = pointer_table_payload(devl_entry);
 
 	if (unref_devices) {
 		for (i = 0; i < devl->count; i++) {
@@ -523,7 +449,7 @@ static void libusb_free_device_list_wrapper(wasm_exec_env_t exec_env, uint32_t l
 				continue;
 
 			dev = (libusb_device *)pointer_table_payload(dev_entry);
-			prev = pointer_table_user_unref(table, devl->devs[i], &(struct libusb_destroy_arg){ .teardown = false });
+			prev = pointer_table_user_unref(table, devl->devs[i], &(struct LibusbDestroyArg){ .teardown = false });
 			if (prev > 0)
 				libusb_unref_device(dev);
 			pointer_table_release(dev_entry);
@@ -533,7 +459,7 @@ static void libusb_free_device_list_wrapper(wasm_exec_env_t exec_env, uint32_t l
 
 	pointer_table_release(devl_entry);
 
-	if (!pointer_table_remove(table, list_ptr, &(struct libusb_destroy_arg){ .teardown = false }))
+	if (!pointer_table_remove(table, list_ptr, &(struct LibusbDestroyArg){ .teardown = false }))
 		pak_global_log("libusb_free_device_list: list handle %u vanished", list_ptr);
 }
 
@@ -576,7 +502,7 @@ static void libusb_unref_device_wrapper(wasm_exec_env_t exec_env, uint32_t dev_p
 	}
 
 	dev = (libusb_device *)pointer_table_payload(entry);
-	prev = pointer_table_user_unref(table, dev_ptr, &(struct libusb_destroy_arg){ .teardown = false });
+	prev = pointer_table_user_unref(table, dev_ptr, &(struct LibusbDestroyArg){ .teardown = false });
 	if (prev > 0)
 		libusb_unref_device(dev);
 
@@ -612,7 +538,7 @@ static int32_t libusb_open_wrapper(wasm_exec_env_t exec_env, uint32_t dev_ptr, u
 	}
 
 	if (!write_u32_to_guest(inst, slot, key)) {
-		pointer_table_remove(table, key, &(struct libusb_destroy_arg){ .teardown = false });
+		pointer_table_remove(table, key, &(struct LibusbDestroyArg){ .teardown = false });
 		pointer_table_release(dev_entry);
 		return (int32_t)LIBUSB_ERROR_INVALID_PARAM;
 	}
@@ -628,7 +554,7 @@ static void libusb_close_wrapper(wasm_exec_env_t exec_env, uint32_t devh_ptr) {
 	if (!(table = peek_table(inst)))
 		return;
 
-	if (!pointer_table_remove(table, devh_ptr, &(struct libusb_destroy_arg){ .teardown = false }))
+	if (!pointer_table_remove(table, devh_ptr, &(struct LibusbDestroyArg){ .teardown = false }))
 		pak_global_log("libusb_close: invalid device handle %u", devh_ptr);
 }
 
@@ -746,7 +672,7 @@ static int32_t libusb_get_device_descriptor_wrapper(wasm_exec_env_t exec_env, ui
 	}
 
 	r = LIBUSB_ERROR_INVALID_PARAM;
-	if (!(p = validate_app_addr_native(inst, desc, W32_SIZEOF_DEVICE_DESCRIPTOR)))
+	if (!(p = wasm_guest_addr(inst, desc, WASM_SIZEOF_LIBUSB_DEVICE_DESCRIPTOR)))
 		goto out;
 
 	if ((r = (int32_t)libusb_get_device_descriptor((libusb_device *)pointer_table_payload(entry), &host_desc))
@@ -763,7 +689,7 @@ static int32_t libusb_get_config_descriptor_wrapper(wasm_exec_env_t exec_env, ui
 	wasm_module_inst_t inst = wasm_runtime_get_module_inst(exec_env);
 	struct PointerTable *table;
 	struct PtNode *dev_entry;
-	cfg_payload_t *cfg_payload;
+	struct LibusbConfigPayload *cfg_payload;
 	struct libusb_config_descriptor *cfg = NULL;
 	uint8_t *blob_native = NULL;
 	uint64_t blob = 0;
@@ -793,7 +719,7 @@ static int32_t libusb_get_config_descriptor_wrapper(wasm_exec_env_t exec_env, ui
 
 	serialize_config_descriptor(cfg, (uint32_t)blob, blob_native);
 
-	if (!(cfg_payload = (cfg_payload_t *)wasm_runtime_malloc(sizeof(cfg_payload_t)))) {
+	if (!(cfg_payload = wasm_runtime_malloc(sizeof(*cfg_payload)))) {
 		wasm_runtime_module_free(inst, blob);
 		libusb_free_config_descriptor(cfg);
 		pointer_table_release(dev_entry);
@@ -812,7 +738,7 @@ static int32_t libusb_get_config_descriptor_wrapper(wasm_exec_env_t exec_env, ui
 	}
 
 	if (!write_u32_to_guest(inst, slot, key)) {
-		pointer_table_remove(table, key, &(struct libusb_destroy_arg){ .teardown = false });
+		pointer_table_remove(table, key, &(struct LibusbDestroyArg){ .teardown = false });
 		pointer_table_release(dev_entry);
 		return (int32_t)LIBUSB_ERROR_INVALID_PARAM;
 	}
@@ -828,7 +754,7 @@ static void libusb_free_config_descriptor_wrapper(wasm_exec_env_t exec_env, uint
 	if (!(table = peek_table(inst)))
 		return;
 
-	if (!pointer_table_remove(table, cfg_ptr, &(struct libusb_destroy_arg){ .teardown = false }))
+	if (!pointer_table_remove(table, cfg_ptr, &(struct LibusbDestroyArg){ .teardown = false }))
 		pak_global_log("libusb_free_config_descriptor: invalid descriptor handle %u", cfg_ptr);
 }
 
@@ -875,7 +801,7 @@ static int32_t transfer_common(wasm_exec_env_t exec_env, uint32_t devh_ptr, uint
 
 	r = LIBUSB_ERROR_INVALID_PARAM;
 	if (length > 0) {
-		if (!(guest_buf = validate_app_addr_native(inst, data, length)))
+		if (!(guest_buf = wasm_guest_addr(inst, data, length)))
 			goto out;
 		if (!(staging = (uint8_t *)wasm_runtime_malloc(length)))
 			goto out;
@@ -902,7 +828,7 @@ static int32_t transfer_common(wasm_exec_env_t exec_env, uint32_t devh_ptr, uint
 		uint8_t *tp = (uint8_t *)wasm_runtime_addr_app_to_native(inst, transferred_slot);
 
 		if (tp)
-			put_u32le(tp, (uint32_t)transferred);
+			wasm_put_u32le(tp, (uint32_t)transferred);
 	}
 
 out:
@@ -920,6 +846,31 @@ static int32_t libusb_bulk_transfer_wrapper(wasm_exec_env_t exec_env, uint32_t d
 static int32_t libusb_interrupt_transfer_wrapper(wasm_exec_env_t exec_env, uint32_t devh_ptr, uint32_t endpoint,
                                                  uint32_t data, uint32_t length, uint32_t transferred_slot, uint32_t timeout) {
 	return transfer_common(exec_env, devh_ptr, endpoint, data, length, transferred_slot, timeout, true);
+}
+
+static int32_t libusb_get_string_descriptor_ascii_wrapper(wasm_exec_env_t exec_env, uint32_t devh_ptr,
+                                                            uint32_t index, uint32_t data, int32_t length) {
+	wasm_module_inst_t inst = wasm_runtime_get_module_inst(exec_env);
+	struct PointerTable *table = peek_table(inst);
+	if (!table || !data || length <= 0) return LIBUSB_ERROR_INVALID_PARAM;
+	struct PtNode *entry = pointer_table_acquire(table, devh_ptr, T_DEVH);
+	if (!entry) return LIBUSB_ERROR_INVALID_PARAM;
+	int32_t result = LIBUSB_ERROR_INVALID_PARAM;
+	unsigned char *staging = NULL;
+	if (!wasm_guest_addr(inst, data, (uint32_t)length)) goto out;
+	staging = wasm_runtime_malloc((uint32_t)length);
+	if (!staging) { result = LIBUSB_ERROR_NO_MEM; goto out; }
+	result = libusb_get_string_descriptor_ascii(pointer_table_payload(entry), (uint8_t)index, staging, length);
+	if (result >= 0 && result < length) {
+		uint32_t bytes = (uint32_t)result + 1; /* include libusb's NUL */
+		void *guest = wasm_guest_addr(inst, data, bytes);
+		if (guest) memcpy(guest, staging, bytes);
+		else result = LIBUSB_ERROR_INVALID_PARAM;
+	} else if (result >= length) result = LIBUSB_ERROR_OVERFLOW;
+out:
+	if (staging) wasm_runtime_free(staging);
+	pointer_table_release(entry);
+	return result;
 }
 
 static int32_t libusb_control_transfer_wrapper(wasm_exec_env_t exec_env, uint32_t devh_ptr, uint32_t bm_request_type,
@@ -945,7 +896,7 @@ static int32_t libusb_control_transfer_wrapper(wasm_exec_env_t exec_env, uint32_
 
 	r = LIBUSB_ERROR_INVALID_PARAM;
 	if (w_length > 0) {
-		if (!(guest_buf = validate_app_addr_native(inst, data, w_length)))
+		if (!(guest_buf = wasm_guest_addr(inst, data, w_length)))
 			goto out;
 		if (!(staging = (uint8_t *)wasm_runtime_malloc(w_length)))
 			goto out;
@@ -987,6 +938,7 @@ static NativeSymbol native_symbols_libusb[] = {
 	REG_NATIVE_FUNC(libusb_set_interface_alt_setting, "(iii)i"),
 	REG_NATIVE_FUNC(libusb_clear_halt, "(ii)i"),
 	REG_NATIVE_FUNC(libusb_get_device_descriptor, "(ii)i"),
+	REG_NATIVE_FUNC(libusb_get_string_descriptor_ascii, "(iiii)i"),
 	REG_NATIVE_FUNC(libusb_get_config_descriptor, "(iii)i"),
 	REG_NATIVE_FUNC(libusb_free_config_descriptor, "(i)"),
 	REG_NATIVE_FUNC(libusb_get_max_packet_size, "(ii)i"),
@@ -1024,7 +976,7 @@ void libusb_native_unregister(void) {
 
 void libusb_native_release_instance(wasm_module_inst_t module_inst) {
 	struct PointerTable *table = (struct PointerTable *)wasm_runtime_get_context(module_inst, g_context_key);
-	struct libusb_destroy_arg arg = { .teardown = false };
+	struct LibusbDestroyArg arg = { .teardown = false };
 
 	if (!table)
 		return;

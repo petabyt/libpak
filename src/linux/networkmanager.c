@@ -120,6 +120,16 @@ struct PakNet *pak_net_get_context(void) {
 	return ctx;
 }
 
+void pak_net_unref_context(struct PakNet *ctx) {
+	dbus_connection_remove_filter(ctx->conn, handle_messages, ctx);
+	dbus_bus_remove_match(ctx->conn,
+		"type='signal',sender='org.freedesktop.NetworkManager',"
+		"interface='org.freedesktop.NetworkManager.Connection.Active',member='StateChanged'", NULL);
+	if (ctx->adapter_list) dbus_message_unref(ctx->adapter_list);
+	dbus_connection_unref(ctx->conn);
+	free(ctx);
+}
+
 // Block and wait for a dbus event
 static int sleep_for_event(DBusConnection *conn) {
 	while (dbus_connection_read_write_dispatch(conn, 1000) == FALSE);

@@ -20,7 +20,7 @@ if(PAK_QUICKJS)
 	list(APPEND LIBPAK_SOURCES src/quickjs/wifi.c src/quickjs/bluetooth.c src/quickjs/socket.c src/quickjs/runtime.c)
 endif()
 if(PAK_WASM)
-	list(APPEND LIBPAK_SOURCES src/wasm/runtime.c src/wasm/printf.c src/wasm/pointer_table.c src/wasm/libusb.c)
+	list(APPEND LIBPAK_SOURCES src/wasm/runtime.c src/wasm/printf.c src/wasm/pointer_table.c src/wasm/libusb.c src/wasm/bluetooth.c src/wasm/wifi.c src/wasm/socket.c)
 endif()
 
 if(ANDROID)
@@ -61,7 +61,7 @@ elseif(LINUX)
 			NAMES iwasm
 			REQUIRED
 		)
-		target_link_libraries(pak PRIVATE ${WAMR_LIB})
+		target_link_libraries(pak PUBLIC ${WAMR_LIB})
 	endif()
 endif()
 

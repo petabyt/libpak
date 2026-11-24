@@ -136,6 +136,17 @@ struct PakBt *pak_bt_get_context(void) {
 	return ctx;
 }
 
+void pak_bt_unref_context(struct PakBt *ctx) {
+	if (!ctx) return;
+	dbus_connection_remove_filter(ctx->conn, handle_messages, NULL);
+	dbus_connection_unref(ctx->conn);
+	free(ctx);
+}
+
+int pak_bt_is_supported(struct PakBt *ctx, enum PakBtFeature feature) {
+	return 0;
+}
+
 static int get_bluez_bool_property(DBusConnection *conn, const char *path, const char *iface, const char *prop, dbus_bool_t *v) {
 	DBusMessage *resp;
 	int rc = get_dbus_property(conn, "org.bluez", path, iface, prop, &resp);
@@ -296,7 +307,7 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
 	return 0;
 }
 
-unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max) {
+unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, void *buffer, unsigned int max) {
 	struct PakBtDeviceWrapper *wrapper = to_wrapper(device);
 #define min(x, y) (((x) < (y)) ? (x) : (y))
 	memcpy(buffer, wrapper->mfg_data, min(wrapper->mfg_data_len, max));
@@ -679,7 +690,7 @@ int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *
 	return 0;
 }
 
-int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const uint8_t *data, unsigned int length, int blocking) {
+int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const void *data, unsigned int length, int blocking) {
 	struct PakGattCharacteristicWrapper *wrapper = to_wrapper(characteristic);
 	DBusMessage *call = dbus_message_new_method_call("org.bluez", wrapper->path, "org.bluez.GattCharacteristic1", "WriteValue");
 	DBusMessageIter iter;
@@ -688,7 +699,7 @@ int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic 
 	DBusMessageIter dict_value;
 	dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "y", &dict_value);
 	for (unsigned int i = 0; i < length; i++) {
-		dbus_message_iter_append_basic(&dict_value, DBUS_TYPE_BYTE, &data[i]);
+		dbus_message_iter_append_basic(&dict_value, DBUS_TYPE_BYTE, &((const uint8_t *)data)[i]);
 	}
 	dbus_message_iter_close_container(&iter, &dict_value);
 
@@ -703,7 +714,7 @@ int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic 
 	return 0;
 }
 
-unsigned int pak_bt_read_characteristic_cached_value(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *buffer, unsigned int max) {
+unsigned int pak_bt_read_characteristic_cached_value(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, void *buffer, unsigned int max) {
 	return 0;
 }
 

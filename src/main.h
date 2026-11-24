@@ -1,11 +1,26 @@
-#pragma once
+#ifndef PAK_MAIN_H
+#define PAK_MAIN_H
+#include <stddef.h>
+
+enum PakSandboxRuleType {
+    PAK_SANDBOX_IP,
+    PAK_SANDBOX_DOMAIN,
+};
+struct PakSandboxPolicy {
+    const struct PakSandboxRule {
+        enum PakSandboxRuleType type;
+        const char *value;
+    }*rules;
+    size_t count;
+};
+
+int pak_sandbox_allows_ip(const struct PakSandboxPolicy *policy, const char *ip);
+
+int pak_sandbox_allows_domain(const struct PakSandboxPolicy *policy, const char *domain);
+
 struct PakModule *pak_create_mod(void);
 
-int pak_rt_test_module(struct PakModule *mod);
-
 struct PakModule *pak_rt_mod_from_native(int (*get)(struct PakModule *mod));
-
-int get_module_dummy(struct PakModule *mod);
 
 int pak_rt_test_module(struct PakModule *mod);
 
@@ -30,3 +45,5 @@ int pak_rt_test_module(struct PakModule *mod);
     struct PakGattCharacteristicWrapper *   : (struct PakGattCharacteristic *)(ptr), \
     const struct PakGattCharacteristicWrapper * : (const struct PakGattCharacteristic *)(ptr) \
 )
+
+#endif

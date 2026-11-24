@@ -1,0 +1,9 @@
+[package]
+name = "libpak-sys"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Raw Rust FFI declarations for libpak"
+
+[lib]
+path = "src/lib.rs"

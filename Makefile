@@ -17,3 +17,13 @@ dump-bluez:
 
 clean:
 	rm -rf .cache build cmake-build-debug .idea
+
+rust-bindgen:
+	bindgen rust/wrapper.h \
+	    --allowlist-type 'Pak.*|WidgetGroup|WidgetType|SettingUnion|Container.*|GcContext|libusb_device|pak_bt_listen_device' \
+	    --allowlist-function 'pak_.*|setup_quickjs_module|setup_wasm_module' \
+	    --allowlist-var 'PAK_.*|UUID_STR_LENGTH|BT_DEVICE|BT_ADAPTER|GATT_.*|WIFI_.*' \
+	    --formatter prettyplease \
+	    --no-layout-tests \
+	    --output rust/src/bindings.rs \
+	    -- --target=x86_64-unknown-linux-gnu -Iinclude
